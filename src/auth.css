@@ -444,6 +444,8 @@
 
 .account-card {
   display: flex;
+  /* .card stacks its children; this one reads as avatar + details side by side. */
+  flex-direction: row;
   align-items: center;
   gap: 14px;
 }

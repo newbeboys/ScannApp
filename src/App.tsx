@@ -1,7 +1,10 @@
 import { Capacitor } from '@capacitor/core'
 import { useCallback, useEffect, useState } from 'react'
 import { BottomNav, type TabId } from './components/BottomNav'
+import { ExportSheet } from './components/ExportSheet'
+import { exportDocument, type ExportFormat } from './lib/documentExport'
 import { scanDocument } from './lib/documentScanner'
+import { getCurrentTier } from './lib/tier'
 import {
   deleteAllScanDocuments,
   deleteScanDocument,
@@ -30,8 +33,11 @@ function App() {
   const [currentPage, setCurrentPage] = useState(0)
   const [isScanning, setIsScanning] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportTarget, setExportTarget] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const isNative = Capacitor.isNativePlatform()
+  const tier = getCurrentTier()
 
   const refreshDocuments = useCallback(async () => {
     setDocuments(await listScanDocuments())
@@ -113,6 +119,21 @@ function App() {
     setToast('Semua dokumen dihapus.')
   }
 
+  const handleExport = async (format: ExportFormat) => {
+    const doc = documents.find((entry) => entry.id === exportTarget)
+    if (!doc) return
+    setIsExporting(true)
+    try {
+      const result = await exportDocument(doc, format, tier)
+      setExportTarget(null)
+      setToast(result.message)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal mengekspor dokumen.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   const handleSeedSamples = async () => {
     const { seedSampleDocuments } = await import('./lib/devSampleDocs')
     const count = await seedSampleDocuments()
@@ -130,6 +151,17 @@ function App() {
       existing.map((doc) => (doc.id === updated.id ? updated : doc)),
     )
   }
+
+  const exportDoc = documents.find((doc) => doc.id === exportTarget) ?? null
+  const exportSheet = exportDoc && (
+    <ExportSheet
+      pageCount={exportDoc.pageCount}
+      tier={tier}
+      isBusy={isExporting}
+      onExport={handleExport}
+      onClose={() => setExportTarget(null)}
+    />
+  )
 
   if (pendingPages) {
     return (
@@ -170,9 +202,10 @@ function App() {
           document={activeDocument}
           onBack={() => setView({ kind: 'tabs' })}
           onEdit={() => setView({ kind: 'editor', id: activeDocument.id })}
-          onExport={() => setToast('Ekspor menyusul di langkah berikutnya.')}
+          onExport={() => setExportTarget(activeDocument.id)}
           onDelete={() => handleDelete(activeDocument.id)}
         />
+        {exportSheet}
         {toast && <p className="toast">{toast}</p>}
       </div>
     )
@@ -216,6 +249,8 @@ function App() {
           </button>
         </div>
       )}
+
+      {exportSheet}
 
       {toast && <p className="toast">{toast}</p>}
 

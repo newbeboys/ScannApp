@@ -20,9 +20,9 @@ Urutan mengikuti PRD Bagian 8. **Jangan lompat ke fase berikutnya sebelum fase s
 
 - [x] Install & konfigurasi `@capacitor-mlkit/document-scanner`
 - [x] Implementasi flow: buka scanner → capture → hasil balik ke app (single page dulu)
-- [~] Uji multi-page capture dalam satu sesi — kode sudah mendukung (scanner mode `FULL`, tanpa page limit override), **belum diuji di device/emulator fisik** karena tidak ada Android SDK/emulator di environment kerja Claude Code saat ini
+- [x] Uji multi-page capture dalam satu sesi — diuji manual oleh Boss Ali di device fisik, berhasil
 - [x] Simpan hasil scan ke storage lokal device (belum ke cloud) — via `@capacitor/filesystem`, `Directory.Data/scans/<id>/page-N.jpg` + index JSON
-- [~] Uji kualitas hasil scan di berbagai kondisi cahaya (baseline sebelum lanjut ke fitur lain) — **butuh pengujian manual oleh Boss Ali di device fisik**, tidak bisa dilakukan dari sesi ini
+- [x] Uji kualitas hasil scan di berbagai kondisi cahaya (baseline sebelum lanjut ke fitur lain) — diuji manual oleh Boss Ali di device fisik, kualitas bagus
 
 ## Fase 2 — Editor Dasar + Export + Kompresi (Basic tier)
 

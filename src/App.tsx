@@ -1,36 +1,27 @@
 import { Capacitor } from '@capacitor/core'
 import { useCallback, useEffect, useState } from 'react'
-import './App.css'
+import { BottomNav, type TabId } from './components/BottomNav'
 import { scanDocument } from './lib/documentScanner'
 import {
+  deleteAllScanDocuments,
   deleteScanDocument,
-  getScanPageDisplayUri,
   listScanDocuments,
   saveScanDocument,
   type LocalScanDocument,
 } from './lib/scanStorage'
-
-function DocumentThumbnail({ pagePath }: { pagePath: string }) {
-  const [src, setSrc] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    getScanPageDisplayUri(pagePath).then((uri) => {
-      if (!cancelled) setSrc(uri)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [pagePath])
-
-  if (!src) return <div className="thumb thumb--empty" />
-  return <img className="thumb" src={src} alt="" />
-}
+import { DocumentsScreen } from './screens/DocumentsScreen'
+import { HomeScreen } from './screens/HomeScreen'
+import { ReviewScreen } from './screens/ReviewScreen'
+import { SettingsScreen } from './screens/SettingsScreen'
 
 function App() {
+  const [tab, setTab] = useState<TabId>('home')
   const [documents, setDocuments] = useState<LocalScanDocument[]>([])
+  const [pendingPages, setPendingPages] = useState<string[] | null>(null)
+  const [currentPage, setCurrentPage] = useState(0)
   const [isScanning, setIsScanning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
   const isNative = Capacitor.isNativePlatform()
 
   const refreshDocuments = useCallback(async () => {
@@ -41,76 +32,123 @@ function App() {
     refreshDocuments()
   }, [refreshDocuments])
 
-  const handleScan = async () => {
-    setError(null)
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), 2600)
+    return () => clearTimeout(timer)
+  }, [toast])
+
+  const runScanner = async (): Promise<string[] | null> => {
     setIsScanning(true)
     try {
       const result = await scanDocument()
-      if (Array.isArray(result)) {
-        await saveScanDocument(result)
-        await refreshDocuments()
-      } else if (result.reason === 'error') {
-        setError(result.message ?? 'Gagal memindai dokumen.')
+      if (Array.isArray(result)) return result
+      if (result.reason === 'error') {
+        setToast(result.message ?? 'Gagal membuka pemindai.')
       }
-      // reason === 'cancelled': user backed out of the scanner, nothing to do
+      return null
     } finally {
       setIsScanning(false)
+    }
+  }
+
+  const handleStartScan = async () => {
+    const pages = await runScanner()
+    if (!pages) return
+    setPendingPages(pages)
+    setCurrentPage(0)
+  }
+
+  const handleAddPages = async () => {
+    const pages = await runScanner()
+    if (!pages) return
+    setPendingPages((existing) => [...(existing ?? []), ...pages])
+  }
+
+  const handleRemovePage = (index: number) => {
+    setPendingPages((existing) => {
+      if (!existing) return existing
+      const next = existing.filter((_, i) => i !== index)
+      return next.length > 0 ? next : null
+    })
+    setCurrentPage((current) => (current > 0 ? current - 1 : 0))
+  }
+
+  const handleSaveDocument = async () => {
+    if (!pendingPages) return
+    setIsSaving(true)
+    try {
+      await saveScanDocument(pendingPages)
+      await refreshDocuments()
+      setPendingPages(null)
+      setTab('documents')
+      setToast('Dokumen tersimpan.')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal menyimpan dokumen.')
+    } finally {
+      setIsSaving(false)
     }
   }
 
   const handleDelete = async (id: string) => {
     await deleteScanDocument(id)
     await refreshDocuments()
+    setToast('Dokumen dihapus.')
+  }
+
+  const handleDeleteAll = async () => {
+    if (!confirm('Hapus semua dokumen tersimpan? Tindakan ini tidak bisa dibatalkan.')) return
+    await deleteAllScanDocuments()
+    await refreshDocuments()
+    setToast('Semua dokumen dihapus.')
+  }
+
+  if (pendingPages) {
+    return (
+      <div className="app">
+        <ReviewScreen
+          pages={pendingPages}
+          currentIndex={currentPage}
+          isBusy={isSaving || isScanning}
+          onSelectPage={setCurrentPage}
+          onRemovePage={handleRemovePage}
+          onAddPages={handleAddPages}
+          onCancel={() => setPendingPages(null)}
+          onSave={handleSaveDocument}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
   }
 
   return (
-    <main className="scan-app">
-      <header className="scan-app__header">
-        <h1>ScannApp</h1>
-        <p>Fase 1 — Capture &amp; Processing Engine</p>
-      </header>
+    <div className="app">
+      <main className="app__body">
+        {tab === 'home' && (
+          <HomeScreen
+            documents={documents}
+            isScanning={isScanning}
+            canScan={isNative}
+            onScan={handleStartScan}
+            onOpenDocuments={() => setTab('documents')}
+          />
+        )}
+        {tab === 'documents' && (
+          <DocumentsScreen documents={documents} onDelete={handleDelete} />
+        )}
+        {tab === 'settings' && (
+          <SettingsScreen documentCount={documents.length} onDeleteAll={handleDeleteAll} />
+        )}
+      </main>
 
       {!isNative && (
-        <p className="scan-app__notice">
-          Fitur scan dokumen (ML Kit) hanya berjalan di build Android, bukan di browser.
-        </p>
+        <p className="platform-note">Pemindaian dokumen hanya berfungsi di aplikasi Android.</p>
       )}
 
-      <button
-        type="button"
-        className="scan-app__scan-button"
-        onClick={handleScan}
-        disabled={!isNative || isScanning}
-      >
-        {isScanning ? 'Memindai…' : 'Scan Dokumen'}
-      </button>
+      {toast && <p className="toast">{toast}</p>}
 
-      {error && <p className="scan-app__error">{error}</p>}
-
-      <section className="scan-app__documents">
-        <h2>Dokumen Tersimpan ({documents.length})</h2>
-        {documents.length === 0 ? (
-          <p className="scan-app__empty">Belum ada dokumen. Mulai scan untuk menambahkan.</p>
-        ) : (
-          <ul className="scan-app__document-list">
-            {documents.map((doc) => (
-              <li key={doc.id} className="scan-app__document-item">
-                <DocumentThumbnail pagePath={doc.pagePaths[0]} />
-                <div className="scan-app__document-meta">
-                  <strong>{doc.title}</strong>
-                  <p>
-                    {doc.pageCount} halaman · {new Date(doc.createdAt).toLocaleString('id-ID')}
-                  </p>
-                </div>
-                <button type="button" onClick={() => handleDelete(doc.id)}>
-                  Hapus
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </main>
+      <BottomNav active={tab} onChange={setTab} />
+    </div>
   )
 }
 

@@ -117,6 +117,16 @@ export async function deleteScanDocument(id: string): Promise<void> {
   await writeIndex(docs.filter((doc) => doc.id !== id))
 }
 
+export async function deleteAllScanDocuments(): Promise<void> {
+  try {
+    await Filesystem.rmdir({ path: SCANS_DIR, directory: Directory.Data, recursive: true })
+  } catch {
+    // nothing stored yet
+  }
+  await ensureScansDir()
+  await writeIndex([])
+}
+
 /** Resolves a stored page path to a URI the webview can render in <img src>. */
 export async function getScanPageDisplayUri(pagePath: string): Promise<string> {
   const result = await Filesystem.getUri({ path: pagePath, directory: Directory.Data })

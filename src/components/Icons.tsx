@@ -160,6 +160,24 @@ export function PdfIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function CloudIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M7 18.5a4 4 0 0 1-.4-8A6 6 0 0 1 18 9.7a4.4 4.4 0 0 1-.6 8.8z" />
+    </svg>
+  )
+}
+
+export function DownloadIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M12 3.5v12" />
+      <path d="M8 11.5 12 15.5l4-4" />
+      <path d="M4.5 15.5v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3" />
+    </svg>
+  )
+}
+
 export function EyeIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">

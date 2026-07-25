@@ -55,7 +55,8 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 - **Milestone referral:** 5 orang→7 hari Pro, 15 orang→25 hari Pro, 30 orang→60 hari Pro.
 - **Harga Pro:** Rp 15.000/bulan atau Rp 150.000/tahun.
 - **Frekuensi iklan Basic:** banner + interstitial tiap 5 scan, ditambah interstitial setelah export.
-- **Quota storage R2:** Basic 100MB, Pro bulanan 500MB, Pro tahunan 1GB.
+- **Quota storage R2:** Basic 100MB, Pro bulanan 500MB, Pro tahunan 1GB, **Pro dari referral 500MB** (ditetapkan 26 Juli 2026 saat Fase 4).
+- **Paket Pro selalu berjangka:** hanya ada 1 bulan & 1 tahun — **tidak ada Pro permanen**. Baris `profiles` dengan `tier='pro'` tapi `tier_expires_at` kosong dianggap data rusak dan diperlakukan sebagai Basic (ditetapkan 26 Juli 2026 saat Fase 3).
 - **Reward referral untuk teman yang diundang:** 1 hari akses Pro (reward dua arah "give X get Y").
 - **Interval job `expire-pro-status`:** tiap hari (jam 00:00), bukan tiap jam.
 - **Signed URL R2:** langsung dari Supabase Edge Function, **tanpa** Cloudflare Worker tambahan — jangan tambah komponen infrastruktur baru untuk ini kecuali ada kebutuhan eksplisit (mis. resize gambar server-side) di kemudian hari.

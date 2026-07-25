@@ -77,12 +77,32 @@ Catatan tambahan di luar daftar asli:
 
 ## Fase 4 — Backend Storage/Backup (Supabase Edge Functions + R2)
 
-- [ ] Edge Function `generate-upload-url`
-- [ ] Edge Function `confirm-upload`
-- [ ] Edge Function `generate-download-url`
-- [ ] Edge Function `delete-backup`
-- [ ] UI toggle "backup ke cloud" per dokumen (opsional, bukan otomatis)
-- [ ] UI indikator sisa kuota storage per tier
+Desain: `docs/superpowers/specs/2026-07-26-fase4-backup-r2-design.md`
+
+- [x] Edge Function `generate-upload-url` — verifikasi JWT, hitung ulang kuota dari tier, tolak 409 kalau penuh, presigned PUT 10 menit
+- [x] Edge Function `confirm-upload` — upsert `scan_documents` + sesuaikan `bytes_used` dengan **selisih** (backup ulang tidak dihitung dobel)
+- [x] Edge Function `generate-download-url` — presigned GET 10 menit, dicek kepemilikannya dua kali
+- [x] Edge Function `delete-backup` — hapus object R2 + baris DB + kurangi `bytes_used`, idempoten
+- [x] UI toggle "backup ke cloud" per dokumen (opsional, bukan otomatis) — baris status di detail dokumen
+- [x] UI indikator sisa kuota storage per tier — bar kuota di Settings & layar cadangan
+
+Catatan tambahan di luar daftar asli:
+
+- [x] Layar **"Cadangan di cloud"** (unduh & hapus) — backup tanpa cara mengambil kembali bukan backup
+- [x] Kuota naik otomatis saat user jadi Pro: dihitung ulang tiap upload, tidak perlu job terjadwal. Kuota **Pro dari referral = 500MB** (angka baru, dicatat di CLAUDE.md Bagian 6)
+- [x] File yang sudah ada **tidak pernah** dihapus otomatis saat kuota turun (mis. hadiah Pro berakhir) — yang diblokir hanya penambahan baru
+- [x] Menghapus dokumen dari HP tidak menghapus cadangannya; toast menyebutkan itu supaya tidak terasa bocor
+- [x] Unit test bertambah 29 (total 88); `vitest.config.ts` kini ikut menguji helper Edge Function
+- [x] Uji nyata ke R2: unggah, unduh (isi identik), tolak tanpa token (401), hapus (object 404 & hitungan kembali 0)
+
+**Terblokir — butuh Boss Ali (5 menit di dashboard Cloudflare):**
+
+- [ ] **Pasang kebijakan CORS di bucket `scanappstorage`.** Tanpa ini, unggah dari aplikasi diblokir preflight browser. Kredensial R2 yang tersimpan cuma punya izin Object Read & Write, jadi `PutBucketCors` ditolak 403 — harus lewat dashboard. JSON-nya ada di spec Fase 4 Bagian 9.
+
+**Belum diverifikasi di device fisik:**
+
+- [ ] Cadangkan dokumen sungguhan dari HP setelah CORS dipasang
+- [ ] Unduh cadangan di HP (harus membuka/menyimpan PDF)
 
 ## Fase 5 — Fitur Iklan & Monetisasi (Basic)
 

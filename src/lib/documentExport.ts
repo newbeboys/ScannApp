@@ -22,6 +22,14 @@ async function compressedPages(doc: LocalScanDocument): Promise<Blob[]> {
   return out
 }
 
+/**
+ * Exported so the cloud backup uploads byte-for-byte the same PDF the user
+ * would get from the export sheet — watermark and compression included.
+ */
+export async function buildPdfFile(doc: LocalScanDocument, tier: Tier): Promise<ExportFile> {
+  return (await exportPdf(doc, tier))[0]
+}
+
 async function exportPdf(doc: LocalScanDocument, tier: Tier): Promise<ExportFile[]> {
   // Loaded on demand so pdf-lib stays out of the initial app bundle.
   const { buildPdf } = await import('./pdfExport')

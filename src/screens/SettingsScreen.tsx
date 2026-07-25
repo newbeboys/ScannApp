@@ -1,16 +1,27 @@
 import { useAuth } from '../auth/useAuth'
-import { LogoutIcon, ScanIcon, TrashIcon } from '../components/Icons'
+import { ChevronRightIcon, CloudIcon, LogoutIcon, ScanIcon, TrashIcon } from '../components/Icons'
+import { QuotaBar } from '../components/QuotaBar'
 import { proDaysRemaining, tierLabel } from '../lib/tier'
 import { THEMES, THEME_ORDER } from '../theme/themes'
 import { useTheme } from '../theme/useTheme'
 
 interface SettingsScreenProps {
   documentCount: number
+  usedBytes: number
+  quotaBytes: number
   onDeleteAll: () => void
   onSignOut: () => void
+  onOpenBackups: () => void
 }
 
-export function SettingsScreen({ documentCount, onDeleteAll, onSignOut }: SettingsScreenProps) {
+export function SettingsScreen({
+  documentCount,
+  usedBytes,
+  quotaBytes,
+  onDeleteAll,
+  onSignOut,
+  onOpenBackups,
+}: SettingsScreenProps) {
   const { themeId, setThemeId, theme } = useTheme()
   const { email, profile, tier } = useAuth()
 
@@ -55,6 +66,20 @@ export function SettingsScreen({ documentCount, onDeleteAll, onSignOut }: Settin
           </div>
         </section>
       )}
+
+      <h2 className="section-label">Cloud</h2>
+
+      <QuotaBar usedBytes={usedBytes} quotaBytes={quotaBytes} />
+
+      <section className="card">
+        <button type="button" className="card__row card__row--button" onClick={onOpenBackups}>
+          <span className="card__row-label">
+            <CloudIcon size={17} className="card__row-icon" />
+            Cadangan di cloud
+          </span>
+          <ChevronRightIcon size={18} />
+        </button>
+      </section>
 
       <h2 className="section-label">Preferensi</h2>
 

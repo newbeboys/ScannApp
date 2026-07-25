@@ -508,6 +508,115 @@
   opacity: 0.85;
 }
 
+/* ---------- Backup ke cloud ---------- */
+
+.backup-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 13px;
+}
+
+.backup-row__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  color: var(--fg-dim);
+  background: var(--chip);
+}
+
+.backup-row__icon--done {
+  color: #fff;
+  background: var(--acc);
+}
+
+.backup-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.backup-row__title {
+  margin: 0;
+  font-size: 0.93rem;
+  font-weight: 700;
+}
+
+.backup-row__note {
+  margin: 2px 0 0;
+  font-size: 0.79rem;
+  color: var(--fg-dim);
+}
+
+/* .button on its own carries no colours — it inherits them from the container
+   it normally sits in (.editor-actions). Outside that, state them here. */
+.backup-row__action {
+  flex-shrink: 0;
+  width: auto;
+  padding: 10px 16px;
+  font-size: 0.86rem;
+  color: var(--acc);
+  background: var(--acc-soft);
+  border: 1px solid var(--acc-edge);
+}
+
+.backup-item {
+  gap: 8px;
+}
+
+.quota {
+  gap: 10px;
+}
+
+.quota__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.quota__label {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.quota__value {
+  font-size: 0.81rem;
+  color: var(--fg-dim);
+}
+
+.quota__track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  overflow: hidden;
+}
+
+.quota__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--acc);
+  transition: width 240ms ease-out;
+}
+
+.quota__fill--full {
+  background: #e2554e;
+}
+
+.quota__warning {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #e2554e;
+}
+
+.card__row-icon {
+  vertical-align: -3px;
+  margin-right: 9px;
+  color: var(--fg-dim);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .splash,
   .landing__sheet,

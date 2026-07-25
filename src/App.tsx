@@ -3,6 +3,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './auth/useAuth'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { ExportSheet } from './components/ExportSheet'
+import {
+  backupDocument,
+  deleteBackup,
+  fetchStorageUsage,
+  listCloudBackups,
+} from './lib/backupApi'
+import { quotaBytesFor } from './lib/storageQuota'
 import { exportDocument, type ExportFormat } from './lib/documentExport'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
@@ -14,6 +21,7 @@ import {
   type LocalScanDocument,
 } from './lib/scanStorage'
 import { AuthScreen, type AuthMode } from './screens/AuthScreen'
+import { CloudBackupScreen } from './screens/CloudBackupScreen'
 import { DocumentDetailScreen } from './screens/DocumentDetailScreen'
 import { DocumentsScreen } from './screens/DocumentsScreen'
 import { EditorScreen } from './screens/EditorScreen'
@@ -31,12 +39,13 @@ type View =
   | { kind: 'detail'; id: string }
   | { kind: 'editor'; id: string }
   | { kind: 'merge' }
+  | { kind: 'backups' }
 
 /** Which screen the signed-out visitor is looking at. */
 type AuthView = { kind: 'landing' } | { kind: 'auth'; mode: AuthMode } | { kind: 'forgot' }
 
 function App() {
-  const { status, tier, signOut } = useAuth()
+  const { status, tier, profile, signOut } = useAuth()
   const [authView, setAuthView] = useState<AuthView>({ kind: 'landing' })
   const [tab, setTab] = useState<TabId>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
@@ -49,16 +58,30 @@ function App() {
   const [isMerging, setIsMerging] = useState(false)
   const [exportTarget, setExportTarget] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  /** Sizes of documents that have a cloud copy, keyed by document id. */
+  const [backedUp, setBackedUp] = useState<Record<string, number>>({})
+  const [backupBusyId, setBackupBusyId] = useState<string | null>(null)
+  const [usedBytes, setUsedBytes] = useState(0)
   const isNative = Capacitor.isNativePlatform()
+  const quotaBytes = quotaBytesFor(profile)
 
   const refreshDocuments = useCallback(async () => {
     setDocuments(await listScanDocuments())
   }, [])
 
+  /** Which local documents already have a cloud copy, and how big it is. */
+  const refreshBackupState = useCallback(async () => {
+    const [backups, usage] = await Promise.all([listCloudBackups(), fetchStorageUsage()])
+
+    setBackedUp(Object.fromEntries(backups.map((backup) => [backup.id, backup.sizeBytes])))
+    setUsedBytes(usage?.usedBytes ?? 0)
+  }, [])
+
   useEffect(() => {
     if (status !== 'signed-in') return
     refreshDocuments()
-  }, [refreshDocuments, status])
+    refreshBackupState()
+  }, [refreshDocuments, refreshBackupState, status])
 
   useEffect(() => {
     if (!toast) return
@@ -119,10 +142,13 @@ function App() {
   }
 
   const handleDelete = async (id: string) => {
+    const hadBackup = id in backedUp
     await deleteScanDocument(id)
     await refreshDocuments()
     setView({ kind: 'tabs' })
-    setToast('Dokumen dihapus.')
+    // The cloud copy is deliberately kept — surviving a local delete is the
+    // whole point of a backup — but say so, or it looks like a leak.
+    setToast(hadBackup ? 'Dokumen dihapus dari HP. Cadangan di cloud tetap ada.' : 'Dokumen dihapus.')
   }
 
   const handleDeleteAll = async () => {
@@ -175,7 +201,7 @@ function App() {
 
   /** Keeps the open detail/editor screen pointed at fresh data after an edit. */
   const activeDocument =
-    view.kind === 'tabs' || view.kind === 'merge'
+    view.kind === 'tabs' || view.kind === 'merge' || view.kind === 'backups'
       ? null
       : (documents.find((doc) => doc.id === view.id) ?? null)
 
@@ -183,6 +209,35 @@ function App() {
     setDocuments((existing) =>
       existing.map((doc) => (doc.id === updated.id ? updated : doc)),
     )
+  }
+
+  const handleBackup = async (doc: LocalScanDocument) => {
+    setBackupBusyId(doc.id)
+    try {
+      await backupDocument(doc, tier)
+      await refreshBackupState()
+      setToast('Dokumen tercadang di cloud.')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal mencadangkan dokumen.')
+    } finally {
+      setBackupBusyId(null)
+    }
+  }
+
+  /** Removes the cloud copy only — the document stays on the phone. */
+  const handleRemoveBackup = async (id: string) => {
+    if (!confirm('Hapus cadangan dari cloud? Dokumen di HP tidak ikut terhapus.')) return
+
+    setBackupBusyId(id)
+    try {
+      await deleteBackup(id)
+      await refreshBackupState()
+      setToast('Cadangan dihapus dari cloud.')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal menghapus cadangan.')
+    } finally {
+      setBackupBusyId(null)
+    }
   }
 
   /** Local files stay on the device; only the session is dropped. */
@@ -259,6 +314,23 @@ function App() {
     )
   }
 
+  if (view.kind === 'backups') {
+    return (
+      <div className="app">
+        <CloudBackupScreen
+          quotaBytes={quotaBytes}
+          onBack={() => {
+            refreshBackupState()
+            setView({ kind: 'tabs' })
+          }}
+          onError={setToast}
+          onNotice={setToast}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
   if (view.kind === 'merge') {
     return (
       <div className="app">
@@ -293,10 +365,20 @@ function App() {
       <div className="app">
         <DocumentDetailScreen
           document={activeDocument}
+          backupStatus={
+            backupBusyId === activeDocument.id
+              ? 'working'
+              : activeDocument.id in backedUp
+                ? 'backed-up'
+                : 'local'
+          }
+          backupSizeBytes={backedUp[activeDocument.id] ?? null}
           onBack={() => setView({ kind: 'tabs' })}
           onEdit={() => setView({ kind: 'editor', id: activeDocument.id })}
           onExport={() => setExportTarget(activeDocument.id)}
           onDelete={() => handleDelete(activeDocument.id)}
+          onBackup={() => handleBackup(activeDocument)}
+          onRemoveBackup={() => handleRemoveBackup(activeDocument.id)}
         />
         {exportSheet}
         {toast && <p className="toast">{toast}</p>}
@@ -328,8 +410,11 @@ function App() {
         {tab === 'settings' && (
           <SettingsScreen
             documentCount={documents.length}
+            usedBytes={usedBytes}
+            quotaBytes={quotaBytes}
             onDeleteAll={handleDeleteAll}
             onSignOut={handleSignOut}
+            onOpenBackups={() => setView({ kind: 'backups' })}
           />
         )}
       </main>

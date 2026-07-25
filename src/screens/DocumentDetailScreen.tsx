@@ -1,13 +1,18 @@
+import { BackupRow, type BackupStatus } from '../components/BackupRow'
 import { ChevronLeftIcon, CropIcon, ExportIcon, TrashIcon } from '../components/Icons'
 import { PageImage } from '../components/PageImage'
 import { resolvePage, type LocalScanDocument } from '../lib/scanStorage'
 
 interface DocumentDetailScreenProps {
   document: LocalScanDocument
+  backupStatus: BackupStatus
+  backupSizeBytes: number | null
   onBack: () => void
   onEdit: () => void
   onExport: () => void
   onDelete: () => void
+  onBackup: () => void
+  onRemoveBackup: () => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('id-ID', {
@@ -20,10 +25,14 @@ const dateFormatter = new Intl.DateTimeFormat('id-ID', {
 
 export function DocumentDetailScreen({
   document: doc,
+  backupStatus,
+  backupSizeBytes,
   onBack,
   onEdit,
   onExport,
   onDelete,
+  onBackup,
+  onRemoveBackup,
 }: DocumentDetailScreenProps) {
   const editedCount = doc.pages.filter((page) => page.edited).length
 
@@ -67,6 +76,13 @@ export function DocumentDetailScreen({
           <span>Ekspor</span>
         </button>
       </div>
+
+      <BackupRow
+        status={backupStatus}
+        sizeBytes={backupSizeBytes}
+        onBackup={onBackup}
+        onRemove={onRemoveBackup}
+      />
 
       <div className="doc-grid">
         {doc.pages.map((page, index) => (

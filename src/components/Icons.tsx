@@ -101,3 +101,71 @@ export function CheckIcon({ size = 24, className }: IconProps) {
     </svg>
   )
 }
+
+export function CropIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M6.5 2.5v15h15" />
+      <path d="M2.5 6.5h15v15" />
+    </svg>
+  )
+}
+
+export function RotateIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1" />
+      <path d="M20.5 4.5V10h-5.5" />
+    </svg>
+  )
+}
+
+export function UndoIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
+      <path d="M3.5 4.5V10H9" />
+    </svg>
+  )
+}
+
+export function ExportIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M12 15.5V3.5" />
+      <path d="M8 7.5 12 3.5l4 4" />
+      <path d="M4.5 14.5v4a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4" />
+    </svg>
+  )
+}
+
+export function MergeIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M5 3.5v5a4 4 0 0 0 4 4h6" />
+      <path d="M5 20.5v-5a4 4 0 0 1 4-4h6" />
+      <path d="m12.5 9 3 3.5-3 3.5" />
+    </svg>
+  )
+}
+
+export function PdfIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z" />
+      <path d="M14 3v4.5h4.5" />
+      <path d="M8.5 16.5v-4h1.2a1.2 1.2 0 0 1 0 2.4H8.5" />
+      <path d="M13 16.5v-4h1a1.6 1.6 0 0 1 1.6 1.6v.8a1.6 1.6 0 0 1-1.6 1.6z" />
+    </svg>
+  )
+}
+
+export function ImageIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <circle cx="9" cy="10" r="1.5" />
+      <path d="m4.5 17 4.5-4.5 3.5 3.5 3-2.5 4 4" />
+    </svg>
+  )
+}

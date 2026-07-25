@@ -690,3 +690,194 @@
   color: var(--fg-dim);
   margin-top: 4px;
 }
+
+/* ---------- editor ---------- */
+
+.editor-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+  touch-action: none;
+}
+
+.editor-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: fill;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.editor-actions .button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 13px 10px;
+  font-size: 14px;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+  color: var(--fg);
+}
+
+.editor-actions .button--primary {
+  background: var(--acc);
+  border-color: transparent;
+  color: #fff;
+}
+
+.editor-thumb {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  border: 1px solid var(--chip-border);
+  background: var(--chip);
+  color: var(--fg-dim);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.editor-thumb--active {
+  border-color: var(--acc);
+  color: var(--acc);
+  background: var(--acc-soft);
+}
+
+.editor-thumb__dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--acc);
+}
+
+.detail-note {
+  font-size: 13px;
+  color: var(--fg-dim);
+  padding: 10px 13px;
+  border-radius: 12px;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+}
+
+/* ---------- crop overlay ---------- */
+
+.crop-overlay {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.crop-window {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgba(10, 12, 20, 0.55);
+  border: 1.5px solid #fff;
+  cursor: move;
+}
+
+.crop-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 1px, transparent 1px);
+  background-size: 33.33% 33.33%;
+  pointer-events: none;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 3px solid #fff;
+  background: transparent;
+}
+
+.crop-handle--nw {
+  top: -2px;
+  left: -2px;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 4px;
+  cursor: nwse-resize;
+}
+
+.crop-handle--ne {
+  top: -2px;
+  right: -2px;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 4px;
+  cursor: nesw-resize;
+}
+
+.crop-handle--sw {
+  bottom: -2px;
+  left: -2px;
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 4px;
+  cursor: nesw-resize;
+}
+
+.crop-handle--se {
+  bottom: -2px;
+  right: -2px;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 4px;
+  cursor: nwse-resize;
+}
+
+.doc-row__open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+}
+
+.doc-row__open:active {
+  opacity: 0.7;
+}
+
+.dev-bar {
+  margin: 0 20px 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px dashed var(--chip-border);
+  background: var(--chip);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.dev-bar button {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--acc-edge);
+  background: var(--acc-soft);
+  color: var(--acc);
+  font-size: 12px;
+  font-weight: 700;
+}

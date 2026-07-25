@@ -1,10 +1,12 @@
-import { ScanIcon, TrashIcon } from '../components/Icons'
+import { MergeIcon, ScanIcon, TrashIcon } from '../components/Icons'
 import { PageImage } from '../components/PageImage'
-import type { LocalScanDocument } from '../lib/scanStorage'
+import { resolvePage, type LocalScanDocument } from '../lib/scanStorage'
 
 interface DocumentsScreenProps {
   documents: LocalScanDocument[]
   onDelete: (id: string) => void
+  onOpen: (id: string) => void
+  onMerge: () => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('id-ID', {
@@ -13,7 +15,7 @@ const dateFormatter = new Intl.DateTimeFormat('id-ID', {
   year: 'numeric',
 })
 
-export function DocumentsScreen({ documents, onDelete }: DocumentsScreenProps) {
+export function DocumentsScreen({ documents, onDelete, onOpen, onMerge }: DocumentsScreenProps) {
   return (
     <div className="screen">
       <header className="app-header">
@@ -27,21 +29,32 @@ export function DocumentsScreen({ documents, onDelete }: DocumentsScreenProps) {
         <span className="app-header__tier">Basic</span>
       </header>
 
+      {documents.length >= 2 && (
+        <div className="editor-actions">
+          <button type="button" className="button" onClick={onMerge}>
+            <MergeIcon size={17} />
+            <span>Gabungkan Dokumen</span>
+          </button>
+        </div>
+      )}
+
       {documents.length === 0 ? (
         <p className="empty-note">Belum ada dokumen tersimpan.</p>
       ) : (
         <ul className="doc-list">
           {documents.map((doc) => (
             <li key={doc.id} className="doc-row">
-              <div className="doc-row__preview">
-                <PageImage source={doc.pagePaths[0]} alt={doc.title} />
-              </div>
-              <div className="doc-row__meta">
-                <h3>{doc.title}</h3>
-                <p>
-                  {doc.pageCount} halaman · {dateFormatter.format(new Date(doc.createdAt))}
-                </p>
-              </div>
+              <button type="button" className="doc-row__open" onClick={() => onOpen(doc.id)}>
+                <div className="doc-row__preview">
+                  <PageImage source={resolvePage(doc.pages[0])} alt={doc.title} />
+                </div>
+                <div className="doc-row__meta">
+                  <h3>{doc.title}</h3>
+                  <p>
+                    {doc.pageCount} halaman · {dateFormatter.format(new Date(doc.createdAt))}
+                  </p>
+                </div>
+              </button>
               <button
                 type="button"
                 className="icon-button icon-button--danger"

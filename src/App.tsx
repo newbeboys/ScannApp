@@ -9,13 +9,22 @@ import {
   saveScanDocument,
   type LocalScanDocument,
 } from './lib/scanStorage'
+import { DocumentDetailScreen } from './screens/DocumentDetailScreen'
 import { DocumentsScreen } from './screens/DocumentsScreen'
+import { EditorScreen } from './screens/EditorScreen'
 import { HomeScreen } from './screens/HomeScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 
+/** Which full-screen flow is on top of the tabs, if any. */
+type View =
+  | { kind: 'tabs' }
+  | { kind: 'detail'; id: string }
+  | { kind: 'editor'; id: string }
+
 function App() {
   const [tab, setTab] = useState<TabId>('home')
+  const [view, setView] = useState<View>({ kind: 'tabs' })
   const [documents, setDocuments] = useState<LocalScanDocument[]>([])
   const [pendingPages, setPendingPages] = useState<string[] | null>(null)
   const [currentPage, setCurrentPage] = useState(0)
@@ -93,6 +102,7 @@ function App() {
   const handleDelete = async (id: string) => {
     await deleteScanDocument(id)
     await refreshDocuments()
+    setView({ kind: 'tabs' })
     setToast('Dokumen dihapus.')
   }
 
@@ -101,6 +111,24 @@ function App() {
     await deleteAllScanDocuments()
     await refreshDocuments()
     setToast('Semua dokumen dihapus.')
+  }
+
+  const handleSeedSamples = async () => {
+    const { seedSampleDocuments } = await import('./lib/devSampleDocs')
+    const count = await seedSampleDocuments()
+    await refreshDocuments()
+    setTab('documents')
+    setToast(`${count} dokumen contoh dibuat.`)
+  }
+
+  /** Keeps the open detail/editor screen pointed at fresh data after an edit. */
+  const activeDocument =
+    view.kind === 'tabs' ? null : (documents.find((doc) => doc.id === view.id) ?? null)
+
+  const applyDocumentChange = (updated: LocalScanDocument) => {
+    setDocuments((existing) =>
+      existing.map((doc) => (doc.id === updated.id ? updated : doc)),
+    )
   }
 
   if (pendingPages) {
@@ -121,6 +149,35 @@ function App() {
     )
   }
 
+  if (activeDocument && view.kind === 'editor') {
+    return (
+      <div className="app">
+        <EditorScreen
+          document={activeDocument}
+          onDocumentChange={applyDocumentChange}
+          onClose={() => setView({ kind: 'detail', id: activeDocument.id })}
+          onError={setToast}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
+  if (activeDocument && view.kind === 'detail') {
+    return (
+      <div className="app">
+        <DocumentDetailScreen
+          document={activeDocument}
+          onBack={() => setView({ kind: 'tabs' })}
+          onEdit={() => setView({ kind: 'editor', id: activeDocument.id })}
+          onExport={() => setToast('Ekspor menyusul di langkah berikutnya.')}
+          onDelete={() => handleDelete(activeDocument.id)}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <main className="app__body">
@@ -131,10 +188,16 @@ function App() {
             canScan={isNative}
             onScan={handleStartScan}
             onOpenDocuments={() => setTab('documents')}
+            onOpenDocument={(id) => setView({ kind: 'detail', id })}
           />
         )}
         {tab === 'documents' && (
-          <DocumentsScreen documents={documents} onDelete={handleDelete} />
+          <DocumentsScreen
+            documents={documents}
+            onDelete={handleDelete}
+            onOpen={(id) => setView({ kind: 'detail', id })}
+            onMerge={() => setToast('Gabung dokumen menyusul di langkah berikutnya.')}
+          />
         )}
         {tab === 'settings' && (
           <SettingsScreen documentCount={documents.length} onDeleteAll={handleDeleteAll} />
@@ -143,6 +206,15 @@ function App() {
 
       {!isNative && (
         <p className="platform-note">Pemindaian dokumen hanya berfungsi di aplikasi Android.</p>
+      )}
+
+      {import.meta.env.DEV && !isNative && (
+        <div className="dev-bar">
+          <span>Mode dev — buat dokumen contoh untuk mencoba editor & ekspor.</span>
+          <button type="button" onClick={handleSeedSamples}>
+            Buat contoh
+          </button>
+        </div>
       )}
 
       {toast && <p className="toast">{toast}</p>}

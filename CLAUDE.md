@@ -47,6 +47,8 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 
 6. kamu bisa lihat pada folder atau file yang di ScannApp Design Prototap kemungkinan seperti itu design aplikasiku, kamu bisa membuatnya lebih bagus atau smoot dengan menggunakan skill/plugin yang tersedia tanpa aku perintahkan, tinggal kamu kerjakan jikan selesai tunjukan nanti aku akan membuat keputusannya.
 
+7. gunakan bahasa indonesia disetiap laporan yang kamu buat dan kegiatan/tugas apa yang kamu sedeng kerjan pastikan kmau menggunakan bahasa indonesia agar aku memahami mu.
+
 ## 6. Angka Final yang Wajib Dipakai (bukan lagi open decision — lihat PRD v2 Bagian 7)
 
 - **Limit merge dokumen:** Basic maksimal 20 halaman per dokumen hasil merge, Pro unlimited.

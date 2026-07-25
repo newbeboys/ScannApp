@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { ExportSheet } from './components/ExportSheet'
 import { exportDocument, type ExportFormat } from './lib/documentExport'
+import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
 import { getCurrentTier } from './lib/tier'
 import {
@@ -16,6 +17,7 @@ import { DocumentDetailScreen } from './screens/DocumentDetailScreen'
 import { DocumentsScreen } from './screens/DocumentsScreen'
 import { EditorScreen } from './screens/EditorScreen'
 import { HomeScreen } from './screens/HomeScreen'
+import { MergeScreen } from './screens/MergeScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 
@@ -24,6 +26,7 @@ type View =
   | { kind: 'tabs' }
   | { kind: 'detail'; id: string }
   | { kind: 'editor'; id: string }
+  | { kind: 'merge' }
 
 function App() {
   const [tab, setTab] = useState<TabId>('home')
@@ -34,6 +37,7 @@ function App() {
   const [isScanning, setIsScanning] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [isMerging, setIsMerging] = useState(false)
   const [exportTarget, setExportTarget] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const isNative = Capacitor.isNativePlatform()
@@ -142,9 +146,29 @@ function App() {
     setToast(`${count} dokumen contoh dibuat.`)
   }
 
+  const handleMerge = async (ids: string[]) => {
+    const chosen = ids
+      .map((id) => documents.find((doc) => doc.id === id))
+      .filter((doc): doc is LocalScanDocument => doc !== undefined)
+
+    setIsMerging(true)
+    try {
+      const merged = await mergeDocuments(chosen, tier)
+      await refreshDocuments()
+      setView({ kind: 'detail', id: merged.id })
+      setToast(`Dokumen digabung — ${merged.pageCount} halaman.`)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal menggabungkan dokumen.')
+    } finally {
+      setIsMerging(false)
+    }
+  }
+
   /** Keeps the open detail/editor screen pointed at fresh data after an edit. */
   const activeDocument =
-    view.kind === 'tabs' ? null : (documents.find((doc) => doc.id === view.id) ?? null)
+    view.kind === 'tabs' || view.kind === 'merge'
+      ? null
+      : (documents.find((doc) => doc.id === view.id) ?? null)
 
   const applyDocumentChange = (updated: LocalScanDocument) => {
     setDocuments((existing) =>
@@ -175,6 +199,21 @@ function App() {
           onAddPages={handleAddPages}
           onCancel={() => setPendingPages(null)}
           onSave={handleSaveDocument}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
+  if (view.kind === 'merge') {
+    return (
+      <div className="app">
+        <MergeScreen
+          documents={documents}
+          tier={tier}
+          isBusy={isMerging}
+          onCancel={() => setView({ kind: 'tabs' })}
+          onMerge={handleMerge}
         />
         {toast && <p className="toast">{toast}</p>}
       </div>
@@ -229,7 +268,7 @@ function App() {
             documents={documents}
             onDelete={handleDelete}
             onOpen={(id) => setView({ kind: 'detail', id })}
-            onMerge={() => setToast('Gabung dokumen menyusul di langkah berikutnya.')}
+            onMerge={() => setView({ kind: 'merge' })}
           />
         )}
         {tab === 'settings' && (

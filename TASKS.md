@@ -26,13 +26,29 @@ Urutan mengikuti PRD Bagian 8. **Jangan lompat ke fase berikutnya sebelum fase s
 
 ## Fase 2 — Editor Dasar + Export + Kompresi (Basic tier)
 
-- [ ] Fitur crop manual
-- [ ] Fitur rotate halaman
-- [ ] Export ke PDF
-- [ ] Export ke JPG
-- [ ] Kompresi otomatis (1 level standar untuk Basic)
-- [ ] Watermark kecil di hasil export PDF (Basic only)
-- [ ] Fitur merge dokumen (universal — Basic & Pro, lihat CLAUDE.md aturan #5), dengan enforcement limit **20 halaman untuk Basic**, unlimited untuk Pro
+Desain: `docs/superpowers/specs/2026-07-26-fase2-editor-export-design.md`
+
+- [x] Fitur crop manual — overlay 4 sudut (`CropOverlay.tsx`), koordinat ternormalisasi 0..1
+- [x] Fitur rotate halaman — kelipatan 90°, bisa ditumpuk
+- [x] Export ke PDF — `pdf-lib`, tiap halaman di-fit ke A4 (otomatis lanskap), margin 18pt
+- [x] Export ke JPG — 1 file per halaman, dinomori kalau lebih dari satu halaman
+- [x] Kompresi otomatis (1 level standar untuk Basic) — JPEG q=0.75, sisi terpanjang maks 2400px
+- [x] Watermark kecil di hasil export PDF (Basic only) — logo vektor + teks "ScannApp", pojok kanan bawah
+- [x] Fitur merge dokumen (universal — Basic & Pro, lihat CLAUDE.md aturan #5), dengan enforcement limit **20 halaman untuk Basic**, unlimited untuk Pro
+
+Catatan tambahan di luar daftar asli (lihat spec Bagian 2 & 4):
+
+- [x] Model halaman naik ke v2 (`{ original, edited? }`) — file scan asli tidak pernah ditimpa, ada "Reset ke asli". Dokumen Fase 1 dimigrasi otomatis saat dibaca.
+- [x] Simpan hasil export ke folder Documents + share sheet Android; di browser jatuh ke unduhan biasa
+- [x] Unit test (Vitest, 33 test) — migrasi index v1→v2, limit tier, bukti watermark ada di Basic & tidak ada di Pro, hitung halaman merge
+- [x] CI menjalankan `npm test` dan ikut membuild APK untuk branch `feat/**`
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali, seperti Fase 1):
+
+- [ ] Crop dengan jari di layar sentuh (drag 4 sudut) terasa enak dipakai
+- [ ] Share sheet Android muncul & file benar-benar tersimpan di folder Documents
+- [ ] Kualitas hasil kompresi (q=0.75 / 2400px) masih terbaca untuk dokumen teks kecil
+- [ ] Watermark tidak mengganggu isi dokumen saat PDF dibuka/dicetak
 
 ## Fase 3 — Sistem Auth & Tier
 

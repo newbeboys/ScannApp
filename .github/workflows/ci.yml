@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Feature branches ikut dibuild supaya APK-nya bisa diuji Boss Ali
+    # sebelum digabung ke main (mesin dev tidak punya Android SDK).
+    branches: [main, 'feat/**']
   pull_request:
     branches: [main]
 
@@ -24,6 +26,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Unit tests
+        run: npm test
 
       - name: Typecheck & build
         run: npm run build

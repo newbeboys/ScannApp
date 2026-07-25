@@ -1,0 +1,11 @@
+-- rls_auto_enable() adalah fungsi event trigger (jaring pengaman: menyalakan
+-- RLS otomatis pada setiap CREATE TABLE di schema public). Fungsinya tetap
+-- dipakai; yang dicabut hanya hak EXECUTE dari role publik, supaya PostgREST
+-- tidak lagi mengeksposnya sebagai /rest/v1/rpc/rls_auto_enable
+-- (temuan advisor 0028 & 0029).
+--
+-- Event trigger dijalankan sistem atas nama pemilik trigger, bukan atas nama
+-- pemanggil, jadi pencabutan ini tidak mematikan jaring pengamannya.
+-- Diverifikasi: setelah revoke, CREATE TABLE percobaan tetap otomatis
+-- menyala RLS-nya.
+revoke all on function public.rls_auto_enable() from public, anon, authenticated;

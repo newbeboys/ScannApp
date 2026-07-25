@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Nunito',system-ui,sans-serif;background:radial-gradient(120% 120% at 50% 0%,#e9eaf6 0%,#dcdef0 60%,#cfd2ea 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px}
+  a{color:#6c6cf0;text-decoration:none}
+  a:hover{opacity:.85}
+  .noscroll::-webkit-scrollbar{display:none}
+  .noscroll{-ms-overflow-style:none;scrollbar-width:none}
+  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+  @keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+  @keyframes toastin{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+</style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;align-items:center;gap:16px">
+  <div style="width:392px;height:812px;background:#0f1116;border-radius:52px;padding:12px;box-shadow:0 40px 90px -30px rgba(60,64,110,.55),0 0 0 2px #dfe1f2,inset 0 0 0 2px #cbcee6;position:relative">
+    <div style="width:100%;height:100%;background:linear-gradient(180deg,#fdfdff 0%,#f6f6fc 100%);border-radius:42px;overflow:hidden;position:relative;display:flex;flex-direction:column">
+
+      <!-- status bar -->
+      <div style="height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 28px 0 30px;color:#2d3561;font-size:14px;font-weight:800;position:relative;z-index:20">
+        <span>9:41</span>
+        <div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:118px;height:26px;background:#0f1116;border-radius:16px"></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <svg width="17" height="11" viewBox="0 0 17 11" fill="none"><rect x="0" y="7" width="2.6" height="4" rx="1" fill="#2d3561"/><rect x="3.7" y="5" width="2.6" height="6" rx="1" fill="#2d3561"/><rect x="7.4" y="2.5" width="2.6" height="8.5" rx="1" fill="#2d3561"/><rect x="11.1" y="0" width="2.6" height="11" rx="1" fill="#2d3561"/></svg>
+          <svg width="16" height="11" viewBox="0 0 16 11" fill="none"><path d="M8 2.4C10.3 2.4 12.4 3.3 14 4.8" stroke="#2d3561" stroke-width="1.5" stroke-linecap="round"/><path d="M4.2 5.1C5.3 4.2 6.6 3.7 8 3.7 9.4 3.7 10.7 4.2 11.8 5.1" stroke="#2d3561" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="8.4" r="1.5" fill="#2d3561"/></svg>
+          <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="#2d3561" opacity=".45"/><rect x="2" y="2" width="16" height="8" rx="1.5" fill="#2d3561"/><rect x="22.5" y="4" width="1.6" height="4" rx="1" fill="#2d3561" opacity=".45"/></svg>
+        </div>
+      </div>
+
+      <!-- header -->
+      <div style="flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 22px 10px">
+        <button onClick="{{ toastMenu }}" style="width:44px;height:44px;border:none;cursor:pointer;border-radius:14px;background:#ecebfe;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M5 12h14M5 17h9" stroke="#6c6cf0" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+        <div style="color:#2d3561;font-size:19px;font-weight:800;letter-spacing:-.01em">{{ activeTitle }}</div>
+        <div style="width:44px"></div>
+      </div>
+
+      <div class="noscroll" style="flex:1;min-height:0;overflow-y:auto;padding:0 22px 20px">
+
+        <!-- mascot -->
+        <div style="display:flex;flex-direction:column;align-items:center;padding:14px 0 6px">
+          <div style="position:relative;width:150px;height:118px;animation:floaty 4.5s ease-in-out infinite">
+            <svg width="150" height="118" viewBox="0 0 150 118" fill="none">
+              <g transform="translate(96 6)">
+                <circle cx="20" cy="20" r="15" fill="#ffe08a"/>
+                <g stroke="#ffcf5c" stroke-width="3" stroke-linecap="round"><path d="M20 -2v-6"/><path d="M42 20h6"/><path d="M35.5 4.5l4.2-4.2"/><path d="M35.5 35.5l4.2 4.2"/></g>
+              </g>
+              <ellipse cx="75" cy="98" rx="46" ry="9" fill="#c9d6ef" opacity=".5"/>
+              <path d="M46 88c-16 0-26-10-26-23 0-12 9-21 21-21 3-13 15-22 29-22 16 0 28 11 30 26 12 1 21 10 21 22 0 12-10 21-24 21H46z" fill="#fff" stroke="#e5eaf6" stroke-width="2"/>
+              <circle cx="60" cy="60" r="4.4" fill="#3a4272"/>
+              <circle cx="90" cy="60" r="4.4" fill="#3a4272"/>
+              <circle cx="50" cy="68" r="6" fill="#ffc4c4" opacity=".75"/>
+              <circle cx="100" cy="68" r="6" fill="#ffc4c4" opacity=".75"/>
+              <path d="M66 68c3 5 15 5 18 0" stroke="#ef6f6f" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+            </svg>
+          </div>
+          <div style="color:#2d3561;font-size:22px;font-weight:900;letter-spacing:-.02em;margin-top:8px">{{ moodQuestion }}</div>
+        </div>
+
+        <!-- mood row -->
+        <div style="display:flex;justify-content:space-between;padding:14px 2px 4px">
+          <sc-for list="{{ moods }}" as="m" hint-placeholder-count="5">
+          <button onClick="{{ m.onSelect }}" style="border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:7px;padding:0;flex:1">
+            <div style="{{ m.circleStyle }}">
+              <span style="font-size:26px;line-height:1">{{ m.face }}</span>
+            </div>
+            <span style="{{ m.labelStyle }}">{{ m.label }}</span>
+          </button>
+          </sc-for>
+        </div>
+
+        <!-- Tests Results -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:26px 4px 14px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 2h6l1 3h3a1 1 0 0 1 1 1v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1h3l1-3z" fill="#cfe0fb"/><circle cx="12" cy="13" r="4" stroke="#6ea0f0" stroke-width="2"/><path d="M12 2.5v3" stroke="#6ea0f0" stroke-width="2" stroke-linecap="round"/></svg>
+            <span style="color:#2d3561;font-size:18px;font-weight:800">Tests Results</span>
+          </div>
+          <span style="color:#8fb3f2;font-size:13px;font-weight:700">{{ testsProgress }}</span>
+        </div>
+
+        <div class="noscroll" style="display:flex;gap:14px;overflow-x:auto;padding:2px 2px 8px;margin:0 -22px;padding-left:22px;padding-right:22px">
+          <sc-for list="{{ tests }}" as="t" hint-placeholder-count="4">
+          <button onClick="{{ t.onOpen }}" style="{{ t.cardStyle }}">
+            <div style="height:96px;display:flex;align-items:center;justify-content:center;margin-bottom:12px">
+              <svg width="82" height="82" viewBox="0 0 82 82" fill="none" style="opacity:.9"><path d="M41 6l30 17v36L41 76 11 59V23L41 6z" fill="{{ t.blobBg }}"/><path d="M30 30c6-6 18-4 20 4 2 7-5 10-2 16 2 5-4 10-11 8-8-2-6-9-11-12-6-4-2-13 4-16z" fill="none" stroke="{{ t.blobLine }}" stroke-width="2.4" stroke-linecap="round"/><circle cx="34" cy="40" r="3" fill="{{ t.blobLine }}"/><path d="M46 34c5 2 7 8 4 12" stroke="{{ t.blobLine }}" stroke-width="2.4" stroke-linecap="round"/></svg>
+            </div>
+            <div style="color:#3a4272;font-size:13.5px;font-weight:800;line-height:1.3;text-align:center">{{ t.title }}</div>
+          </button>
+          </sc-for>
+        </div>
+
+        <!-- Games -->
+        <div style="display:flex;align-items:center;gap:9px;margin:24px 4px 14px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="11" rx="4" fill="#e7defb"/><circle cx="8" cy="12.5" r="1.6" fill="#a78bf0"/><path d="M7 10.5v4M5 12.5h4" stroke="#a78bf0" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="11.5" r="1.3" fill="#a78bf0"/><circle cx="18" cy="14" r="1.3" fill="#a78bf0"/></svg>
+          <span style="color:#8a6ee0;font-size:18px;font-weight:800">Games</span>
+        </div>
+        <div style="display:flex;gap:14px">
+          <sc-for list="{{ games }}" as="g" hint-placeholder-count="2">
+          <button onClick="{{ g.onOpen }}" style="flex:1;border:none;cursor:pointer;background:{{ g.bg }};border-radius:22px;padding:16px;display:flex;align-items:center;gap:12px;text-align:left">
+            <div style="width:44px;height:44px;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px">{{ g.icon }}</div>
+            <div><div style="color:#3a4272;font-size:14px;font-weight:800">{{ g.title }}</div><div style="color:#8791b5;font-size:11.5px;font-weight:600;margin-top:1px">{{ g.sub }}</div></div>
+          </button>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- bottom nav -->
+      <div style="flex:none;height:78px;background:#fff;border-top:1px solid #eef0f8;display:flex;align-items:flex-start;justify-content:space-between;padding:11px 22px 0;position:relative">
+        <button onClick="{{ goHome }}" style="{{ navHomeStyle }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700;margin-top:3px">Home</span></button>
+        <button onClick="{{ goCourses }}" style="{{ navCoursesStyle }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 6h11a3 3 0 0 1 3 3v9a2.5 2.5 0 0 0-2.5-2.5H4V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M20 6v9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span style="font-size:10.5px;font-weight:700;margin-top:3px">Courses</span></button>
+        <div style="width:52px"></div>
+        <button onClick="{{ goTests }}" style="{{ navTestsStyle }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M8 3h8l-1 4H9L8 3zM9 7h6l1 12a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2L9 7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700;margin-top:3px">Tests</span></button>
+        <button onClick="{{ goSettings }}" style="{{ navSettingsStyle }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 4v1.5M12 18.5V20M4 12h1.5M18.5 12H20M6 6l1 1M17 17l1 1M18 6l-1 1M7 17l-1 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span style="font-size:10.5px;font-weight:700;margin-top:3px">Settings</span></button>
+
+        <button onClick="{{ toastAdd }}" style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);width:60px;height:60px;border-radius:50%;border:5px solid #fff;cursor:pointer;background:linear-gradient(135deg,#ffb648,#ff9a2e);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 24px -8px rgba(255,150,40,.7)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg></button>
+      </div>
+
+      <!-- toast -->
+      <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;bottom:96px;left:50%;transform:translateX(-50%);z-index:40;background:#2d3561;color:#fff;font-size:13px;font-weight:700;padding:11px 18px;border-radius:14px;box-shadow:0 14px 30px -8px rgba(45,53,97,.5);white-space:nowrap;animation:toastin .25s ease">{{ toast }}</div>
+      </sc-if>
+
+      <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:3px;background:#c7cbe0;z-index:30"></div>
+    </div>
+  </div>
+  <div style="color:#6b7196;font-size:12px;font-weight:700;text-align:center;max-width:360px;line-height:1.5">Ketuk salah satu wajah mood, geser kartu Tests, atau pindah tab di bawah — semuanya interaktif.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:460,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = { mood:null, tab:'home', toast:null };
+  _t=null;
+
+  moodData=[
+    {key:'unhappy', label:'Unhappy', face:'😖', bg:'#fdeeb0', ring:'#f4d873'},
+    {key:'sad',     label:'Sad',     face:'😔', bg:'#d3e4fb', ring:'#a9caf5'},
+    {key:'normal',  label:'Normal',  face:'😐', bg:'#ececf5', ring:'#cfcfe0'},
+    {key:'good',    label:'Good',    face:'🙂', bg:'#cdebd6', ring:'#9edcб1'.replace('б','b'), c:'#9edcb1'},
+    {key:'happy',   label:'Happy',   face:'😄', bg:'#fbdcbb', ring:'#f6c393'}
+  ];
+
+  testData=[
+    {id:'t1', title:'Extraversion/\nIntroversion Test', bg:'#e9f2fe', blobBg:'#cfe0fb', blobLine:'#8fb3f2'},
+    {id:'t2', title:'Beck Anxiety\nInventory', bg:'#e9f2fe', blobBg:'#cfe0fb', blobLine:'#8fb3f2'},
+    {id:'t3', title:'Love Language\nQuiz', bg:'#eaf5ee', blobBg:'#cfeeda', blobLine:'#87c9a3'},
+    {id:'t4', title:'Stress Level\nScale', bg:'#f3edfd', blobBg:'#e2d6fb', blobLine:'#ab8bf0'}
+  ];
+
+  games=[
+    {id:'g1', title:'Breathe', sub:'Calm in 2 min', icon:'🌬️', bg:'#eaf3ff'},
+    {id:'g2', title:'Memory', sub:'Focus boost', icon:'🧩', bg:'#f2edff'}
+  ];
+
+  toast(msg){ this.setState({toast:msg}); clearTimeout(this._t); this._t=setTimeout(()=>this.setState({toast:null}),1600); }
+
+  renderVals(){
+    const s=this.state;
+    const titles={home:'Home',courses:'Courses',tests:'Tests',settings:'Settings'};
+
+    const moods=this.moodData.map(m=>{
+      const on=s.mood===m.key;
+      return {
+        ...m,
+        onSelect:()=>{ this.setState({mood:m.key}); this.toast('Mood: '+m.label+' 💜'); },
+        circleStyle:`width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${m.bg};transition:transform .18s ease;transform:scale(${on?1.14:1});box-shadow:${on?'0 0 0 3px #fff,0 0 0 6px '+m.ring:'0 4px 10px -4px rgba(90,100,150,.35)'}`,
+        labelStyle:`font-size:11px;font-weight:${on?800:600};color:${on?'#2d3561':'#9aa2c0'}`
+      };
+    });
+
+    const tests=this.testData.map(t=>({
+      ...t,
+      cardStyle:`flex:none;width:150px;border:none;cursor:pointer;background:${t.bg};border-radius:26px;padding:18px 14px 16px;box-shadow:0 10px 22px -14px rgba(90,110,170,.5)`,
+      onOpen:()=>this.toast('Membuka '+t.title.replace('\n',' '))
+    }));
+
+    const games=this.games.map(g=>({ ...g, onOpen:()=>this.toast(g.title+' — segera hadir') }));
+
+    const navBase='flex:none;width:52px;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;padding:0;';
+    const nav=(k)=>navBase+'color:'+(s.tab===k?'#5cc27a':'#b9c0d6');
+
+    return {
+      activeTitle:titles[s.tab],
+      moodQuestion:'How are you today?',
+      moods,
+      testsProgress:'0/18 completed', tests,
+      games,
+      navHomeStyle:nav('home'), navCoursesStyle:nav('courses'), navTestsStyle:nav('tests'), navSettingsStyle:nav('settings'),
+      toast:s.toast,
+      goHome:()=>this.setState({tab:'home'}), goCourses:()=>this.setState({tab:'courses'}),
+      goTests:()=>this.setState({tab:'tests'}), goSettings:()=>this.setState({tab:'settings'}),
+      toastAdd:()=>this.toast('Tambah check-in baru ➕'), toastMenu:()=>this.toast('Menu'),
+    };
+  }
+}
+</script>
+</body>
+</html>

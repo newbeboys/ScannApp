@@ -8,13 +8,13 @@ Urutan mengikuti PRD Bagian 8. **Jangan lompat ke fase berikutnya sebelum fase s
 
 ## Fase 0 — Setup Proyek
 
-- [ ] Init project Capacitor + React + Vite (repo baru, terpisah dari FinanceApp)
-- [ ] Buat project Supabase baru khusus Scanner App (catat URL & anon key ke `.env`)
-- [ ] Setup akun Cloudflare R2 + buat bucket khusus scanner app
-- [ ] Jalankan migration SQL untuk semua tabel di `DATABASE_SCHEMA.md`
-- [ ] Setup RLS policy sesuai `DATABASE_SCHEMA.md`
-- [ ] Konfigurasi `.env` berdasarkan `.env.example`
-- [ ] Setup CI/CD dasar (bisa contek pola dari FinanceApp: Node 22, Java 21 Temurin)
+- [x] Init project Capacitor + React + Vite (repo baru, terpisah dari FinanceApp)
+- [x] Buat project Supabase baru khusus Scanner App (catat URL & anon key ke `.env`)
+- [x] Setup akun Cloudflare R2 + buat bucket khusus scanner app
+- [x] Jalankan migration SQL untuk semua tabel di `DATABASE_SCHEMA.md`
+- [x] Setup RLS policy sesuai `DATABASE_SCHEMA.md`
+- [x] Konfigurasi `.env` berdasarkan `.env.example`
+- [x] Setup CI/CD dasar (bisa contek pola dari FinanceApp: Node 22, Java 21 Temurin)
 
 ## Fase 1 — Capture & Processing Engine (subsistem inti, harus solid dulu)
 

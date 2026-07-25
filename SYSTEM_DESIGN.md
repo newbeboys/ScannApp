@@ -139,3 +139,5 @@ User A share referral_code miliknya → User B daftar pakai kode itu
 
 - Strategi sinkronisasi metadata dokumen saat app dipakai offline lalu online kembali (queue lokal? retry otomatis?) — belum dirancang detail.
 - Strategi konflik kalau user pakai app di lebih dari satu device dengan akun yang sama (saat ini asumsi: 1 user = 1 device aktif, belum ada multi-device sync).
+
+7. kamu bisa lihat pada folder atau file yang di ScannApp Design Prototap kemungkinan seperti itu design aplikasiku, kamu bisa membuatnya lebih bagus atau smoot dengan menggunakan skill/plugin yang tersedia tanpa aku perintahkan, tinggal kamu kerjakan jikan selesai tunjukan nanti aku akan membuat keputusannya.

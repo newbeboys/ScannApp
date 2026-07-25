@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:radial-gradient(120% 120% at 50% 0%,#2a2f3a 0%,#15181f 55%,#0c0e12 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px}
+  a{color:var(--acc);text-decoration:none}
+  a:hover{opacity:.85}
+  ::-webkit-scrollbar{width:0;height:0}
+  .noscroll{-ms-overflow-style:none;scrollbar-width:none}
+  @keyframes tin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  @keyframes toastin{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+</style>
+</helmet>
+
+<div style="--acc:{{ accentColor }};--accsoft:{{ accentSoft }};--accedge:{{ accentEdge }};--bg:{{ themeBg }};--fg:{{ themeFg }};--fgdim:{{ themeFgDim }};--chip:{{ themeChip }};--chipbd:{{ themeChipBd }};display:flex;flex-direction:column;align-items:center;gap:18px">
+
+  <div style="display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);padding:7px 8px 7px 14px;border-radius:999px;backdrop-filter:blur(6px)">
+    <span style="color:#cdd3de;font-size:12px;font-weight:600;letter-spacing:.02em">Tier</span>
+    <div style="display:flex;background:rgba(0,0,0,.35);border-radius:999px;padding:3px">
+      <button onClick="{{ setBasic }}" style="{{ basicToggleStyle }}">Basic</button>
+      <button onClick="{{ setPro }}" style="{{ proToggleStyle }}">PRO</button>
+    </div>
+    <span style="width:1px;height:20px;background:rgba(255,255,255,.14);margin:0 2px"></span>
+    <span style="color:#cdd3de;font-size:12px;font-weight:600;letter-spacing:.02em">Tema</span>
+    <div style="display:flex;gap:7px;padding-right:4px">
+      <sc-for list="{{ themeList }}" as="th" hint-placeholder-count="4">
+      <button onClick="{{ th.onSelect }}" aria-label="{{ th.label }}" title="{{ th.label }}" style="{{ th.swatchStyle }}"></button>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- PHONE -->
+  <div style="width:392px;height:812px;background:#0a0b0e;border-radius:52px;padding:13px;box-shadow:0 40px 90px -30px rgba(0,0,0,.8),0 0 0 2px #23262e,inset 0 0 0 2px #000;position:relative">
+    <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:132px;height:28px;background:#0a0b0e;border-radius:0 0 18px 18px;z-index:40"></div>
+    <div style="width:100%;height:100%;background:var(--bg);border-radius:40px;overflow:hidden;position:relative;display:flex;flex-direction:column">
+
+      <!-- status bar -->
+      <div style="height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;color:var(--fg);font-size:13px;font-weight:700;position:relative;z-index:30">
+        <span>9:41</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <svg width="17" height="12" viewBox="0 0 17 12" fill="none"><rect x="0" y="7" width="3" height="5" rx="1" fill="var(--fg)"/><rect x="4.5" y="4" width="3" height="8" rx="1" fill="var(--fg)"/><rect x="9" y="1.5" width="3" height="10.5" rx="1" fill="var(--fg)"/><rect x="13.5" y="0" width="3" height="12" rx="1" fill="var(--fg)" opacity=".4"/></svg>
+          <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 2.5C10.4 2.5 12.6 3.4 14.2 5" stroke="var(--fg)" stroke-width="1.6" stroke-linecap="round"/><path d="M4 5.4C5.1 4.4 6.5 3.9 8 3.9C9.5 3.9 10.9 4.4 12 5.4" stroke="var(--fg)" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="9" r="1.6" fill="var(--fg)"/></svg>
+          <svg width="24" height="12" viewBox="0 0 24 12" fill="none"><rect x="0.5" y="0.5" width="20" height="11" rx="3" stroke="var(--fg)" opacity=".5"/><rect x="2" y="2" width="15" height="8" rx="1.5" fill="var(--fg)"/><rect x="21.5" y="4" width="1.5" height="4" rx="1" fill="var(--fg)" opacity=".5"/></svg>
+        </div>
+      </div>
+
+      <!-- ================= APP SHELL ================= -->
+      <sc-if value="{{ isApp }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;animation:tin .3s ease">
+
+        <!-- top bar -->
+        <div style="flex:none;padding:6px 20px 12px;display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:38px;height:38px;border-radius:12px;background:var(--acc);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px -4px var(--accedge)">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M4 12h16" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+            <div>
+              <div style="color:var(--fg);font-size:19px;font-weight:800;letter-spacing:-.02em;line-height:1">ScannApp</div>
+              <div style="color:#79818f;font-size:11px;font-weight:600;margin-top:2px">{{ tabSubtitle }}</div>
+            </div>
+          </div>
+          <button onClick="{{ toggleTier }}" style="{{ tierBadgeStyle }}">
+            <sc-if value="{{ isPro }}" hint-placeholder-val="{{ true }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="margin-right:1px"><path d="M3 7l4.5 3L12 4l4.5 6L21 7l-1.8 11H4.8L3 7z" fill="#3a2c00"/></svg></sc-if>
+            <span>{{ tierLabel }}</span>
+          </button>
+        </div>
+
+        <!-- HOME TAB -->
+        <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+        <div class="noscroll" style="flex:1;min-height:0;overflow-y:auto;padding:4px 20px 16px">
+
+          <!-- primary scan action -->
+          <button onClick="{{ startScan }}" style="width:100%;border:none;border-radius:24px;background:var(--acc);padding:22px;color:#fff;text-align:left;cursor:pointer;box-shadow:0 18px 34px -14px var(--accedge);position:relative;overflow:hidden">
+            <div style="position:absolute;right:-24px;top:-24px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.12)"></div>
+            <div style="position:absolute;right:14px;bottom:-30px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.1)"></div>
+            <div style="width:52px;height:52px;border-radius:16px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><rect x="8" y="8.5" width="8" height="7" rx="1.5" stroke="#fff" stroke-width="2.2"/></svg>
+            </div>
+            <div style="font-size:22px;font-weight:800;letter-spacing:-.02em">Pindai Dokumen Baru</div>
+            <div style="font-size:13px;font-weight:600;opacity:.85;margin-top:3px">New scan · deteksi tepi otomatis</div>
+          </button>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin:26px 2px 12px">
+            <div style="color:var(--fg);font-size:16px;font-weight:800;letter-spacing:-.01em">Terakhir Dipindai</div>
+            <span style="color:#79818f;font-size:12px;font-weight:600">Recent</span>
+          </div>
+
+          <sc-if value="{{ hasDocs }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <sc-for list="{{ documents }}" as="doc" hint-placeholder-count="4">
+            <button onClick="{{ doc.onOpen }}" style="text-align:left;border:none;cursor:pointer;background:#fff;border-radius:18px;padding:10px;box-shadow:0 8px 20px -12px rgba(0,0,0,.5)">
+              <div style="position:relative;height:96px;border-radius:12px;overflow:hidden;background:{{ doc.tint }};display:flex;flex-direction:column;padding:9px 9px 0">
+                <div style="height:8px;width:60%;border-radius:3px;background:{{ doc.ink }};opacity:.85"></div>
+                <div style="height:5px;width:85%;border-radius:3px;background:{{ doc.ink }};opacity:.35;margin-top:8px"></div>
+                <div style="height:5px;width:75%;border-radius:3px;background:{{ doc.ink }};opacity:.35;margin-top:5px"></div>
+                <div style="height:5px;width:88%;border-radius:3px;background:{{ doc.ink }};opacity:.35;margin-top:5px"></div>
+                <span style="{{ doc.typeTagStyle }}">{{ doc.filetype }}</span>
+              </div>
+              <div style="color:#141821;font-size:13px;font-weight:700;margin:9px 2px 0;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ doc.title }}</div>
+              <div style="color:#8a93a2;font-size:11px;font-weight:600;margin:3px 2px 3px">{{ doc.pageLabel }}</div>
+            </button>
+            </sc-for>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ noDocs }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:8px;background:#161a22;border:1px solid rgba(255,255,255,.06);border-radius:20px;padding:40px 26px;text-align:center;display:flex;flex-direction:column;align-items:center">
+            <div style="width:74px;height:74px;border-radius:22px;background:var(--accsoft);display:flex;align-items:center;justify-content:center;margin-bottom:18px">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="var(--acc)" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v5h5" stroke="var(--acc)" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12v5M9.5 14.5h5" stroke="var(--acc)" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <div style="color:#fff;font-size:17px;font-weight:800">Belum ada dokumen</div>
+            <div style="color:#8a93a2;font-size:13px;font-weight:500;margin-top:6px;line-height:1.5;max-width:220px">Pindai dokumen pertamamu — struk, kontrak, atau KTP — jadi PDF rapi dalam hitungan detik.</div>
+            <button onClick="{{ startScan }}" style="margin-top:20px;border:none;cursor:pointer;background:var(--acc);color:#fff;font-weight:700;font-size:14px;padding:13px 24px;border-radius:14px;box-shadow:0 12px 24px -10px var(--accedge)">Pindai sekarang</button>
+          </div>
+          </sc-if>
+
+          <!-- ad banner: basic only -->
+          <sc-if value="{{ showAd }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:20px;height:66px;border-radius:14px;background:linear-gradient(90deg,#1b2029,#20262f);border:1px dashed rgba(255,255,255,.16);display:flex;align-items:center;gap:12px;padding:0 14px;position:relative">
+            <span style="position:absolute;top:6px;right:9px;font-size:9px;font-weight:800;letter-spacing:.08em;color:#69717f">AD</span>
+            <div style="width:42px;height:42px;border-radius:10px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#79818f" stroke-width="1.8"/><path d="M3 15l5-4 4 3 3-2 6 4" stroke="#79818f" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+            <div style="min-width:0"><div style="color:#c3cad4;font-size:12px;font-weight:700">Iklan · Sponsored</div><div style="color:#79818f;font-size:11px;font-weight:500;margin-top:1px">Upgrade ke PRO untuk hilangkan iklan</div></div>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <!-- DOCS TAB -->
+        <sc-if value="{{ isDocs }}" hint-placeholder-val="{{ false }}">
+        <div class="noscroll" style="flex:1;min-height:0;overflow-y:auto;padding:4px 20px 16px">
+          <sc-if value="{{ hasDocs }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ documents }}" as="doc" hint-placeholder-count="4">
+            <button onClick="{{ doc.onOpen }}" style="display:flex;gap:13px;align-items:center;text-align:left;border:none;cursor:pointer;background:#fff;border-radius:16px;padding:11px;box-shadow:0 8px 20px -14px rgba(0,0,0,.5)">
+              <div style="width:52px;height:64px;border-radius:9px;background:{{ doc.tint }};flex:none;padding:7px 7px 0;overflow:hidden">
+                <div style="height:6px;width:60%;border-radius:2px;background:{{ doc.ink }};opacity:.8"></div>
+                <div style="height:4px;width:88%;border-radius:2px;background:{{ doc.ink }};opacity:.3;margin-top:6px"></div>
+                <div style="height:4px;width:70%;border-radius:2px;background:{{ doc.ink }};opacity:.3;margin-top:4px"></div>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="color:#141821;font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ doc.title }}</div>
+                <div style="color:#8a93a2;font-size:12px;font-weight:600;margin-top:3px">{{ doc.pageLabel }} · {{ doc.filetype }}</div>
+              </div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="flex:none"><path d="M9 6l6 6-6 6" stroke="#c2cad4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ noDocs }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:60px;text-align:center;color:#8a93a2;font-size:13px;font-weight:600">Belum ada dokumen tersimpan.</div>
+          </sc-if>
+          <sc-if value="{{ showAd }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:18px;height:66px;border-radius:14px;background:linear-gradient(90deg,#1b2029,#20262f);border:1px dashed rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;position:relative"><span style="position:absolute;top:6px;right:9px;font-size:9px;font-weight:800;letter-spacing:.08em;color:#69717f">AD</span><span style="color:#79818f;font-size:12px;font-weight:600">Banner Iklan · 320×50</span></div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <!-- SETTINGS TAB -->
+        <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+        <div class="noscroll" style="flex:1;min-height:0;overflow-y:auto;padding:4px 20px 16px">
+          <div style="background:linear-gradient(135deg,#1b2130,#141822);border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:18px;display:flex;align-items:center;gap:14px">
+            <div style="{{ settingsTierIconStyle }}"><span style="font-size:20px;font-weight:800;color:#fff">{{ tierInitial }}</span></div>
+            <div style="flex:1">
+              <div style="color:#fff;font-size:16px;font-weight:800">Paket {{ tierLabel }}</div>
+              <div style="color:#8a93a2;font-size:12px;font-weight:600;margin-top:2px">{{ tierBlurb }}</div>
+            </div>
+          </div>
+          <sc-if value="{{ isBasic }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ setPro }}" style="width:100%;margin-top:14px;border:none;cursor:pointer;background:linear-gradient(135deg,#ffcf47,#f59e0b);color:#3a2c00;font-weight:800;font-size:15px;padding:15px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 14px 28px -12px rgba(245,158,11,.6)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 7l4.5 3L12 4l4.5 6L21 7l-1.8 11H4.8L3 7z" fill="#3a2c00"/></svg>Upgrade ke PRO</button>
+          </sc-if>
+
+          <div style="color:#79818f;font-size:12px;font-weight:700;letter-spacing:.04em;margin:22px 4px 10px">PREFERENSI</div>
+          <div style="background:#161a22;border:1px solid rgba(255,255,255,.06);border-radius:18px;overflow:hidden">
+            <div style="padding:15px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="color:#e7ebf1;font-size:14px;font-weight:600">Tema warna</div>
+                <div style="color:var(--acc);font-size:12px;font-weight:700">{{ themeName }}</div>
+              </div>
+              <div style="display:flex;gap:12px;margin-top:13px">
+                <sc-for list="{{ themeList }}" as="th" hint-placeholder-count="4">
+                <button onClick="{{ th.onSelect }}" title="{{ th.label }}" style="{{ th.swatchLgStyle }}"></button>
+                </sc-for>
+              </div>
+            </div>
+            <button onClick="{{ clearDocs }}" style="width:100%;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:15px 16px;text-align:left">
+              <div style="color:#e7ebf1;font-size:14px;font-weight:600">Hapus semua dokumen</div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5h6v2M6 7l1 13h10l1-13" stroke="#ef4444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <div style="color:#5b6371;font-size:11px;font-weight:500;text-align:center;margin-top:22px">ScannApp v0.2 · Fase 0–2 prototype</div>
+        </div>
+        </sc-if>
+
+        <!-- bottom nav -->
+        <div style="flex:none;height:70px;background:#12151c;border-top:1px solid rgba(255,255,255,.06);display:flex;align-items:stretch;padding:0 8px 6px">
+          <button onClick="{{ goHome }}" style="{{ navHomeStyle }}"><svg width="23" height="23" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700;margin-top:3px">Home</span></button>
+          <button onClick="{{ goDocs }}" style="{{ navDocsStyle }}"><svg width="23" height="23" viewBox="0 0 24 24" fill="none"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M14 3v5h5" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700;margin-top:3px">Dokumen</span></button>
+          <button onClick="{{ goSettings }}" style="{{ navSettingsStyle }}"><svg width="23" height="23" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.9"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span style="font-size:10.5px;font-weight:700;margin-top:3px">Pengaturan</span></button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ================= REVIEW ================= -->
+      <sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:transparent;animation:tin .3s ease">
+        <div style="flex:none;display:flex;align-items:center;justify-content:space-between;padding:8px 18px 10px">
+          <button onClick="{{ goHome }}" style="width:40px;height:40px;border-radius:12px;border:none;cursor:pointer;background:var(--chip);display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="var(--fg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div style="text-align:center"><div style="color:var(--fg);font-size:15px;font-weight:800">Tinjau Hasil Pindai</div><div style="color:#79818f;font-size:11px;font-weight:600;margin-top:1px">Review captured pages</div></div>
+          <div style="width:40px"></div>
+        </div>
+
+        <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 30px">
+          <div style="width:100%;max-width:250px;aspect-ratio:3/4;background:{{ currentTint }};border-radius:14px;box-shadow:0 24px 50px -18px rgba(0,0,0,.85);padding:22px 20px;position:relative;overflow:hidden">
+            <div style="height:14px;width:55%;border-radius:4px;background:{{ currentInk }};opacity:.85"></div>
+            <div style="height:8px;width:92%;border-radius:3px;background:{{ currentInk }};opacity:.3;margin-top:16px"></div>
+            <div style="height:8px;width:86%;border-radius:3px;background:{{ currentInk }};opacity:.3;margin-top:8px"></div>
+            <div style="height:8px;width:90%;border-radius:3px;background:{{ currentInk }};opacity:.3;margin-top:8px"></div>
+            <div style="height:8px;width:70%;border-radius:3px;background:{{ currentInk }};opacity:.3;margin-top:8px"></div>
+            <span style="position:absolute;bottom:16px;left:20px;font-size:11px;font-weight:800;letter-spacing:.05em;color:{{ currentInk }};opacity:.65">{{ currentTypeLabel }}</span>
+            <div style="position:absolute;inset:0;border:2px solid var(--acc);border-radius:14px;pointer-events:none;opacity:.45"></div>
+          </div>
+        </div>
+
+        <div style="flex:none;text-align:center;color:var(--fg);font-size:13px;font-weight:700;padding:2px 0 10px">{{ pageCountLabel }}</div>
+
+        <!-- thumbnail strip -->
+        <div class="noscroll" style="flex:none;display:flex;gap:11px;overflow-x:auto;padding:2px 18px 14px">
+          <sc-for list="{{ reviewPages }}" as="pg" hint-placeholder-count="4">
+          <div style="position:relative;flex:none">
+            <button onClick="{{ pg.onSelect }}" style="{{ pg.thumbStyle }}">
+              <div style="height:5px;width:60%;border-radius:2px;background:{{ pg.ink }};opacity:.7;margin:0 auto 4px 6px"></div>
+              <div style="height:3px;width:80%;border-radius:2px;background:{{ pg.ink }};opacity:.3;margin:0 auto 3px 6px"></div>
+              <div style="height:3px;width:70%;border-radius:2px;background:{{ pg.ink }};opacity:.3;margin:0 auto 0 6px"></div>
+              <span style="position:absolute;bottom:4px;left:0;right:0;text-align:center;font-size:9px;font-weight:800;color:{{ pg.ink }};opacity:.6">{{ pg.pageNo }}</span>
+            </button>
+            <button onClick="{{ pg.onDelete }}" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:2px solid #0b0d11;cursor:pointer;background:#ef4444;display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></button>
+          </div>
+          </sc-for>
+          <button onClick="{{ addPage }}" style="flex:none;width:62px;height:82px;border-radius:11px;border:2px dashed rgba(255,255,255,.22);cursor:pointer;background:rgba(255,255,255,.03);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#8a93a2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span style="font-size:9px;font-weight:700">Tambah</span></button>
+        </div>
+
+        <div style="flex:none;padding:6px 18px 18px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:10px">
+            <button onClick="{{ retake }}" style="flex:1;border:1.6px solid rgba(255,255,255,.18);cursor:pointer;background:none;color:#e7ebf1;font-size:13px;font-weight:700;padding:13px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:7px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>Ambil ulang</button>
+            <button onClick="{{ addPage }}" style="flex:1;border:1.6px solid rgba(255,255,255,.18);cursor:pointer;background:none;color:#e7ebf1;font-size:13px;font-weight:700;padding:13px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:7px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Halaman</button>
+          </div>
+          <button onClick="{{ continueToEditor }}" style="width:100%;border:none;cursor:pointer;background:var(--acc);color:#fff;font-size:15px;font-weight:800;padding:16px;border-radius:16px;box-shadow:0 16px 30px -12px var(--accedge);display:flex;align-items:center;justify-content:center;gap:8px">Lanjut ke Editor<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ================= EDITOR ================= -->
+      <sc-if value="{{ isEditor }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:transparent;animation:tin .3s ease">
+        <div style="flex:none;display:flex;align-items:center;gap:10px;padding:8px 16px 8px">
+          <button onClick="{{ backToReview }}" style="width:40px;height:40px;flex:none;border-radius:12px;border:none;cursor:pointer;background:var(--chip);display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="var(--fg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div style="flex:1;min-width:0;position:relative">
+            <input value="{{ docTitle }}" onChange="{{ onTitleChange }}" style="width:100%;background:var(--chip);border:1px solid var(--chipbd);border-radius:11px;color:var(--fg);font-family:inherit;font-size:14px;font-weight:700;padding:10px 32px 10px 12px;outline:none" />
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);pointer-events:none"><path d="M4 20h4L18 10l-4-4L4 16v4z" stroke="#79818f" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <button onClick="{{ saveToExport }}" style="width:40px;height:40px;flex:none;border-radius:12px;border:none;cursor:pointer;background:var(--acc);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px -8px var(--accedge)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+
+        <!-- page counter -->
+        <div style="flex:none;display:flex;justify-content:center;padding:2px 0 6px">
+          <div style="{{ counterPillStyle }}">
+            <sc-if value="{{ showCeiling }}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="margin-right:1px"><path d="M12 4l9 16H3L12 4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></sc-if>
+            <span>{{ counterLabel }}</span>
+          </div>
+        </div>
+        <sc-if value="{{ showCeilingHint }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:none;text-align:center;color:{{ counterHintColor }};font-size:11px;font-weight:600;padding:0 24px 2px">{{ counterHint }}</div>
+        </sc-if>
+
+        <!-- preview -->
+        <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:10px 30px 8px">
+          <div style="width:100%;max-width:230px;aspect-ratio:3/4;background:{{ currentTint }};border-radius:12px;box-shadow:0 24px 50px -18px rgba(0,0,0,.85);padding:22px 20px;position:relative;transform:{{ previewTransform }};transition:transform .35s cubic-bezier(.2,.8,.3,1)">
+            <div style="height:14px;width:55%;border-radius:4px;background:{{ currentInk }};opacity:.85"></div>
+            <div style="height:8px;width:92%;border-radius:3px;background:{{ currentInk }};opacity:.3;margin-top:16px"></div>
+            <div style="height:8px;width:86%;border-radius:3px;background:{{ currentInk }};opacity:.3;margin-top:8px"></div>
+            <div style="height:8px;width:90%;border-radius:3px;background:{{ currentInk }};opacity:.3;margin-top:8px"></div>
+            <div style="height:8px;width:60%;border-radius:3px;background:{{ currentInk }};opacity:.3;margin-top:8px"></div>
+            <sc-if value="{{ cropActive }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;inset:14px;border:2px solid var(--acc);border-radius:6px">
+              <div style="position:absolute;top:-5px;left:-5px;width:12px;height:12px;border:3px solid var(--acc);border-right:none;border-bottom:none"></div>
+              <div style="position:absolute;top:-5px;right:-5px;width:12px;height:12px;border:3px solid var(--acc);border-left:none;border-bottom:none"></div>
+              <div style="position:absolute;bottom:-5px;left:-5px;width:12px;height:12px;border:3px solid var(--acc);border-right:none;border-top:none"></div>
+              <div style="position:absolute;bottom:-5px;right:-5px;width:12px;height:12px;border:3px solid var(--acc);border-left:none;border-top:none"></div>
+            </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <!-- merge strip -->
+        <sc-if value="{{ mergeMode }}" hint-placeholder-val="{{ false }}">
+        <div class="noscroll" style="flex:none;display:flex;gap:9px;overflow-x:auto;padding:6px 16px 12px;background:rgba(255,255,255,.02);border-top:1px solid rgba(255,255,255,.05)">
+          <sc-for list="{{ mergePages }}" as="pg" hint-placeholder-count="4">
+          <div draggable="true" onDragStart="{{ pg.onDragStart }}" onDragOver="{{ pg.onDragOver }}" onDrop="{{ pg.onDrop }}" style="{{ pg.mergeThumbStyle }}">
+            <div style="display:flex;align-items:center;justify-content:center;gap:3px;height:14px;color:#9aa3b2;cursor:grab"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="6" r="1.4" fill="currentColor"/><circle cx="15" cy="6" r="1.4" fill="currentColor"/><circle cx="9" cy="12" r="1.4" fill="currentColor"/><circle cx="15" cy="12" r="1.4" fill="currentColor"/><circle cx="9" cy="18" r="1.4" fill="currentColor"/><circle cx="15" cy="18" r="1.4" fill="currentColor"/></svg></div>
+            <div style="flex:1;border-radius:6px;background:{{ pg.tint }};padding:6px 6px 0;overflow:hidden;position:relative">
+              <div style="height:4px;width:60%;border-radius:2px;background:{{ pg.ink }};opacity:.7"></div>
+              <div style="height:3px;width:85%;border-radius:2px;background:{{ pg.ink }};opacity:.3;margin-top:4px"></div>
+              <span style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:9px;font-weight:800;color:{{ pg.ink }};opacity:.65">{{ pg.pageNo }}</span>
+            </div>
+          </div>
+          </sc-for>
+        </div>
+        </sc-if>
+
+        <!-- toolbar -->
+        <div style="flex:none;height:76px;background:#12151c;border-top:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-around;padding:0 8px 6px">
+          <button onClick="{{ toolCrop }}" style="{{ cropBtnStyle }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="font-size:10px;font-weight:700;margin-top:3px">Crop</span></button>
+          <button onClick="{{ toolRotate }}" style="{{ rotateBtnStyle }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="font-size:10px;font-weight:700;margin-top:3px">Putar</span></button>
+          <button onClick="{{ toolMerge }}" style="{{ mergeBtnStyle }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="8" height="14" rx="1.5" stroke="currentColor" stroke-width="1.9"/><rect x="13" y="5" width="8" height="14" rx="1.5" stroke="currentColor" stroke-width="1.9"/></svg><span style="font-size:10px;font-weight:700;margin-top:3px">Gabung</span></button>
+          <button onClick="{{ toolDelete }}" style="{{ deleteBtnStyle }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="font-size:10px;font-weight:700;margin-top:3px">Hapus</span></button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ================= EXPORT ================= -->
+      <sc-if value="{{ isExport }}" hint-placeholder-val="{{ false }}">
+      <div class="noscroll" style="flex:1;min-height:0;overflow-y:auto;background:transparent;animation:tin .3s ease">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 18px 12px">
+          <button onClick="{{ backToEditor }}" style="width:40px;height:40px;border-radius:12px;border:none;cursor:pointer;background:var(--chip);display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="var(--fg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div style="text-align:center"><div style="color:var(--fg);font-size:15px;font-weight:800">Ekspor Dokumen</div><div style="color:#79818f;font-size:11px;font-weight:600;margin-top:1px">Export &amp; share</div></div>
+          <div style="width:40px"></div>
+        </div>
+
+        <!-- preview + size -->
+        <div style="display:flex;flex-direction:column;align-items:center;padding:4px 20px 8px">
+          <div style="width:132px;aspect-ratio:3/4;background:{{ currentTint }};border-radius:12px;box-shadow:0 20px 40px -16px rgba(0,0,0,.8);padding:16px 14px;position:relative;overflow:hidden">
+            <div style="height:10px;width:55%;border-radius:3px;background:{{ currentInk }};opacity:.85"></div>
+            <div style="height:5px;width:90%;border-radius:2px;background:{{ currentInk }};opacity:.3;margin-top:11px"></div>
+            <div style="height:5px;width:82%;border-radius:2px;background:{{ currentInk }};opacity:.3;margin-top:6px"></div>
+            <div style="height:5px;width:88%;border-radius:2px;background:{{ currentInk }};opacity:.3;margin-top:6px"></div>
+            <sc-if value="{{ isBasic }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;bottom:8px;right:8px;font-size:8px;font-weight:800;color:{{ currentInk }};opacity:.35;transform:rotate(-12deg);border:1px solid;padding:1px 3px;border-radius:3px">ScannApp</span></sc-if>
+          </div>
+          <div style="color:var(--fg);font-size:13px;font-weight:700;margin-top:12px">{{ docTitle }}</div>
+          <div style="color:#79818f;font-size:12px;font-weight:600;margin-top:2px">{{ pageCountLabel }} · ~{{ estSize }}</div>
+
+          <sc-if value="{{ isBasic }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:8px">
+            <div style="display:flex;align-items:center;gap:6px;background:rgba(245,165,36,.14);border:1px solid rgba(245,165,36,.3);border-radius:10px;padding:7px 11px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#f5a524" stroke-width="1.8"/><path d="M12 8v5M12 16v.5" stroke="#f5a524" stroke-width="1.8" stroke-linecap="round"/></svg><span style="color:#f5a524;font-size:11.5px;font-weight:700">Ekspor akan menyertakan watermark kecil</span></div>
+            <button onClick="{{ setPro }}" style="border:1px solid var(--acc);background:var(--accsoft);cursor:pointer;color:var(--acc);font-size:11.5px;font-weight:700;padding:6px 12px;border-radius:999px">Hapus watermark — Upgrade ke PRO</button>
+          </div>
+          </sc-if>
+        </div>
+
+        <div style="padding:12px 20px 0">
+          <div style="color:#79818f;font-size:12px;font-weight:700;letter-spacing:.04em;margin:8px 2px 10px">FORMAT</div>
+          <div style="display:flex;gap:11px">
+            <button onClick="{{ selectPdf }}" style="{{ pdfChipStyle }}">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v5h5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+              <span style="font-size:15px;font-weight:800;margin-top:7px">PDF</span><span style="font-size:11px;font-weight:600;opacity:.7;margin-top:1px">Multi-halaman</span>
+            </button>
+            <button onClick="{{ selectJpg }}" style="{{ jpgChipStyle }}">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="10" r="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M4 16l4.5-3.5L13 16l3-2 4 3" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+              <span style="font-size:15px;font-weight:800;margin-top:7px">JPG</span><span style="font-size:11px;font-weight:600;opacity:.7;margin-top:1px">Per halaman</span>
+            </button>
+          </div>
+
+          <div style="color:#79818f;font-size:12px;font-weight:700;letter-spacing:.04em;margin:22px 2px 10px">KUALITAS</div>
+          <div style="background:#161a22;border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:15px 16px;display:flex;align-items:center;justify-content:space-between">
+            <div><div style="color:#e7ebf1;font-size:14px;font-weight:700">Standard quality</div><div style="color:#79818f;font-size:11.5px;font-weight:500;margin-top:2px">{{ qualityHint }}</div></div>
+            <sc-if value="{{ isBasic }}" hint-placeholder-val="{{ true }}"><span style="background:rgba(255,255,255,.06);color:#8a93a2;font-size:10.5px;font-weight:700;padding:5px 9px;border-radius:8px">Terkunci</span></sc-if>
+            <sc-if value="{{ isPro }}" hint-placeholder-val="{{ false }}"><span style="background:var(--accsoft);color:var(--acc);font-size:10.5px;font-weight:700;padding:5px 9px;border-radius:8px">PRO: dapat diatur</span></sc-if>
+          </div>
+        </div>
+
+        <div style="padding:22px 20px 22px;display:flex;flex-direction:column;gap:11px">
+          <button onClick="{{ doExport }}" style="width:100%;border:none;cursor:pointer;background:var(--acc);color:#fff;font-size:16px;font-weight:800;padding:17px;border-radius:16px;box-shadow:0 16px 30px -12px var(--accedge);display:flex;align-items:center;justify-content:center;gap:8px"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3v12M7 10l5 5 5-5M5 20h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Ekspor {{ formatLabel }}</button>
+          <div style="display:flex;gap:11px">
+            <button onClick="{{ toastShare }}" style="flex:1;border:1.6px solid rgba(255,255,255,.18);cursor:pointer;background:none;color:#e7ebf1;font-size:13px;font-weight:700;padding:13px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:7px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="18" cy="5" r="2.5" stroke="currentColor" stroke-width="1.8"/><circle cx="6" cy="12" r="2.5" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="19" r="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M8.2 10.8l7.6-4.6M8.2 13.2l7.6 4.6" stroke="currentColor" stroke-width="1.8"/></svg>Bagikan</button>
+            <button onClick="{{ toastSave }}" style="flex:1;border:1.6px solid rgba(255,255,255,.18);cursor:pointer;background:none;color:#e7ebf1;font-size:13px;font-weight:700;padding:13px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:7px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 3h11l3 3v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 3v5h7M8 14h8M8 18h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Simpan</button>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- toast -->
+      <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;bottom:34px;left:50%;transform:translateX(-50%);z-index:50;background:#f5f7fa;color:#141821;font-size:13px;font-weight:700;padding:11px 18px;border-radius:12px;box-shadow:0 14px 30px -8px rgba(0,0,0,.5);white-space:nowrap;animation:toastin .25s ease;display:flex;align-items:center;gap:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="var(--acc)"/><path d="M8 12.5l2.5 2.5L16 9" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>{{ toast }}</div>
+      </sc-if>
+
+      <!-- home indicator -->
+      <div style="position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:3px;background:rgba(255,255,255,.35);z-index:31"></div>
+    </div>
+  </div>
+
+  <div style="color:#7b8290;font-size:12px;font-weight:600;text-align:center;max-width:392px;line-height:1.5">Prototipe interaktif — ketuk <span style="color:#aeb6c2">Pindai Dokumen Baru</span> untuk menjalankan alur Home → Review → Editor → Ekspor. Ganti Tier &amp; Warna di atas.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:460,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  constructor(p){
+    super(p);
+    const T = this.types;
+    this.state = {
+      view:'app', tab:'home', tier:'basic',
+      documents: this.seedDocs(), theme:'snow',
+      pages:[], current:0, tool:'crop', mergeMode:false, rotation:0,
+      docTitle:'Dokumen Baru', format:'pdf', dragIndex:null, toast:null
+    };
+    this._toastT = null;
+  }
+
+  types = {
+    receipt:{tint:'#fef3c7', ink:'#92600a', label:'STRUK'},
+    contract:{tint:'#e0e7ff', ink:'#3730a3', label:'KONTRAK'},
+    id:{tint:'#dcfce7', ink:'#166534', label:'KARTU ID'},
+    note:{tint:'#fee2e2', ink:'#9f1239', label:'CATATAN'}
+  };
+  order = ['receipt','contract','id','note'];
+
+  seedDocs(){
+    return [
+      {id:'d1', type:'receipt', title:'Struk Belanja', pages:1, filetype:'JPG'},
+      {id:'d2', type:'contract', title:'Kontrak Sewa Rumah', pages:8, filetype:'PDF'},
+      {id:'d3', type:'id', title:'KTP & SIM', pages:2, filetype:'PDF'},
+      {id:'d4', type:'note', title:'Catatan Rapat Q3', pages:3, filetype:'PDF'}
+    ];
+  }
+
+  uid(){ return 'p'+Math.random().toString(36).slice(2,8); }
+  makePage(i){ const t = this.order[i % this.order.length]; return {id:this.uid(), type:t}; }
+
+  themes = {
+    snow:   {label:'Putih',   acc:'#3457e8', a:'#ffffff', b:'#3457e8', bg:'radial-gradient(135% 100% at 50% 0%, #ffffff 0%, #eef2fb 52%, #d8e2f4 100%)', light:true},
+    ocean:  {label:'Samudra', acc:'#2f6bff', a:'#2f6bff', b:'#38bdf8', bg:'radial-gradient(135% 100% at 50% 0%, #13294a 0%, #0d1a2e 55%, #070d18 100%)'},
+    sunset: {label:'Senja',   acc:'#ff5a20', a:'#ff5a20', b:'#ffb020', bg:'radial-gradient(135% 100% at 50% 0%, #341c12 0%, #21140d 55%, #120b07 100%)'},
+    lime:   {label:'Lime',    acc:'#5CB270', a:'#F4F269', b:'#5CB270', bg:'radial-gradient(135% 100% at 50% 0%, #223a22 0%, #14231455 55%, #0a130b 100%)'}
+  };
+  themeOrder = ['snow','ocean','sunset','lime'];
+  rgba(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+  acc(){ return this.themes[this.state.theme].acc; }
+  accSoft(){ return this.rgba(this.acc(),0.15); }
+  accEdge(){ return this.rgba(this.acc(),0.6); }
+
+  toast(msg){
+    this.setState({toast:msg});
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(()=>this.setState({toast:null}), 1700);
+  }
+
+  startScan(){
+    const pages = [0,1,2,3].map(i=>this.makePage(i));
+    this.setState({pages, current:0, view:'review', docTitle:'Dokumen Baru', tool:'crop', mergeMode:false, rotation:0});
+  }
+  addPage(){
+    if(this.state.tier==='basic' && this.state.pages.length>=20){ this.toast('Batas 20 halaman (Basic)'); return; }
+    const pages = this.state.pages.concat(this.makePage(this.state.pages.length));
+    this.setState({pages, current:pages.length-1});
+    this.toast('Halaman ditambahkan');
+  }
+  deletePage(id){
+    let pages = this.state.pages.filter(p=>p.id!==id);
+    if(pages.length===0){ pages=[this.makePage(0)]; }
+    const current = Math.min(this.state.current, pages.length-1);
+    this.setState({pages, current});
+  }
+  retake(){ this.toast('Halaman diambil ulang'); }
+  continueToEditor(){ this.setState({view:'editor', tool:'crop', mergeMode:false, rotation:0}); }
+  backToReview(){ this.setState({view:'review', mergeMode:false}); }
+  backToEditor(){ this.setState({view:'editor'}); }
+
+  setTool(t){
+    if(t==='delete'){ this.deletePage(this.state.pages[this.state.current].id); this.toast('Halaman dihapus'); return; }
+    if(t==='rotate'){ this.setState({tool:'rotate', mergeMode:false, rotation:(this.state.rotation+90)%360}); return; }
+    if(t==='merge'){ this.setState({tool:'merge', mergeMode:!this.state.mergeMode}); return; }
+    this.setState({tool:t, mergeMode:false});
+  }
+
+  reorder(from,to){
+    if(from==null||from===to) return;
+    const pages = this.state.pages.slice();
+    const [m] = pages.splice(from,1);
+    pages.splice(to,0,m);
+    this.setState({pages, dragIndex:null, current:to});
+  }
+
+  saveToExport(){ this.setState({view:'export'}); }
+  doExport(){
+    const s=this.state; const cur=s.pages[Math.min(s.current,s.pages.length-1)]||s.pages[0];
+    const doc={id:this.uid(), type:cur?cur.type:'note', title:s.docTitle||'Dokumen Baru', pages:s.pages.length, filetype:s.format.toUpperCase()};
+    this.setState({documents:[doc].concat(s.documents), view:'app', tab:'home'});
+    this.toast('Tersimpan ke ScannApp');
+  }
+
+  openDoc(){ this.toast('Membuka dokumen…'); }
+  clearDocs(){ this.setState({documents:[]}); this.toast('Semua dokumen dihapus'); }
+
+  renderVals(){
+    const s = this.state;
+    const acc=this.acc(), accSoft=this.accSoft(), accEdge=this.accEdge();
+    const T=this.types;
+    const isPro = s.tier==='pro', isBasic=!isPro;
+
+    // documents
+    const documents = s.documents.map(d=>{
+      const t=T[d.type];
+      return {
+        ...d, tint:t.tint, ink:t.ink,
+        pageLabel: d.pages+(d.pages>1?' halaman':' halaman'),
+        typeTagStyle:`position:absolute;bottom:7px;right:7px;font-size:8px;font-weight:800;letter-spacing:.03em;padding:2px 6px;border-radius:6px;background:${t.ink};color:#fff`,
+        onOpen:()=>this.openDoc()
+      };
+    });
+
+    // current page
+    const pages=s.pages; const cIdx=Math.min(s.current, Math.max(0,pages.length-1));
+    const cur=pages[cIdx]||this.makePage(0);
+    const cT=T[cur.type];
+
+    // review pages
+    const reviewPages = pages.map((p,i)=>{
+      const t=T[p.type]; const active=i===cIdx;
+      return {
+        id:p.id, ink:t.ink, pageNo:i+1,
+        thumbStyle:`width:62px;height:82px;border-radius:11px;border:2px solid ${active?acc:'rgba(255,255,255,.12)'};cursor:pointer;background:${t.tint};padding:7px 0 0;position:relative;outline:none;box-shadow:${active?'0 0 0 3px '+accSoft:'none'}`,
+        onSelect:()=>this.setState({current:i}),
+        onDelete:()=>this.deletePage(p.id)
+      };
+    });
+
+    // merge pages
+    const mergePages = pages.map((p,i)=>{
+      const t=T[p.type]; const active=i===cIdx;
+      return {
+        id:p.id, tint:t.tint, ink:t.ink, pageNo:i+1,
+        mergeThumbStyle:`flex:none;width:56px;height:82px;border-radius:9px;border:1.5px solid ${active?acc:'rgba(255,255,255,.1)'};background:rgba(255,255,255,.03);padding:2px 3px 5px;display:flex;flex-direction:column;cursor:grab`,
+        onDragStart:()=>this.setState({dragIndex:i}),
+        onDragOver:(e)=>e.preventDefault(),
+        onDrop:()=>this.reorder(s.dragIndex,i)
+      };
+    });
+
+    // editor counter
+    const total=pages.length, limit=20;
+    const near = isBasic && total>=16 && total<20;
+    const over = isBasic && total>=20;
+    const counterColor = isPro ? '#9aa3b2' : (over?'#ef4444':(near?'#f5a524':'#9aa3b2'));
+    const counterBg = isPro ? 'rgba(255,255,255,.06)' : (over?'rgba(239,68,68,.15)':(near?'rgba(245,165,36,.15)':'rgba(255,255,255,.06)'));
+    const counterLabel = isPro ? (total+' halaman') : (total+' / '+limit+' halaman');
+    const showCeiling = isBasic && (near||over);
+    const counterHint = over ? 'Batas Basic tercapai — upgrade PRO untuk tanpa batas' : (near ? 'Mendekati batas '+limit+' halaman (Basic)' : '');
+
+    // export
+    const perPage = s.format==='pdf' ? 190 : 320;
+    const kb = perPage*Math.max(1,total);
+    const estSize = kb>1024 ? (kb/1024).toFixed(1)+' MB' : kb+' KB';
+
+    // tier badge
+    const tierBadgeStyle = isPro
+      ? 'display:flex;align-items:center;gap:4px;border:none;cursor:pointer;background:linear-gradient(135deg,#ffcf47,#f59e0b);color:#3a2c00;font-size:12px;font-weight:800;letter-spacing:.03em;padding:7px 13px;border-radius:999px;box-shadow:0 6px 16px -6px rgba(245,158,11,.7)'
+      : 'display:flex;align-items:center;gap:4px;border:1px solid rgba(255,255,255,.14);cursor:pointer;background:rgba(255,255,255,.06);color:#c3cad4;font-size:12px;font-weight:700;letter-spacing:.02em;padding:7px 14px;border-radius:999px';
+
+    const navBase='flex:1;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:6px;';
+    const navStyle=(name)=> navBase+'color:'+(s.tab===name?acc:'#6d7583');
+
+    const toolBase='flex:1;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;border-radius:14px;margin:0 3px;';
+    const toolStyle=(name)=>{ const on=s.tool===name && (name!=='merge' || s.mergeMode); return toolBase+(on?('background:'+accSoft+';color:'+acc):'color:#8a93a2'); };
+
+    const chipStyle=(fmt)=>{ const on=s.format===fmt; return `flex:1;border:2px solid ${on?acc:'rgba(255,255,255,.1)'};cursor:pointer;background:${on?accSoft:'#161a22'};color:${on?acc:'#c3cad4'};border-radius:16px;padding:18px 12px;display:flex;flex-direction:column;align-items:center;box-shadow:${on?'0 0 0 3px '+accSoft:'none'}`; };
+
+    const themeList=this.themeOrder.map(k=>{
+      const th=this.themes[k]; const on=s.theme===k;
+      const grad=`linear-gradient(135deg, ${th.a} 0%, ${th.a} 50%, ${th.b} 50%, ${th.b} 100%)`;
+      return {
+        key:k, label:th.label, onSelect:()=>this.setState({theme:k}),
+        swatchStyle:`width:26px;height:26px;border-radius:50%;cursor:pointer;padding:0;background:${grad};border:2px solid ${on?'#fff':'rgba(255,255,255,.18)'};box-shadow:${on?'0 0 0 2px '+th.acc:'none'}`,
+        swatchLgStyle:`flex:1;height:40px;border-radius:13px;cursor:pointer;padding:0;background:${grad};border:2px solid ${on?'#fff':'rgba(255,255,255,.1)'};box-shadow:${on?'0 0 0 2px '+th.acc:'none'}`
+      };
+    });
+
+    const toggleBtn=(on)=>`border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:800;padding:6px 13px;border-radius:999px;`+(on?'background:'+ (isPro?'linear-gradient(135deg,#ffcf47,#f59e0b);color:#3a2c00':acc+';color:#fff'):'background:transparent;color:#8a93a2');
+
+    const previewTransform = s.tool==='rotate' ? `rotate(${s.rotation}deg)` : 'rotate(0deg)';
+
+    const subtitles={home:'Digitalkan dokumen apa saja', docs:'Semua dokumen tersimpan', settings:'Kelola paket & preferensi'};
+
+    return {
+      accentColor:acc, accentSoft:accSoft, accentEdge:accEdge,
+      isApp:s.view==='app', isReview:s.view==='review', isEditor:s.view==='editor', isExport:s.view==='export',
+      isHome:s.tab==='home', isDocs:s.tab==='docs', isSettings:s.tab==='settings',
+      tabSubtitle:subtitles[s.tab],
+      tier:s.tier, isPro, isBasic, tierLabel:isPro?'PRO':'Basic', tierInitial:isPro?'P':'B',
+      tierBlurb:isPro?'Tanpa iklan · tanpa watermark · tanpa batas halaman':'Gratis · didukung iklan · maks 20 halaman/dokumen',
+      tierBadgeStyle,
+      settingsTierIconStyle:`width:52px;height:52px;border-radius:16px;flex:none;display:flex;align-items:center;justify-content:center;background:${isPro?'linear-gradient(135deg,#ffcf47,#f59e0b)':acc}`,
+
+      basicToggleStyle:toggleBtn(isBasic), proToggleStyle:toggleBtn(isPro),
+      themeList, themeName:this.themes[s.theme].label, themeBg:this.themes[s.theme].bg,
+      themeFg: this.themes[s.theme].light ? '#1b2740' : '#eef1f6',
+      themeFgDim: this.themes[s.theme].light ? '#5c6a86' : '#79818f',
+      themeChip: this.themes[s.theme].light ? 'rgba(20,34,70,.06)' : 'rgba(255,255,255,.07)',
+      themeChipBd: this.themes[s.theme].light ? 'rgba(20,34,70,.14)' : 'rgba(255,255,255,.18)',
+
+      documents, hasDocs:s.documents.length>0, noDocs:s.documents.length===0,
+      showAd: isBasic && (s.tab==='home'||s.tab==='docs'),
+
+      // page/preview
+      currentTint:cT.tint, currentInk:cT.ink, currentTypeLabel:cT.label,
+      pageCountLabel: pages.length? ('Halaman '+(cIdx+1)+' dari '+pages.length+' · Page '+(cIdx+1)+' of '+pages.length):'—',
+      reviewPages, mergePages,
+
+      // editor
+      docTitle:s.docTitle, mergeMode:s.mergeMode,
+      cropActive:s.tool==='crop', previewTransform,
+      counterLabel, showCeiling, counterHint, showCeilingHint: !!counterHint,
+      counterHintColor: over?'#ef4444':'#f5a524',
+      counterPillStyle:`display:flex;align-items:center;gap:5px;font-size:13px;font-weight:800;padding:6px 14px;border-radius:999px;color:${counterColor};background:${counterBg}`,
+      cropBtnStyle:toolStyle('crop'), rotateBtnStyle:toolStyle('rotate'), mergeBtnStyle:toolStyle('merge'), deleteBtnStyle:toolStyle('delete'),
+
+      // export
+      isPdf:s.format==='pdf', isJpg:s.format==='jpg',
+      pdfChipStyle:chipStyle('pdf'), jpgChipStyle:chipStyle('jpg'),
+      formatLabel:s.format.toUpperCase(), estSize,
+      qualityHint:isBasic?'Kompresi tetap · slider tersedia di PRO':'Dapat diatur (fitur PRO)',
+
+      navHomeStyle:navStyle('home'), navDocsStyle:navStyle('docs'), navSettingsStyle:navStyle('settings'),
+
+      toast:s.toast,
+
+      // handlers
+      startScan:()=>this.startScan(), addPage:()=>this.addPage(), retake:()=>this.retake(),
+      continueToEditor:()=>this.continueToEditor(), backToReview:()=>this.backToReview(), backToEditor:()=>this.backToEditor(),
+      toolCrop:()=>this.setTool('crop'), toolRotate:()=>this.setTool('rotate'), toolMerge:()=>this.setTool('merge'), toolDelete:()=>this.setTool('delete'),
+      onTitleChange:(e)=>this.setState({docTitle:e.target.value}),
+      saveToExport:()=>this.saveToExport(), doExport:()=>this.doExport(),
+      selectPdf:()=>this.setState({format:'pdf'}), selectJpg:()=>this.setState({format:'jpg'}),
+      toastShare:()=>this.toast('Membuka menu bagikan…'), toastSave:()=>this.toast('Disimpan ke perangkat'),
+      goHome:()=>this.setState({view:'app', tab:'home'}), goDocs:()=>this.setState({view:'app', tab:'docs'}), goSettings:()=>this.setState({view:'app', tab:'settings'}),
+      setBasic:()=>this.setState({tier:'basic'}), setPro:()=>this.setState({tier:'pro'}), toggleTier:()=>this.setState({tier:s.tier==='pro'?'basic':'pro'}),
+      clearDocs:()=>this.clearDocs()
+    };
+  }
+}
+</script>
+</body>
+</html>

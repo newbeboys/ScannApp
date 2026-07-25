@@ -40,9 +40,12 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 ## 5. Alur Kerja yang Diharapkan
 
 1. Sebelum coding, baca task terkait di `TASKS.md`.
-2. Kerjakan satu task/subsistem per sesi kerja, ikuti urutan di `TASKS.md` (jangan lompat ke fitur Pro sebelum fondasi Basic selesai, kecuali diminta).
-3. Setelah selesai satu task, update status di `TASKS.md`.
-4. Kalau menemukan keputusan yang belum ada di PRD/System Design (mis. angka limit yang belum ditentukan), **berhenti dan tanyakan ke Boss Ali** — jangan menebak angka bisnis sendiri.
+2. gunakan skill/plugin yang tersedia atau terpasang agar pekerjaanmu lebih baik gunakan itu jika memeang per
+3. Kerjakan satu task/subsistem per sesi kerja, ikuti urutan di `TASKS.md` (jangan lompat ke fitur Pro sebelum fondasi Basic selesai, kecuali diminta).
+4. Setelah selesai satu task, update status di `TASKS.md`.
+5. Kalau menemukan keputusan yang belum ada di PRD/System Design (mis. angka limit yang belum ditentukan), **berhenti dan tanyakan ke Boss Ali** — jangan menebak angka bisnis sendiri.
+
+6. kamu bisa lihat pada folder atau file yang di ScannApp Design Prototap kemungkinan seperti itu design aplikasiku, kamu bisa membuatnya lebih bagus atau smoot dengan menggunakan skill/plugin yang tersedia tanpa aku perintahkan, tinggal kamu kerjakan jikan selesai tunjukan nanti aku akan membuat keputusannya.
 
 ## 6. Angka Final yang Wajib Dipakai (bukan lagi open decision — lihat PRD v2 Bagian 7)
 

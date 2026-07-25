@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ScannApp</string>
+    <string name="title_activity_main">ScannApp</string>
+    <string name="package_name">com.newbeboys.scannapp</string>
+    <string name="custom_url_scheme">com.newbeboys.scannapp</string>
+</resources>

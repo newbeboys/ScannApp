@@ -1,0 +1,102 @@
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { translateAuthError } from '../lib/authErrors'
+import { fetchOwnProfile } from '../lib/profileApi'
+import { clearCachedProfile, readCachedProfile, writeCachedProfile } from '../lib/profileCache'
+import { supabase } from '../lib/supabase'
+import { resolveTier, type Profile } from '../lib/tier'
+import { AuthContext, type AuthStatus } from './authContext'
+
+/** Turns a Supabase error into an Error carrying an Indonesian message. */
+function fail(error: { message?: string } | null): never {
+  throw new Error(translateAuthError(error))
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [status, setStatus] = useState<AuthStatus>('loading')
+  const [userId, setUserId] = useState<string | null>(null)
+  const [email, setEmail] = useState<string | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
+
+  /**
+   * Cache-first: show the last known profile immediately so gating is correct
+   * offline, then replace it with the server copy when the network allows.
+   */
+  const loadProfile = useCallback(async (id: string) => {
+    setProfile(readCachedProfile(id))
+
+    const fresh = await fetchOwnProfile()
+    if (!fresh) return // offline, or the signup trigger has not landed yet
+
+    setProfile(fresh)
+    writeCachedProfile(fresh)
+  }, [])
+
+  useEffect(() => {
+    // onAuthStateChange fires once with the restored session on startup, so it
+    // covers both "already signed in" and every later sign-in/sign-out.
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null
+
+      setUserId(user?.id ?? null)
+      setEmail(user?.email ?? null)
+      setStatus(user ? 'signed-in' : 'signed-out')
+
+      if (user) {
+        void loadProfile(user.id)
+      } else {
+        setProfile(null)
+      }
+    })
+
+    return () => data.subscription.unsubscribe()
+  }, [loadProfile])
+
+  const signIn = useCallback(async (address: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email: address.trim(),
+      password,
+    })
+    if (error) fail(error)
+  }, [])
+
+  const signUp = useCallback(async (address: string, password: string, displayName: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email: address.trim(),
+      password,
+      options: { data: { display_name: displayName.trim() } },
+    })
+    if (error) fail(error)
+
+    // No session means the project still requires email confirmation; the UI
+    // shows a "check your email" step instead of dropping the user inside.
+    return { signedIn: data.session !== null }
+  }, [])
+
+  const signOut = useCallback(async () => {
+    clearCachedProfile()
+    const { error } = await supabase.auth.signOut()
+    if (error) fail(error)
+  }, [])
+
+  const sendPasswordReset = useCallback(async (address: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(address.trim())
+    if (error) fail(error)
+  }, [])
+
+  const value = useMemo(
+    () => ({
+      status,
+      userId,
+      email,
+      profile,
+      tier: resolveTier(profile),
+      signIn,
+      signUp,
+      signOut,
+      sendPasswordReset,
+    }),
+    [status, userId, email, profile, signIn, signUp, signOut, sendPasswordReset],
+  )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}

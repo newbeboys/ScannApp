@@ -52,10 +52,28 @@ Catatan tambahan di luar daftar asli (lihat spec Bagian 2 & 4):
 
 ## Fase 3 — Sistem Auth & Tier
 
-- [ ] Signup/login (Supabase Auth)
-- [ ] Trigger `on_auth_user_created` (auto-buat `profiles` + `storage_usage` + `referral_code`)
-- [ ] Logic pengecekan tier (`basic`/`pro`) di client untuk gating fitur
-- [ ] UI status tier & (kalau Pro dari referral) sisa waktu aktif
+Desain: `docs/superpowers/specs/2026-07-26-fase3-auth-tier-design.md`
+
+- [x] Signup/login (Supabase Auth) — email + password, **login wajib** (tidak ada mode tamu). Landing bermerek → layar masuk/daftar bertab → lupa password
+- [x] Trigger `on_auth_user_created` (auto-buat `profiles` + `storage_usage` 100MB + `referral_code` 8 karakter) — diuji langsung di database, profil & kuota terbentuk otomatis
+- [x] Logic pengecekan tier (`basic`/`pro`) di client untuk gating fitur — `resolveTier()`, semua keraguan jatuh ke Basic
+- [x] UI status tier & sisa waktu aktif — kartu akun di Settings (nama, email, badge tier, sisa hari, tombol Keluar)
+
+Catatan tambahan di luar daftar asli:
+
+- [x] **Pro selalu berjangka** (keputusan Boss Ali): tidak ada Pro permanen. Kolom baru `profiles.pro_plan` (`monthly`/`yearly`/`referral`) membedakan paket — dipakai untuk kuota storage di Fase 4
+- [x] Sesi & profil di-cache di device (cache-first), jadi aplikasi tetap jalan offline setelah login pertama
+- [x] Pesan error Supabase diterjemahkan ke Bahasa Indonesia yang manusiawi
+- [x] Semua migration SQL disimpan ke `supabase/migrations/` — termasuk backfill migration Fase 0 yang sebelumnya hanya ada di dashboard
+- [x] Fungsi `security definer` di-`revoke` dari `anon`/`authenticated` (menutup temuan advisor Supabase 0028 & 0029)
+- [x] Unit test bertambah 26 (total 59): perhitungan tier, cache profil antar akun, terjemahan error
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Daftar akun sungguhan dengan `demofimance@gmail.com` di HP, lalu cek profil & kode referral terbentuk
+- [ ] Keluar lalu masuk lagi — sesi tersimpan dengan benar
+- [ ] Buka aplikasi dalam mode pesawat setelah pernah login — harus tetap bisa masuk & memindai
+- [ ] Putuskan apakah "Confirm email" di dashboard Supabase dimatikan (lebih mudah saat uji coba) atau dibiarkan aktif
 
 ## Fase 4 — Backend Storage/Backup (Supabase Edge Functions + R2)
 

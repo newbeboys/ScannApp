@@ -1,11 +1,11 @@
 import { Capacitor } from '@capacitor/core'
 import { useCallback, useEffect, useState } from 'react'
+import { useAuth } from './auth/useAuth'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { ExportSheet } from './components/ExportSheet'
 import { exportDocument, type ExportFormat } from './lib/documentExport'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
-import { getCurrentTier } from './lib/tier'
 import {
   deleteAllScanDocuments,
   deleteScanDocument,
@@ -13,13 +13,17 @@ import {
   saveScanDocument,
   type LocalScanDocument,
 } from './lib/scanStorage'
+import { AuthScreen, type AuthMode } from './screens/AuthScreen'
 import { DocumentDetailScreen } from './screens/DocumentDetailScreen'
 import { DocumentsScreen } from './screens/DocumentsScreen'
 import { EditorScreen } from './screens/EditorScreen'
+import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
 import { HomeScreen } from './screens/HomeScreen'
+import { LandingScreen } from './screens/LandingScreen'
 import { MergeScreen } from './screens/MergeScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
+import { SplashScreen } from './screens/SplashScreen'
 
 /** Which full-screen flow is on top of the tabs, if any. */
 type View =
@@ -28,7 +32,12 @@ type View =
   | { kind: 'editor'; id: string }
   | { kind: 'merge' }
 
+/** Which screen the signed-out visitor is looking at. */
+type AuthView = { kind: 'landing' } | { kind: 'auth'; mode: AuthMode } | { kind: 'forgot' }
+
 function App() {
+  const { status, tier, signOut } = useAuth()
+  const [authView, setAuthView] = useState<AuthView>({ kind: 'landing' })
   const [tab, setTab] = useState<TabId>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
   const [documents, setDocuments] = useState<LocalScanDocument[]>([])
@@ -41,15 +50,15 @@ function App() {
   const [exportTarget, setExportTarget] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const isNative = Capacitor.isNativePlatform()
-  const tier = getCurrentTier()
 
   const refreshDocuments = useCallback(async () => {
     setDocuments(await listScanDocuments())
   }, [])
 
   useEffect(() => {
+    if (status !== 'signed-in') return
     refreshDocuments()
-  }, [refreshDocuments])
+  }, [refreshDocuments, status])
 
   useEffect(() => {
     if (!toast) return
@@ -176,6 +185,19 @@ function App() {
     )
   }
 
+  /** Local files stay on the device; only the session is dropped. */
+  const handleSignOut = async () => {
+    if (!confirm('Keluar dari akun ini? Dokumen yang tersimpan di HP tidak ikut terhapus.')) return
+    try {
+      await signOut()
+      setTab('home')
+      setView({ kind: 'tabs' })
+      setAuthView({ kind: 'landing' })
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal keluar.')
+    }
+  }
+
   const exportDoc = documents.find((doc) => doc.id === exportTarget) ?? null
   const exportSheet = exportDoc && (
     <ExportSheet
@@ -186,6 +208,38 @@ function App() {
       onClose={() => setExportTarget(null)}
     />
   )
+
+  if (status === 'loading') {
+    return (
+      <div className="app">
+        <SplashScreen />
+      </div>
+    )
+  }
+
+  if (status === 'signed-out') {
+    return (
+      <div className="app">
+        {authView.kind === 'landing' && (
+          <LandingScreen
+            onSignUp={() => setAuthView({ kind: 'auth', mode: 'signup' })}
+            onSignIn={() => setAuthView({ kind: 'auth', mode: 'signin' })}
+          />
+        )}
+        {authView.kind === 'auth' && (
+          <AuthScreen
+            mode={authView.mode}
+            onModeChange={(mode) => setAuthView({ kind: 'auth', mode })}
+            onBack={() => setAuthView({ kind: 'landing' })}
+            onForgotPassword={() => setAuthView({ kind: 'forgot' })}
+          />
+        )}
+        {authView.kind === 'forgot' && (
+          <ForgotPasswordScreen onBack={() => setAuthView({ kind: 'auth', mode: 'signin' })} />
+        )}
+      </div>
+    )
+  }
 
   if (pendingPages) {
     return (
@@ -272,7 +326,11 @@ function App() {
           />
         )}
         {tab === 'settings' && (
-          <SettingsScreen documentCount={documents.length} onDeleteAll={handleDeleteAll} />
+          <SettingsScreen
+            documentCount={documents.length}
+            onDeleteAll={handleDeleteAll}
+            onSignOut={handleSignOut}
+          />
         )}
       </main>
 

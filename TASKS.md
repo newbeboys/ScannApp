@@ -111,6 +111,7 @@ Catatan tambahan di luar daftar asli:
 - [ ] Banner ad di layar utama
 - [ ] Interstitial ad: tiap 5 scan + setelah export dokumen (`ADS_INTERSTITIAL_FREQUENCY=every_5_scans_plus_after_export`)
 - [ ] Flow pembelian Pro (in-app purchase/subscription): Rp 15.000/bulan atau Rp 150.000/tahun
+- [ ] Pasang RevenueCat (`purchases-capacitor`). **Bersamaan dengan ini**, ubah `android:launchMode` MainActivity di [android/app/src/main/AndroidManifest.xml](android/app/src/main/AndroidManifest.xml) dari `singleTask` ke `singleTop` — `singleTask` berisiko membuat callback hasil pembelian dari Play Store hilang lewat `onNewIntent()`. Uji ulang di device asli dalam satu siklus: buka app dari launcher setelah di-background, kembali dari share sheet/file picker, dan alur pembelian itu sendiri (ditetapkan 12 Agustus 2026 saat audit manifest, lihat [[project_scannapp_progress]])
 
 ## Fase 6 — Fitur Pro: OCR & Edit Lanjutan
 

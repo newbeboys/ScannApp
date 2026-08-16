@@ -1,0 +1,53 @@
+name: Build Signed AAB
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/scannapp.jks
+
+      - name: Build signed AAB
+        working-directory: android
+        run: |
+          ./gradlew bundleRelease \
+            -PSCANNAPP_KEYSTORE_PATH=scannapp.jks \
+            -PSCANNAPP_KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
+            -PSCANNAPP_KEY_ALIAS=${{ secrets.KEY_ALIAS }} \
+            -PSCANNAPP_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab

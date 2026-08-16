@@ -35,16 +35,16 @@ jobs:
 
       - name: Decode keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/scannapp.jks
+          echo "${{ secrets.KEYSTOREBASE64 }}" | base64 -d > android/app/scannapp.jks
 
       - name: Build signed AAB
         working-directory: android
         run: |
           ./gradlew bundleRelease \
             -PSCANNAPP_KEYSTORE_PATH=scannapp.jks \
-            -PSCANNAPP_KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
-            -PSCANNAPP_KEY_ALIAS=${{ secrets.KEY_ALIAS }} \
-            -PSCANNAPP_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
+            -PSCANNAPP_KEYSTORE_PASSWORD=${{ secrets.KEYSTOREPASSWORD }} \
+            -PSCANNAPP_KEY_ALIAS=${{ secrets.KEYALIAS }} \
+            -PSCANNAPP_KEY_PASSWORD=${{ secrets.KEYPASSWORD }}
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4

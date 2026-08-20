@@ -38,4 +38,11 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        Google Play Billing — required for the Pro subscription (monthly / yearly).
+        The Play Billing Library already merges this permission in automatically;
+        it is declared here explicitly so the app's billing usage is self-documenting.
+    -->
+    <uses-permission android:name="com.android.vending.BILLING" />
 </manifest>

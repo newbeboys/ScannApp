@@ -55,7 +55,11 @@ Urutan mengikuti PRD Bagian 8. **Jangan lompat ke fase berikutnya sebelum fase s
 - [ ] Integrasi AdMob (atau provider iklan lain yang dipilih)
 - [ ] Banner ad di layar utama
 - [ ] Interstitial ad: tiap 5 scan + setelah export dokumen (`ADS_INTERSTITIAL_FREQUENCY=every_5_scans_plus_after_export`)
-- [ ] Flow pembelian Pro (in-app purchase/subscription): Rp 15.000/bulan atau Rp 150.000/tahun
+- [~] Flow pembelian Pro (in-app purchase/subscription): Rp 15.000/bulan atau Rp 150.000/tahun
+  - [x] Fondasi Android: dependency Google Play Billing Library 9.1.0 + deklarasi permission `com.android.vending.BILLING`
+  - [ ] Jembatan ke layer JS/React via **RevenueCat** (`@revenuecat/purchases-capacitor`) — diputuskan Boss Ali, 20 Agustus 2026. Saat plugin ini dipasang, **hapus** baris `com.android.billingclient:billing` di `android/app/build.gradle` karena RevenueCat sudah membawa Play Billing sendiri
+  - [ ] Buat produk subscription di Play Console (SKU bulanan & tahunan)
+  - [ ] Verifikasi purchase di server (Edge Function) + update `tier` di tabel `profiles`
 
 ## Fase 6 — Fitur Pro: OCR & Edit Lanjutan
 

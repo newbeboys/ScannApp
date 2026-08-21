@@ -119,3 +119,32 @@ Mengunduh **tidak** terpengaruh — cadangan dibuka lewat navigasi tab, bukan `f
 ## 8. Ditunda dengan sengaja
 
 Rate limiting 30 request/menit (`BACKEND_API_DESIGN.md` Bagian 9, kata-katanya "sebaiknya") ditunda ke Fase 9 bersama uji kuota dan pembersihan object yatim yang sudah terdaftar di sana. Menambahkannya sekarang berarti membangun tabel penghitung untuk masalah yang belum punya pengguna.
+
+## 9. Adendum keamanan (22 Agustus 2026)
+
+Ditemukan saat code-review Fase 5. Dua lubang di Fase 4 yang membolehkan penyimpanan R2 tanpa batas dan pengambilalihan metadata dokumen. Keduanya sudah ditutup; bagian ini mencatat sebabnya supaya polanya tidak terulang.
+
+### 9.1 Kuota bisa dilewati — dari dua arah
+
+Perhitungan kuota memakai `bytes_used - ukuran_lama + ukuran_baru` (Bagian 4c). Rumusnya benar; yang salah adalah **dari mana kedua angka itu datang**. Keduanya bisa dikendalikan client:
+
+**Arah pertama — `ukuran_lama` (`replacing`).** Policy `scan_documents_insert_own` & `scan_documents_update_own` mengizinkan client menulis barisnya sendiri, termasuk kolom `file_size_bytes`. Isi kolom itu dengan angka raksasa, maka `growth` selalu negatif dan `fitsInQuota()` meloloskan unggahan sebesar apa pun. `confirm-upload` lalu menghitung `bytes_used` jatuh ke 0.
+
+**Arah kedua — `ukuran_baru` (`incoming`).** `generate-upload-url` hanya memeriksa ukuran yang **diklaim** client, dan presigned PUT tidak membawa batas panjang sama sekali. Jadi: klaim 1 KB, unggah 5 GB, konfirmasi 1 KB.
+
+Menutup satu arah saja tidak ada gunanya — hasil akhirnya sama.
+
+Perbaikannya:
+
+- Migration `20260822130000` **mencabut policy INSERT/UPDATE/DELETE** pada `scan_documents`. Client memang tidak pernah menulis tabel ini; penulisnya cuma `confirm-upload` dan `delete-backup` yang memakai service role. Ini menyamakan `scan_documents` dengan `storage_usage` dan `referral_events` yang sejak awal hanya punya policy SELECT. Policy SELECT dibiarkan — `listCloudBackups()` membacanya langsung dan itu aman.
+- `confirm-upload` **mengukur ukuran sebenarnya dari R2** lewat `headObjectSize()`, bukan mempercayai angka dari client, lalu memeriksa kuota ulang terhadap angka itu. Kalau melebihi kuota, object-nya dihapus dan dibalas `409 QUOTA_EXCEEDED` — membiarkannya berarti tetap membayar penyimpanannya padahal tidak ada baris database yang menunjuk ke sana.
+
+Pemeriksaan di `generate-upload-url` tetap ada dan tetap berguna: menolak lebih awal jauh lebih murah daripada membiarkan unggahan 5 GB berjalan sampai selesai baru ditolak. Ia sekarang berperan sebagai saringan pertama, bukan penjaga terakhir.
+
+### 9.2 `confirm-upload` bisa merebut dokumen orang lain
+
+Fungsi ini melakukan `upsert` dengan `onConflict: 'id'` memakai service role, tanpa memeriksa kepemilikan. Siapa pun yang tahu sebuah `document_id` bisa memanggilnya dan menimpa `owner_id` baris itu jadi miliknya — korban kehilangan baris metadata, dan cadangan R2-nya jadi yatim tanpa ada yang mengurangi `bytes_used` miliknya.
+
+Diganti dengan **update-lalu-insert**, bukan cek-lalu-tulis: `update` dibatasi `owner_id = user.id`, dan kalau tidak ada baris yang cocok, `insert` membiarkan primary key yang memutuskan. Galat `23505` di situ berarti id-nya milik akun lain, dan database menetapkannya secara atomik — tidak ada celah balapan antara pemeriksaan dan penulisan.
+
+`delete-backup` dan `generate-download-url` sudah benar sejak awal (keduanya memfilter `owner_id` dan memakai `isOwnedBy`), jadi tidak berubah.

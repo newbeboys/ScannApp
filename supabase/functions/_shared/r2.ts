@@ -50,6 +50,27 @@ export function presignDownload(objectKey: string): Promise<string> {
 }
 
 /**
+ * Real size of the stored object in bytes, or null when nothing is there.
+ *
+ * The presigned PUT carries no length limit, so the only trustworthy source
+ * for how much room a backup actually takes is R2 itself. Believing the size
+ * the client reports would let it claim a kilobyte and store a gigabyte.
+ */
+export async function headObjectSize(objectKey: string): Promise<number | null> {
+  const { client, base } = config()
+
+  const response = await client.fetch(objectUrl(base, objectKey), { method: 'HEAD' })
+
+  if (response.status === 404) return null
+  if (!response.ok) {
+    throw new Error(`Gagal membaca metadata object R2: ${response.status}`)
+  }
+
+  const length = Number(response.headers.get('content-length'))
+  return Number.isFinite(length) && length >= 0 ? length : null
+}
+
+/**
  * Deletes the object. An object that is already gone counts as success so the
  * caller stays idempotent — the database row still has to be cleaned up.
  */

@@ -135,7 +135,10 @@ Total test naik dari 100 ke 123.
 - [ ] Buat produk subscription di Play Console: `scannapp_pro_monthly` (Rp 15.000) & `scannapp_pro_yearly` (Rp 150.000)
 - [ ] Di dashboard RevenueCat: hubungkan ke Play Console, buat entitlement `pro`, buat offering berisi kedua produk
 - [ ] Set `REVENUECAT_WEBHOOK_SECRET` di RevenueCat (Integrations → Webhooks → Authorization header) **dan** di Supabase Edge Function Secrets dengan nama yang sama
-- [ ] Deploy Edge Function `revenuecat-webhook` + jalankan migration `20260822120000_fase5_subscription_events.sql`
+- [ ] Deploy Edge Function `revenuecat-webhook` + **redeploy `confirm-upload`** (ada perbaikan keamanan), lalu jalankan 3 migration baru:
+  - `20260822120000_fase5_subscription_events.sql`
+  - `20260822120500_fase5_freeze_pro_plan_in_rls.sql`
+  - `20260822130000_fase5_revoke_client_writes_on_scan_documents.sql`
 
 **Belum diverifikasi di device fisik** (butuh Boss Ali):
 
@@ -177,13 +180,25 @@ Total test naik dari 100 ke 123.
 
 - [ ] Uji limit merge dokumen Basic (20 halaman) & quota storage R2 per tier (100MB/500MB/1GB) sesuai angka final
 - [ ] Uji job pembersihan object R2 yatim (tidak punya referensi di `scan_documents`)
-- [ ] Security review RLS policy (pastikan tidak ada cross-user data leak)
+- [~] Security review RLS policy (pastikan tidak ada cross-user data leak) — dimajukan sebagian, lihat di bawah
 - [ ] Nyalakan **Leaked Password Protection** di Supabase (Authentication → Policies) — cek password terhadap HaveIBeenPwned, satu-satunya temuan advisor yang tersisa per 26 Juli 2026
 - [ ] Tinjau ulang setelan **Confirm email** sebelum rilis publik (lihat catatan Fase 3)
 - [ ] Uji auto-pause Supabase free tier (setup keep-alive kalau perlu, mengingat riwayat kebijakan pause di Supabase/Appwrite)
+
+### Sudah ditutup lebih awal (22 Agustus 2026)
+
+Ditemukan saat code-review Fase 5, diperbaiki atas permintaan Boss Ali sebelum lanjut ke Fase 6. Rincian sebabnya di `docs/superpowers/specs/2026-07-26-fase4-backup-r2-design.md` Bagian 9.
+
+- [x] **Kuota R2 bisa dilewati** — dari dua arah sekaligus: client bisa menulis sendiri `scan_documents.file_size_bytes` lewat RLS (`replacing` jadi raksasa), dan presigned PUT tidak membatasi panjang (klaim 1 KB, unggah 5 GB). Ditutup dengan mencabut policy tulis `scan_documents` (migration `20260822130000`) **dan** mengukur ukuran sebenarnya dari R2 di `confirm-upload`.
+- [x] **`confirm-upload` bisa merebut dokumen orang lain** — upsert `onConflict: 'id'` dengan service role tanpa cek kepemilikan. Diganti update-lalu-insert yang atomik.
+- [x] **`pro_plan` tidak dibekukan RLS** — user Pro Bulanan bisa menaikkan diri ke kuota 1GB tanpa membayar (migration `20260822120500`).
+
+Yang **belum** dicakup dan tetap jadi tugas Fase 9: telaah menyeluruh seluruh policy (bukan cuma tiga temuan di atas), termasuk `profiles`, `referral_events`, dan `referral_milestones`, plus uji cross-user beneran dengan dua akun.
 
 ---
 
 ## Status Keputusan
 
 Semua angka bisnis & keputusan arsitektur untuk versi pertama sudah final (lihat PRD v2 Bagian 7 & CLAUDE.md Bagian 6-7). Tidak ada lagi open decision yang memblokir task di atas — implementasi bisa langsung jalan mengikuti urutan fase.
+
+**Keputusan Boss Ali, 22 Agustus 2026:** flow pembelian Pro **tidak dibuka ke publik sebelum Fase 6 selesai**. Alasannya: hari ini Pro cuma benar-benar memberi 4 hal (bebas iklan, tanpa watermark, merge tanpa batas, kuota storage lebih besar), dan paywall sengaja hanya menjual itu. OCR, anotasi, dan tanda tangan di Fase 6 yang akan membuat harganya masuk akal. Kodenya sendiri sudah siap dan sudah diuji — yang ditunda hanya pembukaannya ke user.

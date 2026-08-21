@@ -126,4 +126,22 @@ describe('fitsInQuota', () => {
   it('blocks a brand new upload when usage already exceeds quota', () => {
     expect(fitsInQuota({ used: 5000, quota, incoming: 1, replacing: 0 })).toBe(false)
   })
+
+  /**
+   * Documents why `replacing` and `incoming` must both come from the server.
+   *
+   * An inflated `replacing` makes the growth negative, so any upload passes —
+   * that was the shape of the quota bypass fixed in migration 20260822130000
+   * (client could write `scan_documents.file_size_bytes` through RLS). This
+   * function is behaving correctly here; the safety lives entirely in where
+   * its inputs come from, so the assertion exists to keep that visible.
+   */
+  it('lets any upload through when `replacing` is inflated — inputs must be server-controlled', () => {
+    expect(fitsInQuota({ used: 900, quota, incoming: 999_999, replacing: 1e12 })).toBe(true)
+  })
+
+  /** Same reason `incoming` is measured from R2 rather than taken on trust. */
+  it('cannot tell an understated `incoming` from an honest one', () => {
+    expect(fitsInQuota({ used: 900, quota, incoming: 1, replacing: 0 })).toBe(true)
+  })
 })

@@ -35,6 +35,7 @@ import { MergeScreen } from './screens/MergeScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { SplashScreen } from './screens/SplashScreen'
+import { UpgradeScreen } from './screens/UpgradeScreen'
 
 /** Which full-screen flow is on top of the tabs, if any. */
 type View =
@@ -43,12 +44,13 @@ type View =
   | { kind: 'editor'; id: string }
   | { kind: 'merge' }
   | { kind: 'backups' }
+  | { kind: 'upgrade' }
 
 /** Which screen the signed-out visitor is looking at. */
 type AuthView = { kind: 'landing' } | { kind: 'auth'; mode: AuthMode } | { kind: 'forgot' }
 
 function App() {
-  const { status, tier, profile, signOut } = useAuth()
+  const { status, tier, profile, signOut, refreshProfile } = useAuth()
   const [authView, setAuthView] = useState<AuthView>({ kind: 'landing' })
   const [tab, setTab] = useState<TabId>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
@@ -216,7 +218,10 @@ function App() {
 
   /** Keeps the open detail/editor screen pointed at fresh data after an edit. */
   const activeDocument =
-    view.kind === 'tabs' || view.kind === 'merge' || view.kind === 'backups'
+    view.kind === 'tabs' ||
+    view.kind === 'merge' ||
+    view.kind === 'backups' ||
+    view.kind === 'upgrade'
       ? null
       : (documents.find((doc) => doc.id === view.id) ?? null)
 
@@ -332,6 +337,24 @@ function App() {
     )
   }
 
+  if (view.kind === 'upgrade') {
+    return (
+      <div className="app">
+        <UpgradeScreen
+          onClose={() => setView({ kind: 'tabs' })}
+          onUpgraded={() => {
+            // Tier ditulis webhook RevenueCat, bukan oleh client — jadi
+            // profil dibaca ulang beberapa kali sampai entitlement mendarat.
+            void refreshProfile({ untilPro: true })
+            refreshBackupState()
+          }}
+          onNotice={setToast}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
   if (view.kind === 'backups') {
     return (
       <div className="app">
@@ -358,6 +381,7 @@ function App() {
           isBusy={isMerging}
           onCancel={() => setView({ kind: 'tabs' })}
           onMerge={handleMerge}
+          onUpgrade={() => setView({ kind: 'upgrade' })}
         />
         {toast && <p className="toast">{toast}</p>}
       </div>
@@ -435,6 +459,7 @@ function App() {
             onDeleteAll={handleDeleteAll}
             onSignOut={handleSignOut}
             onOpenBackups={() => setView({ kind: 'backups' })}
+            onUpgrade={() => setView({ kind: 'upgrade' })}
           />
         )}
       </main>

@@ -12,6 +12,7 @@ interface SettingsScreenProps {
   onDeleteAll: () => void
   onSignOut: () => void
   onOpenBackups: () => void
+  onUpgrade: () => void
 }
 
 export function SettingsScreen({
@@ -21,6 +22,7 @@ export function SettingsScreen({
   onDeleteAll,
   onSignOut,
   onOpenBackups,
+  onUpgrade,
 }: SettingsScreenProps) {
   const { themeId, setThemeId, theme } = useTheme()
   const { email, profile, tier } = useAuth()
@@ -58,12 +60,11 @@ export function SettingsScreen({
       </section>
 
       {tier === 'basic' && (
-        <section className="card plan-card">
-          <div className="plan-card__badge">B</div>
-          <div>
-            <h2>Paket Basic</h2>
-            <p>Gratis · maks 20 halaman per dokumen gabungan</p>
-          </div>
+        <section className="card">
+          <button type="button" className="card__row card__row--button" onClick={onUpgrade}>
+            <span className="card__row-label upgrade-row">Naik ke Pro</span>
+            <ChevronRightIcon size={18} />
+          </button>
         </section>
       )}
 
@@ -127,7 +128,7 @@ export function SettingsScreen({
         </button>
       </section>
 
-      <p className="app-version">ScannApp · Fase 3</p>
+      <p className="app-version">ScannApp · Fase 5</p>
     </div>
   )
 }

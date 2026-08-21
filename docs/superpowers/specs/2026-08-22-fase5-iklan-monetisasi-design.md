@@ -110,24 +110,35 @@ Wajib ada (aturan Google Play): tombol **"Pulihkan pembelian"**, keterangan lang
 Satu-satunya jalan `profiles.tier` berubah karena pembelian. Client **tidak pernah** menulis `tier` sendiri — kalau bisa, siapa pun yang memegang anon key bisa memberi dirinya Pro.
 
 - Autentikasi: header `Authorization` dicocokkan dengan `REVENUECAT_WEBHOOK_SECRET` (di-set Boss Ali di dashboard RevenueCat + Supabase Edge Function Secrets). Perbandingannya konstan-waktu.
-- Berbeda dari 4 Edge Function Fase 4, fungsi ini **tidak** memakai `handler()` — pemanggilnya RevenueCat, bukan user ber-JWT.
+- Berbeda dari 4 Edge Function Fase 4, fungsi ini **tidak** memakai `handler()` — pemanggilnya RevenueCat, bukan user ber-JWT. Konsekuensinya `verify_jwt = false` di `supabase/config.toml`; tanpa itu gateway Supabase menolak semua webhook dengan 401 sebelum kodenya sempat jalan, dan tidak ada pembelian yang pernah mengaktifkan Pro.
 - Event yang menaikkan/memperpanjang Pro: `INITIAL_PURCHASE`, `RENEWAL`, `UNCANCELLATION`, `PRODUCT_CHANGE`, `SUBSCRIPTION_EXTENDED`.
-- Event yang mencabut: `EXPIRATION`, `REFUND`, `SUBSCRIPTION_PAUSED`.
-- `CANCELLATION` **tidak** mencabut apa pun — user membatalkan perpanjangan tapi tetap Pro sampai periode berjalan habis. Pencabutan menunggu `EXPIRATION`.
+- Event yang mencabut: `EXPIRATION`, `REFUND`.
+- `CANCELLATION` dan `SUBSCRIPTION_PAUSED` **tidak** mencabut apa pun — keduanya hanya menjadwalkan berhentinya perpanjangan; user tetap Pro sampai periode yang sudah dibayar habis. Pencabutan menunggu `EXPIRATION`.
+- `TRANSFER` dicatat tapi tidak ditindak: payload-nya memakai `transferred_from`/`transferred_to`, bukan `app_user_id` tunggal, jadi tidak aman ditafsirkan dengan field yang dibaca fungsi ini. Perilaku transfer diatur di dashboard RevenueCat dan perlu diverifikasi Boss Ali saat uji device.
+- Tipe event yang tidak dikenal juga diabaikan, bukan dianggap mencabut — RevenueCat menambah tipe baru dari waktu ke waktu, dan tipe asing tidak boleh membuat user berbayar kehilangan Pro.
 
-### 5.1 Pro dari referral tidak boleh terinjak
+### 5.1 Sisa Pro di luar langganan tidak boleh terinjak
 
-Ini jebakan utamanya. Kalau webhook menulis `tier = 'basic'` mentah-mentah saat `EXPIRATION`, user yang langganannya habis **tapi masih punya sisa Pro dari referral** akan kehilangan haknya.
+Ini jebakan utamanya, dan ada dua sumbernya:
+
+1. **Hadiah referral** (Fase 8) menulis ke kolom `tier_expires_at` yang sama.
+2. **Upgrade paket** — user pindah bulanan → tahunan, `PRODUCT_CHANGE` sudah memberi paket baru, lalu `EXPIRATION` produk lama menyusul terlambat.
 
 Aturan yang dipakai:
-- Saat memberi Pro: `tier_expires_at` = **yang paling jauh** antara nilai sekarang dan `expiration_at_ms` dari event. Sisa hari referral tidak hangus karena membeli.
-- Saat mencabut: hanya turunkan ke Basic bila `pro_plan` memang `monthly`/`yearly`. Kalau `pro_plan = 'referral'`, event pembelian tidak menyentuhnya.
+- Saat memberi Pro: `tier_expires_at` = **yang paling jauh** antara nilai sekarang dan `expiration_at_ms` dari event. Langganan hanya bisa memperpanjang, tidak pernah memperpendek.
+- Saat mencabut: bandingkan `tier_expires_at` tersimpan dengan akhir langganan yang berakhir ini. Kalau yang tersimpan lebih jauh, **profil tidak disentuh sama sekali** — waktu itu bukan berasal dari sini, dan `pro_plan` yang tercatat ditulis oleh event yang lebih tahu. Menimpanya jadi `referral` akan menurunkan pelanggan tahunan yang aktif dari kuota 1GB ke 500MB.
 
 ### 5.2 Tabel `subscription_events`
 
-Migration baru. Menyimpan tiap event webhook (id event, tipe, user, produk, waktu) untuk audit dan **idempotensi** — RevenueCat mengirim ulang webhook yang gagal, dan `RENEWAL` yang diproses dua kali tidak boleh memperpanjang Pro dua kali. `event_id` jadi primary key; event yang sudah ada langsung dibalas 200 tanpa efek samping.
+Migration baru. Menyimpan tiap event webhook (id event, tipe, user, produk, waktu, payload mentah) untuk audit dan **idempotensi** — RevenueCat mengirim ulang webhook yang gagal, dan `RENEWAL` yang diproses dua kali tidak boleh memperpanjang Pro dua kali.
+
+`event_id` jadi primary key, tapi keberadaan barisnya saja tidak cukup jadi penanda selesai: baris ditulis **sebelum** tier diubah, jadi kalau update tier gagal, kiriman ulang akan melihat baris itu dan menganggapnya duplikat — perubahan tier hilang selamanya. Karena itu ada kolom `applied` terpisah. Kiriman ulang dengan `applied = false` diproses ulang; dengan `applied = true` dibalas 200 tanpa efek samping.
 
 RLS: user boleh membaca barisnya sendiri, tidak ada policy tulis untuk client — hanya service role yang menulis.
+
+### 5.3 `pro_plan` ikut dibekukan di RLS
+
+Policy `profiles_update_own` dari Fase 0 membekukan `tier` dan `tier_expires_at`, tapi tidak `pro_plan` — kolom itu baru ada di Fase 3. Akibatnya user Pro Bulanan bisa meng-update barisnya sendiri jadi `yearly` dan mendapat kuota 1GB tanpa membayar selisihnya. Celahnya sudah ada sejak Fase 3, tapi baru bernilai sekarang karena Fase 5 yang membuat perbedaan paket berarti secara komersial. Migration `20260822120500` menutupnya.
 
 ## 6. Yang tidak dikerjakan di fase ini
 

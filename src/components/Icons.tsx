@@ -69,6 +69,15 @@ export function ChevronRightIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function ArrowRightIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M4 12h15" />
+      <path d="m13 6 6 6-6 6" />
+    </svg>
+  )
+}
+
 export function TrashIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">

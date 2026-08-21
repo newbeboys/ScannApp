@@ -107,15 +107,43 @@ Catatan tambahan di luar daftar asli:
 
 ## Fase 5 — Fitur Iklan & Monetisasi (Basic)
 
-- [ ] Integrasi AdMob (atau provider iklan lain yang dipilih)
-- [ ] Banner ad di layar utama
-- [ ] Interstitial ad: tiap 5 scan + setelah export dokumen (`ADS_INTERSTITIAL_FREQUENCY=every_5_scans_plus_after_export`)
-- [~] Flow pembelian Pro (in-app purchase/subscription): Rp 15.000/bulan atau Rp 150.000/tahun
-  - [x] Fondasi Android: dependency Google Play Billing Library 9.1.0 + deklarasi permission `com.android.vending.BILLING`
-  - [ ] Jembatan ke layer JS/React via **RevenueCat** (`@revenuecat/purchases-capacitor`) — diputuskan Boss Ali, 20 Agustus 2026. Saat plugin ini dipasang, **hapus** baris `com.android.billingclient:billing` di `android/app/build.gradle` karena RevenueCat sudah membawa Play Billing sendiri
-  - [ ] **Bersamaan dengan pemasangan RevenueCat**, ubah `android:launchMode` MainActivity di [android/app/src/main/AndroidManifest.xml](android/app/src/main/AndroidManifest.xml) dari `singleTask` ke `singleTop` — `singleTask` berisiko membuat callback hasil pembelian dari Play Store hilang lewat `onNewIntent()`. Uji ulang di device asli dalam satu siklus: buka app dari launcher setelah di-background, kembali dari share sheet/file picker, dan alur pembelian itu sendiri (ditetapkan 12 Agustus 2026 saat audit manifest)
-  - [ ] Buat produk subscription di Play Console (SKU bulanan & tahunan)
-  - [ ] Verifikasi purchase di server (Edge Function) + update `tier` di tabel `profiles`
+Desain: `docs/superpowers/specs/2026-08-22-fase5-iklan-monetisasi-design.md`
+
+### A. Iklan
+
+- [x] Integrasi AdMob — `@capacitor-community/admob` 8.1.0
+- [x] Banner ad di layar utama — hanya di layar tab, tidak di alur scan/editor/merge/paywall
+- [x] Interstitial ad: tiap 5 scan + setelah export (`ADS_INTERSTITIAL_FREQUENCY=every_5_scans_plus_after_export`) — penghitung disimpan di localStorage supaya restart aplikasi tidak meresetnya, dan naik hanya saat dokumen benar-benar tersimpan
+- [x] Gating Pro: tanpa iklan, dan penghitung scan tidak ikut naik selama Pro (langganan yang habis tidak langsung disambut interstitial)
+
+### B. Pembelian Pro
+
+- [x] Fondasi Android: dependency Google Play Billing Library 9.1.0 + permission `com.android.vending.BILLING`
+- [x] Jembatan ke layer JS/React via **RevenueCat** (`@revenuecat/purchases-capacitor` 13.4.1) — baris `com.android.billingclient:billing` sudah dihapus dari `android/app/build.gradle`
+- [x] `android:launchMode` MainActivity diubah `singleTask` → `singleTop`
+- [x] Paywall `UpgradeScreen` — harga diambil dari offering RevenueCat, fallback Rp 15.000/Rp 150.000 saat offline. Ada tombol "Pulihkan pembelian" & keterangan langganan berulang (wajib aturan Google Play)
+- [x] Verifikasi purchase di server: Edge Function `revenuecat-webhook` + tabel `subscription_events` (idempoten lewat `event_id` sebagai primary key)
+- [x] Sisa Pro dari referral tidak terinjak oleh event pembelian — 18 test menutup kasus ini
+
+Total test naik dari 100 ke 123.
+
+**Catatan penting:** paywall sengaja hanya menjual 4 hal yang benar-benar sudah jalan — bebas iklan, tanpa watermark, merge tanpa batas, kuota storage lebih besar. OCR/anotasi/tanda tangan masih Fase 6 dan **tidak** dijual di paywall.
+
+**Langkah manual Boss Ali (di luar repo, memblokir rilis):**
+
+- [ ] Buat akun AdMob, lalu isi `VITE_ADMOB_BANNER_UNIT_ID` & `VITE_ADMOB_INTERSTITIAL_UNIT_ID` di `.env`, dan ganti `APPLICATION_ID` di `AndroidManifest.xml` (sekarang masih App ID test resmi Google)
+- [ ] Buat produk subscription di Play Console: `scannapp_pro_monthly` (Rp 15.000) & `scannapp_pro_yearly` (Rp 150.000)
+- [ ] Di dashboard RevenueCat: hubungkan ke Play Console, buat entitlement `pro`, buat offering berisi kedua produk
+- [ ] Set `REVENUECAT_WEBHOOK_SECRET` di RevenueCat (Integrations → Webhooks → Authorization header) **dan** di Supabase Edge Function Secrets dengan nama yang sama
+- [ ] Deploy Edge Function `revenuecat-webhook` + jalankan migration `20260822120000_fase5_subscription_events.sql`
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Banner muncul dan tidak menutupi bottom nav
+- [ ] Interstitial benar-benar muncul di scan ke-5 dan setelah export
+- [ ] Pembelian test di Play Console berhasil, lalu `tier` di `profiles` berubah jadi `pro`
+- [ ] Callback pembelian tidak hilang setelah `launchMode` diubah — uji juga buka app dari launcher setelah di-background, dan kembali dari share sheet/file picker
+- [ ] "Pulihkan pembelian" bekerja setelah aplikasi di-install ulang
 
 ## Fase 6 — Fitur Pro: OCR & Edit Lanjutan
 

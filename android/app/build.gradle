@@ -71,11 +71,6 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
-    // Google Play Billing — Pro subscription (monthly / yearly), see PRD section 6.
-    // Required in the uploaded AAB so Play Console unlocks subscription creation.
-    // NOTE: remove this line once the RevenueCat SDK is added — RevenueCat already
-    // bundles the Play Billing Library, and declaring both risks a version clash.
-    implementation "com.android.billingclient:billing:$playBillingVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

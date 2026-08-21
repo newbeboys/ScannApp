@@ -11,9 +11,17 @@ interface MergeScreenProps {
   isBusy: boolean
   onCancel: () => void
   onMerge: (ids: string[]) => void
+  onUpgrade: () => void
 }
 
-export function MergeScreen({ documents, tier, isBusy, onCancel, onMerge }: MergeScreenProps) {
+export function MergeScreen({
+  documents,
+  tier,
+  isBusy,
+  onCancel,
+  onMerge,
+  onUpgrade,
+}: MergeScreenProps) {
   // Selection order is meaningful: it becomes the page order of the result.
   const [selected, setSelected] = useState<string[]>([])
 
@@ -58,7 +66,11 @@ export function MergeScreen({ documents, tier, isBusy, onCancel, onMerge }: Merg
 
       {!plan.check.allowed && (
         <p className="merge-warning">
-          {plan.check.reason} Kurangi pilihan, atau naik ke Pro untuk gabungan tanpa batas.
+          {plan.check.reason} Kurangi pilihan, atau{' '}
+          <button type="button" className="link-button" onClick={onUpgrade}>
+            naik ke Pro
+          </button>{' '}
+          untuk gabungan tanpa batas.
         </p>
       )}
 

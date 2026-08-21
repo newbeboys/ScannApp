@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { translateAuthError } from '../lib/authErrors'
 import { fetchOwnProfile } from '../lib/profileApi'
+import { forgetPurchaseIdentity, identifyForPurchases } from '../lib/purchases/purchasesService'
 import { clearCachedProfile, readCachedProfile, writeCachedProfile } from '../lib/profileCache'
 import { supabase } from '../lib/supabase'
 import { resolveTier, type Profile } from '../lib/tier'
 import { AuthContext, type AuthStatus } from './authContext'
+
+/**
+ * Delays between retries while waiting for the purchase webhook, in ms.
+ * Front-loaded because the webhook usually lands almost immediately; the later
+ * attempts only cover a slow round trip.
+ */
+const WEBHOOK_RETRY_DELAYS = [0, 1500, 3000, 6000]
 
 /** Turns a Supabase error into an Error carrying an Indonesian message. */
 function fail(error: { message?: string } | null): never {
@@ -31,6 +39,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeCachedProfile(fresh)
   }, [])
 
+  /**
+   * Re-reads the profile after something server-side may have changed it —
+   * today that means a purchase landing via the RevenueCat webhook.
+   */
+  const refreshProfile = useCallback(async (options?: { untilPro?: boolean }) => {
+    const delays = options?.untilPro ? WEBHOOK_RETRY_DELAYS : [0]
+
+    for (const delay of delays) {
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
+
+      const fresh = await fetchOwnProfile()
+      if (!fresh) continue
+
+      setProfile(fresh)
+      writeCachedProfile(fresh)
+
+      // Stop as soon as the entitlement has actually landed.
+      if (!options?.untilPro || resolveTier(fresh) === 'pro') return
+    }
+  }, [])
+
   useEffect(() => {
     // onAuthStateChange fires once with the restored session on startup, so it
     // covers both "already signed in" and every later sign-in/sign-out.
@@ -43,8 +72,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (user) {
         void loadProfile(user.id)
+        // Binds Play Store purchases to this Supabase user, so the webhook
+        // can resolve app_user_id straight to profiles.id.
+        void identifyForPurchases(user.id)
       } else {
         setProfile(null)
+        void forgetPurchaseIdentity()
       }
     })
 
@@ -94,8 +127,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signOut,
       sendPasswordReset,
+      refreshProfile,
     }),
-    [status, userId, email, profile, signIn, signUp, signOut, sendPasswordReset],
+    [status, userId, email, profile, signIn, signUp, signOut, sendPasswordReset, refreshProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

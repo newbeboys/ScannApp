@@ -19,6 +19,15 @@ export interface AuthContextValue {
   signUp: (email: string, password: string, displayName: string) => Promise<SignUpOutcome>
   signOut: () => Promise<void>
   sendPasswordReset: (email: string) => Promise<void>
+  /**
+   * Re-reads the profile from the server.
+   *
+   * With `untilPro`, keeps retrying for a short while: after a purchase the
+   * tier is written by the RevenueCat webhook, which lands a second or two
+   * after the Play Store dialog closes. A single read right after the purchase
+   * would usually still see Basic.
+   */
+  refreshProfile: (options?: { untilPro?: boolean }) => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

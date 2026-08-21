@@ -20,6 +20,15 @@
   /* Diisi App.tsx saat banner AdMob tampil; 0 untuk Pro & di web. */
   --ad-banner-height: 0px;
 
+  /*
+    Warna merek Pro/upgrade — final di CLAUDE.md Bagian 9.2. Sengaja TIDAK
+    ikut berubah mengikuti tema: Pro harus terlihat sama di keempat tema,
+    karena ini elemen merek, bukan elemen tema.
+  */
+  --upgrade: #ff6b4a;
+  --upgrade-soft: rgba(255, 107, 74, 0.16);
+  --pro-gold: #f5c443;
+
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   font-size: 16px;
   line-height: 1.45;

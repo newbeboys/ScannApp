@@ -18,6 +18,7 @@
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/share": "^8.0.1",
     "@fontsource/plus-jakarta-sans": "^5.3.0",
+    "@revenuecat/purchases-capacitor": "^13.4.1",
     "@supabase/supabase-js": "^2.110.8",
     "pdf-lib": "^1.17.1",
     "react": "^19.2.7",

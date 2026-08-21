@@ -131,7 +131,7 @@ describe('fitsInQuota', () => {
    * Documents why `replacing` and `incoming` must both come from the server.
    *
    * An inflated `replacing` makes the growth negative, so any upload passes —
-   * that was the shape of the quota bypass fixed in migration 20260822130000
+   * that was the shape of the quota bypass fixed in migration 20260821211059
    * (client could write `scan_documents.file_size_bytes` through RLS). This
    * function is behaving correctly here; the safety lives entirely in where
    * its inputs come from, so the assertion exists to keep that visible.

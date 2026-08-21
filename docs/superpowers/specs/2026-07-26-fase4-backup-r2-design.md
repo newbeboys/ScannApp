@@ -136,7 +136,7 @@ Menutup satu arah saja tidak ada gunanya — hasil akhirnya sama.
 
 Perbaikannya:
 
-- Migration `20260822130000` **mencabut policy INSERT/UPDATE/DELETE** pada `scan_documents`. Client memang tidak pernah menulis tabel ini; penulisnya cuma `confirm-upload` dan `delete-backup` yang memakai service role. Ini menyamakan `scan_documents` dengan `storage_usage` dan `referral_events` yang sejak awal hanya punya policy SELECT. Policy SELECT dibiarkan — `listCloudBackups()` membacanya langsung dan itu aman.
+- Migration `20260821211059` **mencabut policy INSERT/UPDATE/DELETE** pada `scan_documents`. Client memang tidak pernah menulis tabel ini; penulisnya cuma `confirm-upload` dan `delete-backup` yang memakai service role. Ini menyamakan `scan_documents` dengan `storage_usage` dan `referral_events` yang sejak awal hanya punya policy SELECT. Policy SELECT dibiarkan — `listCloudBackups()` membacanya langsung dan itu aman.
 - `confirm-upload` **mengukur ukuran sebenarnya dari R2** lewat `headObjectSize()`, bukan mempercayai angka dari client, lalu memeriksa kuota ulang terhadap angka itu. Kalau melebihi kuota, object-nya dihapus dan dibalas `409 QUOTA_EXCEEDED` — membiarkannya berarti tetap membayar penyimpanannya padahal tidak ada baris database yang menunjuk ke sana.
 
 Pemeriksaan di `generate-upload-url` tetap ada dan tetap berguna: menolak lebih awal jauh lebih murah daripada membiarkan unggahan 5 GB berjalan sampai selesai baru ditolak. Ia sekarang berperan sebagai saringan pertama, bukan penjaga terakhir.

@@ -138,7 +138,7 @@ RLS: user boleh membaca barisnya sendiri, tidak ada policy tulis untuk client �
 
 ### 5.3 `pro_plan` ikut dibekukan di RLS
 
-Policy `profiles_update_own` dari Fase 0 membekukan `tier` dan `tier_expires_at`, tapi tidak `pro_plan` — kolom itu baru ada di Fase 3. Akibatnya user Pro Bulanan bisa meng-update barisnya sendiri jadi `yearly` dan mendapat kuota 1GB tanpa membayar selisihnya. Celahnya sudah ada sejak Fase 3, tapi baru bernilai sekarang karena Fase 5 yang membuat perbedaan paket berarti secara komersial. Migration `20260822120500` menutupnya.
+Policy `profiles_update_own` dari Fase 0 membekukan `tier` dan `tier_expires_at`, tapi tidak `pro_plan` — kolom itu baru ada di Fase 3. Akibatnya user Pro Bulanan bisa meng-update barisnya sendiri jadi `yearly` dan mendapat kuota 1GB tanpa membayar selisihnya. Celahnya sudah ada sejak Fase 3, tapi baru bernilai sekarang karena Fase 5 yang membuat perbedaan paket berarti secara komersial. Migration `20260821211045` menutupnya.
 
 ## 6. Yang tidak dikerjakan di fase ini
 

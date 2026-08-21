@@ -76,3 +76,32 @@ Angka-angka di atas dipakai langsung sebagai konstanta/env var (lihat `.env.exam
 ## 8. Filosofi Kerja Claude Code di Proyek Ini
 
 Boss Ali ingin Claude Code berperan besar dalam implementasi — ambil inisiatif teknis, buat keputusan detail implementasi sendiri. **Yang wajib dieskalasi ke Boss Ali hanya:** keputusan bisnis/angka baru yang belum ada di dokumen (lihat Bagian 6 & PRD Bagian 7), perubahan arsitektur besar (mis. ganti provider, ganti framework), atau pilihan yang punya trade-off signifikan tanpa jawaban jelas dari dokumen yang ada. Keputusan implementasi teknis kecil (struktur komponen, nama variabel, cara menulis query) tidak perlu ditanyakan — langsung kerjakan sesuai konvensi di Bagian 4.
+
+## 9. Konvensi Plugin & Skill Claude Code
+
+Plugin berikut sudah terpasang di scope user/project — **tidak perlu diinstall ulang atau ditanyakan lagi**, langsung dipakai sesuai konteks. Sebagian bersifat otomatis (model-invoked), sebagian butuh aturan tambahan supaya hasilnya konsisten dengan proyek ini.
+
+### 9.1 Plugin otomatis (tidak butuh perintah manual)
+
+- **security-guidance** — scan otomatis tiap ada perubahan kode untuk pola injection, XSS, secret ter-expose, IDOR. Kalau ada temuan, laporkan sebelum lanjut, jangan diamkan.
+- **typescript-lsp** — diagnostik TypeScript real-time (type errors, jump-to-definition). Berjalan di background, tidak perlu dipanggil.
+- **frontend-design** — aktif otomatis saat mengerjakan UI/frontend. **Lihat aturan wajib di 9.2 sebelum skill ini dipakai.**
+
+### 9.2 Aturan wajib untuk frontend-design (mengikat, bukan saran)
+
+Skill ini cenderung mendorong pemilihan font/warna/aksen baru yang "distinctive" demi menghindari tampilan AI generik. **Proyek ini sudah punya design token final (3-layer: primitive → semantic → component)** — blue `#2563EB` primary, coral `#FF6B4A` khusus elemen Pro/upgrade, amber `#F59E0B` warning, gold `#F5C443` badge Pro.
+
+- **Wajib pakai token yang sudah ada.** Jangan perkenalkan palet warna atau font baru tanpa konfirmasi eksplisit dari Boss Ali, meskipun skill frontend-design menyarankan arah estetik berbeda demi "distinctiveness".
+- Kebebasan skill ini **hanya berlaku** pada aspek yang belum ditentukan: layout, spacing, micro-interaction, tipografi pendukung (bukan warna brand), komposisi visual.
+- Kalau ragu apakah suatu keputusan visual menyentuh token yang sudah final atau area bebas — berhenti dan tanyakan, jangan menebak (konsisten dengan Aturan Keras di Bagian 3).
+
+### 9.3 Superpowers (alur brainstorm → plan → execute)
+
+- **Task baru/besar** (subsistem baru, fitur belum ada sebelumnya): ikuti alur penuh — brainstorm dulu, baru write-plan, baru execute-plan.
+- **Fix kecil / perubahan config / typo**: boleh skip langsung ke eksekusi kalau Boss Ali eksplisit bilang "langsung kerjakan" atau semacamnya — jangan paksakan proses penuh untuk perubahan trivial.
+- Proses ini **tidak menggantikan** Aturan Keras di Bagian 3 & alur kerja Bagian 5 — kalau brainstorm/plan mengarah ke keputusan bisnis/angka yang belum ada di PRD/System Design, tetap berhenti dan tanya (bukan diputuskan sendiri oleh proses Superpowers).
+
+### 9.4 code-review & commit-commands
+
+- **code-review**: jalankan sebelum commit untuk perubahan yang menyentuh lebih dari satu file atau logic non-trivial. Untuk perubahan satu baris/config, boleh dilewati.
+- **commit-commands**: pakai untuk format commit message, ikuti conventional commits — tidak perlu approval manual per commit message kecuali isinya menyangkut perubahan yang juga butuh review kode.

@@ -15,8 +15,9 @@ Extend dari `auth.users` bawaan Supabase (relasi 1:1).
 | `id` | uuid (PK, FK → `auth.users.id`) | Sama dengan user id Supabase Auth |
 | `display_name` | text | Nama tampilan user |
 | `tier` | text | `'basic'` \| `'pro'` — default `'basic'` |
-| `tier_expires_at` | timestamptz, nullable | Kapan status Pro berakhir (untuk Pro dari referral yang sifatnya sementara). `NULL` = permanen (Pro dari pembelian) |
-| `referral_code` | text, unique | Kode referral unik milik user ini |
+| `tier_expires_at` | timestamptz, nullable | Kapan status Pro berakhir. **Wajib terisi untuk setiap Pro** — tidak ada Pro permanen, paket pembelian hanya 1 bulan & 1 tahun (keputusan Boss Ali, Fase 3). `NULL` untuk Basic; `NULL` pada baris `tier='pro'` dianggap data tidak wajar dan diperlakukan sebagai Basic oleh client |
+| `pro_plan` | text, nullable | `'monthly'` \| `'yearly'` \| `'referral'` — asal status Pro. Penentu kuota storage (500MB/1GB) dan label di UI. `NULL` untuk Basic. Ditambahkan di migration `fase3_auth_profile_bootstrap` |
+| `referral_code` | text, unique | Kode referral unik milik user ini. Dibuat otomatis oleh trigger signup: 8 karakter dari alfabet `23456789ABCDEFGHJKMNPQRSTVWXYZ` (tanpa karakter yang gampang tertukar) |
 | `referred_by` | uuid, nullable, FK → `profiles.id` | Diisi kalau user ini mendaftar lewat kode referral orang lain |
 | `created_at` | timestamptz | default `now()` |
 | `updated_at` | timestamptz | default `now()`, di-update tiap perubahan |
@@ -133,7 +134,7 @@ referral_milestones (tabel konfigurasi, tidak berelasi langsung)
 
 ## 7. Trigger yang Perlu Dibuat
 
-1. **`on_auth_user_created`** — trigger di `auth.users` untuk auto-insert row `profiles` + `storage_usage` (quota default Basic) saat signup, sekaligus generate `referral_code` unik.
+1. **`on_auth_user_created`** — ✅ **sudah dibuat di Fase 3** (migration `fase3_auth_profile_bootstrap`). Trigger di `auth.users` yang auto-insert row `profiles` + `storage_usage` (quota Basic 100MB) saat signup, sekaligus generate `referral_code` unik lewat fungsi `generate_referral_code()`. Kedua fungsi `security definer` ini sudah di-`revoke` dari role `anon`/`authenticated` supaya tidak bisa dipanggil sebagai endpoint RPC.
 2. **`on_scan_document_backup`** — setelah `scan_documents.local_only` berubah jadi `false`, update `storage_usage.bytes_used` (+file_size_bytes).
 3. **`on_scan_document_delete`** — kalau dokumen yang sudah di-backup dihapus, kurangi `storage_usage.bytes_used`.
 

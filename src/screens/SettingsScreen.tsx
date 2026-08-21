@@ -1,14 +1,32 @@
-import { ScanIcon, TrashIcon } from '../components/Icons'
+import { useAuth } from '../auth/useAuth'
+import { ChevronRightIcon, CloudIcon, LogoutIcon, ScanIcon, TrashIcon } from '../components/Icons'
+import { QuotaBar } from '../components/QuotaBar'
+import { proDaysRemaining, tierLabel } from '../lib/tier'
 import { THEMES, THEME_ORDER } from '../theme/themes'
 import { useTheme } from '../theme/useTheme'
 
 interface SettingsScreenProps {
   documentCount: number
+  usedBytes: number
+  quotaBytes: number
   onDeleteAll: () => void
+  onSignOut: () => void
+  onOpenBackups: () => void
 }
 
-export function SettingsScreen({ documentCount, onDeleteAll }: SettingsScreenProps) {
+export function SettingsScreen({
+  documentCount,
+  usedBytes,
+  quotaBytes,
+  onDeleteAll,
+  onSignOut,
+  onOpenBackups,
+}: SettingsScreenProps) {
   const { themeId, setThemeId, theme } = useTheme()
+  const { email, profile, tier } = useAuth()
+
+  const name = profile?.displayName?.trim() || email?.split('@')[0] || 'Pengguna'
+  const daysLeft = proDaysRemaining(profile)
 
   return (
     <div className="screen">
@@ -20,15 +38,47 @@ export function SettingsScreen({ documentCount, onDeleteAll }: SettingsScreenPro
           <h1>ScannApp</h1>
           <p>Kelola paket &amp; preferensi</p>
         </div>
-        <span className="app-header__tier">Basic</span>
+        <span className="app-header__tier">{tier === 'pro' ? 'Pro' : 'Basic'}</span>
       </header>
 
-      <section className="card plan-card">
-        <div className="plan-card__badge">B</div>
-        <div>
-          <h2>Paket Basic</h2>
-          <p>Gratis · maks 20 halaman per dokumen</p>
+      <section className="card account-card">
+        <div className="account-card__avatar">{name.charAt(0).toUpperCase()}</div>
+        <div className="account-card__body">
+          <p className="account-card__name">{name}</p>
+          {email && <p className="account-card__email">{email}</p>}
+          <span
+            className={`account-card__tier${tier === 'pro' ? ' account-card__tier--pro' : ''}`}
+          >
+            {tierLabel(profile)}
+            {daysLeft !== null && (
+              <span className="account-card__remaining">· sisa {daysLeft} hari</span>
+            )}
+          </span>
         </div>
+      </section>
+
+      {tier === 'basic' && (
+        <section className="card plan-card">
+          <div className="plan-card__badge">B</div>
+          <div>
+            <h2>Paket Basic</h2>
+            <p>Gratis · maks 20 halaman per dokumen gabungan</p>
+          </div>
+        </section>
+      )}
+
+      <h2 className="section-label">Cloud</h2>
+
+      <QuotaBar usedBytes={usedBytes} quotaBytes={quotaBytes} />
+
+      <section className="card">
+        <button type="button" className="card__row card__row--button" onClick={onOpenBackups}>
+          <span className="card__row-label">
+            <CloudIcon size={17} className="card__row-icon" />
+            Cadangan di cloud
+          </span>
+          <ChevronRightIcon size={18} />
+        </button>
       </section>
 
       <h2 className="section-label">Preferensi</h2>
@@ -70,7 +120,14 @@ export function SettingsScreen({ documentCount, onDeleteAll }: SettingsScreenPro
         </button>
       </section>
 
-      <p className="app-version">ScannApp · Fase 1</p>
+      <section className="card">
+        <button type="button" className="card__row card__row--button" onClick={onSignOut}>
+          <span className="card__row-label">Keluar</span>
+          <LogoutIcon size={18} />
+        </button>
+      </section>
+
+      <p className="app-version">ScannApp · Fase 3</p>
     </div>
   )
 }

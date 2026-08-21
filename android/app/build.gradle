@@ -7,6 +7,9 @@ android {
         applicationId "com.newbeboys.scannapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        // versionCode = angka yang dipakai Google Play untuk mendeteksi versi baru.
+        // WAJIB dinaikkan setiap upload AAB baru ke Play Console, tidak boleh mundur/sama.
+        // versionName = string yang dilihat user di halaman Play Store.
         versionCode 3
         versionName "2.0.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -17,13 +20,28 @@ android {
         }
     }
 
+    // Signing config untuk release dibaca dari ~/.gradle/gradle.properties (di luar repo,
+    // tidak pernah masuk git). 4 properti berikut sudah diisi Boss Ali di sana:
+    //   SCANNAPP_KEYSTORE_PATH=/path/absolut/ke/keystore.jks
+    //   SCANNAPP_KEYSTORE_PASSWORD=...
+    //   SCANNAPP_KEY_ALIAS=...
+    //   SCANNAPP_KEY_PASSWORD=...
+    // Kalau properti belum/tidak lengkap, build debug tetap jalan normal — hanya release
+    // yang gagal ditandatangani (lihat signingConfig di bawah).
+    def releaseKeystorePath = project.findProperty('SCANNAPP_KEYSTORE_PATH')
+    def releaseKeystorePassword = project.findProperty('SCANNAPP_KEYSTORE_PASSWORD')
+    def releaseKeyAlias = project.findProperty('SCANNAPP_KEY_ALIAS')
+    def releaseKeyPassword = project.findProperty('SCANNAPP_KEY_PASSWORD')
+    def hasReleaseSigningProps = releaseKeystorePath && releaseKeystorePassword &&
+            releaseKeyAlias && releaseKeyPassword
+
     signingConfigs {
         release {
-            if (project.hasProperty('SCANNAPP_KEYSTORE_PATH')) {
-                storeFile file(SCANNAPP_KEYSTORE_PATH)
-                storePassword SCANNAPP_KEYSTORE_PASSWORD
-                keyAlias SCANNAPP_KEY_ALIAS
-                keyPassword SCANNAPP_KEY_PASSWORD
+            if (hasReleaseSigningProps) {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseKeystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
             }
         }
     }
@@ -32,7 +50,11 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            if (hasReleaseSigningProps) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn("SCANNAPP_KEYSTORE_PATH/SCANNAPP_KEYSTORE_PASSWORD/SCANNAPP_KEY_ALIAS/SCANNAPP_KEY_PASSWORD belum lengkap di ~/.gradle/gradle.properties — build release TIDAK akan ditandatangani.")
+            }
         }
     }
 }

@@ -47,13 +47,16 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 
 6. kamu bisa lihat pada folder atau file yang di ScannApp Design Prototap kemungkinan seperti itu design aplikasiku, kamu bisa membuatnya lebih bagus atau smoot dengan menggunakan skill/plugin yang tersedia tanpa aku perintahkan, tinggal kamu kerjakan jikan selesai tunjukan nanti aku akan membuat keputusannya.
 
+7. gunakan bahasa indonesia disetiap laporan yang kamu buat dan kegiatan/tugas apa yang kamu sedeng kerjan pastikan kmau menggunakan bahasa indonesia agar aku memahami mu.
+
 ## 6. Angka Final yang Wajib Dipakai (bukan lagi open decision — lihat PRD v2 Bagian 7)
 
 - **Limit merge dokumen:** Basic maksimal 20 halaman per dokumen hasil merge, Pro unlimited.
 - **Milestone referral:** 5 orang→7 hari Pro, 15 orang→25 hari Pro, 30 orang→60 hari Pro.
 - **Harga Pro:** Rp 15.000/bulan atau Rp 150.000/tahun.
 - **Frekuensi iklan Basic:** banner + interstitial tiap 5 scan, ditambah interstitial setelah export.
-- **Quota storage R2:** Basic 100MB, Pro bulanan 500MB, Pro tahunan 1GB.
+- **Quota storage R2:** Basic 100MB, Pro bulanan 500MB, Pro tahunan 1GB, **Pro dari referral 500MB** (ditetapkan 26 Juli 2026 saat Fase 4).
+- **Paket Pro selalu berjangka:** hanya ada 1 bulan & 1 tahun — **tidak ada Pro permanen**. Baris `profiles` dengan `tier='pro'` tapi `tier_expires_at` kosong dianggap data rusak dan diperlakukan sebagai Basic (ditetapkan 26 Juli 2026 saat Fase 3).
 - **Reward referral untuk teman yang diundang:** 1 hari akses Pro (reward dua arah "give X get Y").
 - **Interval job `expire-pro-status`:** tiap hari (jam 00:00), bukan tiap jam.
 - **Signed URL R2:** langsung dari Supabase Edge Function, **tanpa** Cloudflare Worker tambahan — jangan tambah komponen infrastruktur baru untuk ini kecuali ada kebutuhan eksplisit (mis. resize gambar server-side) di kemudian hari.

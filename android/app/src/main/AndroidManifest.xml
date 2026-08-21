@@ -45,4 +45,13 @@
         it is declared here explicitly so the app's billing usage is self-documenting.
     -->
     <uses-permission android:name="com.android.vending.BILLING" />
+
+    <!--
+        Ekspor menulis PDF/JPG ke folder Documents publik supaya file-nya
+        bisa ditemukan lewat file manager. Izin ini hanya diperlukan di
+        Android 10 ke bawah; Android 11+ (scoped storage) tidak memintanya.
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
 </manifest>

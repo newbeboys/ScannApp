@@ -1,6 +1,6 @@
 import { PageImage } from '../components/PageImage'
 import { ScanIcon } from '../components/Icons'
-import type { LocalScanDocument } from '../lib/scanStorage'
+import { resolvePage, type LocalScanDocument } from '../lib/scanStorage'
 
 interface HomeScreenProps {
   documents: LocalScanDocument[]
@@ -8,6 +8,7 @@ interface HomeScreenProps {
   canScan: boolean
   onScan: () => void
   onOpenDocuments: () => void
+  onOpenDocument: (id: string) => void
 }
 
 export function HomeScreen({
@@ -16,6 +17,7 @@ export function HomeScreen({
   canScan,
   onScan,
   onOpenDocuments,
+  onOpenDocument,
 }: HomeScreenProps) {
   const recent = documents.slice(0, 4)
 
@@ -60,13 +62,18 @@ export function HomeScreen({
         ) : (
           <div className="doc-grid">
             {recent.map((doc) => (
-              <article key={doc.id} className="doc-tile">
+              <button
+                key={doc.id}
+                type="button"
+                className="doc-tile"
+                onClick={() => onOpenDocument(doc.id)}
+              >
                 <div className="doc-tile__preview">
-                  <PageImage source={doc.pagePaths[0]} alt={doc.title} />
+                  <PageImage source={resolvePage(doc.pages[0])} alt={doc.title} />
                 </div>
                 <h3>{doc.title}</h3>
                 <p>{doc.pageCount} halaman</p>
-              </article>
+              </button>
             ))}
           </div>
         )}

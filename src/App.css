@@ -10,7 +10,9 @@
 .app__body {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(
+    var(--nav-height) + var(--ad-banner-height) + env(safe-area-inset-bottom, 0px)
+  );
 }
 
 .screen {
@@ -587,7 +589,8 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  /* Banner AdMob menutup dasar layar; nav naik di atasnya. */
+  bottom: var(--ad-banner-height);
   z-index: 10;
   max-width: 560px;
   margin: 0 auto;
@@ -645,7 +648,9 @@
   position: fixed;
   left: 16px;
   right: 16px;
-  bottom: calc(var(--nav-height) + 12px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(
+    var(--nav-height) + var(--ad-banner-height) + 12px + env(safe-area-inset-bottom, 0px)
+  );
   max-width: 528px;
   margin: 0 auto;
   font-size: 12px;
@@ -660,7 +665,7 @@
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--nav-height) + 58px);
+  bottom: calc(var(--nav-height) + var(--ad-banner-height) + 58px);
   transform: translateX(-50%);
   z-index: 20;
   font-size: 13px;

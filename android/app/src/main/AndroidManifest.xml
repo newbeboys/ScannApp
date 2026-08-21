@@ -14,7 +14,7 @@
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:exported="true">
 
             <intent-filter>
@@ -23,6 +23,16 @@
             </intent-filter>
 
         </activity>
+
+        <!--
+            AdMob APPLICATION_ID. SDK Google Mobile Ads sengaja membuat aplikasi
+            crash saat start kalau meta-data ini tidak ada, jadi nilainya tidak
+            boleh kosong. Sekarang memakai App ID test resmi Google; GANTI dengan
+            App ID asli dari dashboard AdMob (ADMOB_APP_ID di .env) sebelum rilis.
+        -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

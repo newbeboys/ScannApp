@@ -1,8 +1,11 @@
 import { Capacitor } from '@capacitor/core'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { useAuth } from './auth/useAuth'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { ExportSheet } from './components/ExportSheet'
+import { resetScanCount } from './lib/ads/adFrequency'
+import { maybeShowInterstitial } from './lib/ads/adsService'
+import { useAdBanner } from './lib/ads/useAdBanner'
 import {
   backupDocument,
   deleteBackup,
@@ -64,6 +67,13 @@ function App() {
   const [usedBytes, setUsedBytes] = useState(0)
   const isNative = Capacitor.isNativePlatform()
   const quotaBytes = quotaBytesFor(profile)
+
+  // Banner only on the tab screens — never over a scan review, editor, merge
+  // or paywall, where it would sit in the middle of a task (spec Bagian 3.3).
+  const bannerPx = useAdBanner(
+    status === 'signed-in' && view.kind === 'tabs' && pendingPages === null,
+    tier,
+  )
 
   const refreshDocuments = useCallback(async () => {
     setDocuments(await listScanDocuments())
@@ -134,6 +144,9 @@ function App() {
       setPendingPages(null)
       setTab('documents')
       setToast('Dokumen tersimpan.')
+      // Counted per saved document, not per scanner launch: a cancelled scan
+      // produced nothing, so it should not cost the user an ad.
+      void maybeShowInterstitial('scan-saved', tier)
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Gagal menyimpan dokumen.')
     } finally {
@@ -166,6 +179,8 @@ function App() {
       const result = await exportDocument(doc, format, tier)
       setExportTarget(null)
       setToast(result.message)
+      // After delivery, so the ad never races the Android share sheet.
+      void maybeShowInterstitial('export-finished', tier)
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Gagal mengekspor dokumen.')
     } finally {
@@ -245,6 +260,9 @@ function App() {
     if (!confirm('Keluar dari akun ini? Dokumen yang tersimpan di HP tidak ikut terhapus.')) return
     try {
       await signOut()
+      // The scan counter is per person, not per device — the next account to
+      // sign in should not inherit someone else's progress toward an ad.
+      resetScanCount()
       setTab('home')
       setView({ kind: 'tabs' })
       setAuthView({ kind: 'landing' })
@@ -387,7 +405,9 @@ function App() {
   }
 
   return (
-    <div className="app">
+    // The banner is a native view laid over the WebView, so its height has to
+    // be handed to CSS explicitly — nothing in the layout can measure it.
+    <div className="app" style={{ '--ad-banner-height': `${bannerPx}px` } as CSSProperties}>
       <main className="app__body">
         {tab === 'home' && (
           <HomeScreen

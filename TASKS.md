@@ -135,10 +135,12 @@ Total test naik dari 100 ke 123.
 - [ ] Buat produk subscription di Play Console: `scannapp_pro_monthly` (Rp 15.000) & `scannapp_pro_yearly` (Rp 150.000)
 - [ ] Di dashboard RevenueCat: hubungkan ke Play Console, buat entitlement `pro`, buat offering berisi kedua produk
 - [ ] Set `REVENUECAT_WEBHOOK_SECRET` di RevenueCat (Integrations → Webhooks → Authorization header) **dan** di Supabase Edge Function Secrets dengan nama yang sama
-- [ ] Deploy Edge Function `revenuecat-webhook` + **redeploy `confirm-upload`** (ada perbaikan keamanan), lalu jalankan 3 migration baru:
+- [x] ~~Jalankan 3 migration baru~~ — sudah diterapkan ke production 22 Agustus 2026 lewat MCP, exploit-nya diverifikasi manual:
   - `20260821211033_fase5_subscription_events.sql`
   - `20260821211045_fase5_freeze_pro_plan_in_rls.sql`
   - `20260821211059_fase5_revoke_client_writes_on_scan_documents.sql`
+- [x] ~~Redeploy `confirm-upload`~~ — sudah live di production (version 2, 22 Agustus 2026). Celah pengambilalihan dokumen ditutup di production, tidak menunggu deploy Fase 5.
+- [ ] Deploy Edge Function `revenuecat-webhook` (menunggu `REVENUECAT_WEBHOOK_SECRET` di-set)
 
 **Belum diverifikasi di device fisik** (butuh Boss Ali):
 
@@ -147,6 +149,7 @@ Total test naik dari 100 ke 123.
 - [ ] Pembelian test di Play Console berhasil, lalu `tier` di `profiles` berubah jadi `pro`
 - [ ] Callback pembelian tidak hilang setelah `launchMode` diubah — uji juga buka app dari launcher setelah di-background, dan kembali dari share sheet/file picker
 - [ ] "Pulihkan pembelian" bekerja setelah aplikasi di-install ulang
+- [ ] **Backup ke cloud masih jalan setelah `confirm-upload` v2.** Fungsinya sekarang mengukur ukuran berkas dari R2 (HEAD) alih-alih mempercayai angka dari client. Jalur HEAD ini belum pernah diuji terhadap R2 sungguhan — kalau bermasalah, gejalanya pesan **"Berkas cadangan belum sampai di cloud"** padahal unggahan berhasil. Uji cadangkan satu dokumen dari HP.
 
 ## Fase 6 — Fitur Pro: OCR & Edit Lanjutan
 

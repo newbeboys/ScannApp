@@ -93,11 +93,19 @@ export async function backupDownloadUrl(documentId: string): Promise<string> {
 /**
  * Read straight from the table — RLS already limits both of these to the
  * signed-in user, so no Edge Function round trip is needed just to look.
+ *
+ * `local_only = false` is what actually means "there is a copy in R2". Every
+ * row today is written by `confirm-upload`, which always sets it false, so the
+ * filter changes nothing right now. It is here because the offline metadata
+ * sync in SYSTEM_DESIGN.md Bagian 6 is meant to create `local_only = true`
+ * rows: without the filter, the day that lands, this list would show documents
+ * that have no cloud copy and the backup badge would claim they are safe.
  */
 export async function listCloudBackups(): Promise<CloudBackup[]> {
   const { data, error } = await supabase
     .from('scan_documents')
     .select('id, title, page_count, file_size_bytes, updated_at')
+    .eq('local_only', false)
     .order('updated_at', { ascending: false })
 
   if (error || !data) return []

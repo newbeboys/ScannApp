@@ -1,8 +1,7 @@
-import { base64ToBlob } from './blobBase64'
 import { cropImage, rotateImage, type CropRect, type Rotation } from './imageEditor'
 import {
   invalidateDisplayUri,
-  readPageBase64,
+  readPageBlob,
   resetPageEdit,
   resolvePage,
   savePageEdit,
@@ -12,7 +11,7 @@ import {
 
 /** Loads whatever the page currently shows — the edit if present, else the original. */
 export async function loadPageBlob(page: ScanPage): Promise<Blob> {
-  return base64ToBlob(await readPageBase64(resolvePage(page)))
+  return readPageBlob(resolvePage(page))
 }
 
 async function editPage(

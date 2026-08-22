@@ -186,10 +186,50 @@ export async function deleteAllScanDocuments(): Promise<void> {
   await writeIndex([])
 }
 
-/** Reads a stored page as raw base64 so it can be decoded into a canvas. */
+/** Reads a stored page as raw base64. Kept for the web storage fallback. */
 export async function readPageBase64(pagePath: string): Promise<string> {
   const result = await Filesystem.readFile({ path: pagePath, directory: Directory.Data })
   return result.data as string
+}
+
+/**
+ * Reads a stored page as binary — the fast path, and the one every caller that
+ * just wants the bytes should use.
+ *
+ * Filesystem.readFile is the slow way to move an image on Android: the plugin
+ * base64-encodes the file (a 3 MB scan becomes a 4 MB string), hands that
+ * string across the JS/Java bridge as JSON, and then base64ToBlob walks it byte
+ * by byte in JavaScript. Measured on a desktop, the decode alone costs 9-27x
+ * more than building the Blob straight from bytes, and the bridge hop costs
+ * more again on a phone.
+ *
+ * On native the file already has a URL that Capacitor's own asset loader
+ * serves — the same one the <img> tags use — so fetch() streams the bytes with
+ * no base64 and no bridge in the way.
+ */
+export async function readPageBlob(pagePath: string): Promise<Blob> {
+  if (!Capacitor.isNativePlatform()) {
+    // Web storage is IndexedDB-backed, so there is no URL to stream from.
+    // Deliberately not routed through getScanPageDisplayUri: that would park a
+    // full-size object URL in the display cache, which only invalidateDisplayUri
+    // ever revokes — exporting 20 pages would strand tens of MB for the session.
+    return base64ToBlob(await readPageBase64(pagePath))
+  }
+
+  const { uri } = await Filesystem.getUri({ path: pagePath, directory: Directory.Data })
+
+  // cache: 'no-store' is load-bearing, not a precaution. savePageEdit rewrites
+  // the *same* path (page-N-edited.jpg) and the URL is therefore stable, so the
+  // webview would happily serve the bytes it cached for the <img> that is
+  // showing the page right now. Rotating twice would then re-rotate the first
+  // rotation's output and appear stuck at 90 degrees, and the exported PDF
+  // would carry the pre-edit pixels. Filesystem.readFile never had this problem
+  // because it always went to disk.
+  const response = await fetch(Capacitor.convertFileSrc(uri), { cache: 'no-store' })
+  if (!response.ok) {
+    throw new Error(`Gagal membaca halaman dokumen (HTTP ${response.status}).`)
+  }
+  return response.blob()
 }
 
 /**

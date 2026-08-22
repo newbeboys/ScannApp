@@ -81,6 +81,45 @@ export async function deleteBackup(documentId: string): Promise<void> {
   await callFunction('delete-backup', { document_id: documentId })
 }
 
+/**
+ * Whether the new name reached the cloud copy.
+ *
+ * `no-cloud-copy` and `failed` are kept apart on purpose: only the second one
+ * is worth warning the user about. A document that was never backed up has
+ * nothing out of sync.
+ */
+export type CloudRenameResult = 'synced' | 'no-cloud-copy' | 'failed'
+
+/**
+ * Points the cloud copy at the document's new name.
+ *
+ * Goes through an Edge Function rather than a plain update because the client
+ * has no write policy on `scan_documents` — revoked on 21 August 2026 so a
+ * caller could not inflate its own `file_size_bytes` past the storage quota.
+ *
+ * Never throws: the local rename has already succeeded by the time this runs,
+ * and storage is local-first, so a dropped connection must not look like the
+ * rename failed. The next backup carries the current name up anyway.
+ *
+ * Whether a cloud copy exists is answered by the server, not guessed from the
+ * client's backup map — that map is empty whenever listCloudBackups() failed,
+ * which would otherwise silently skip the sync for the rest of the session.
+ */
+export async function renameCloudDocument(
+  documentId: string,
+  title: string,
+): Promise<CloudRenameResult> {
+  try {
+    const { synced } = await callFunction<{ synced: boolean }>('rename-document', {
+      document_id: documentId,
+      title,
+    })
+    return synced ? 'synced' : 'no-cloud-copy'
+  } catch {
+    return 'failed'
+  }
+}
+
 /** Returns a short-lived link the caller can open or download. */
 export async function backupDownloadUrl(documentId: string): Promise<string> {
   const { download_url } = await callFunction<{ download_url: string }>('generate-download-url', {

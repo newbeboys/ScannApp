@@ -94,6 +94,78 @@
   color: var(--fg-dim);
 }
 
+/* ---------- ubah nama dokumen ---------- */
+
+/*
+  Judulnya sendiri jadi tombol, bukan ikon pensil terpisah di sebelahnya:
+  targetnya jadi selebar judul — jauh lebih mudah ditekan dengan jempol — dan
+  ikonnya cuma penanda bahwa teks itu bisa diubah.
+*/
+.flow-header__rename {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+}
+
+.flow-header__rename-icon {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+}
+
+.rename {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rename__input {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--acc-edge);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 16px; /* di bawah 16px, WebView Android ikut men-zoom halaman */
+  font-weight: 600;
+}
+
+.rename__input:focus {
+  outline: 2px solid var(--acc-soft);
+  outline-offset: 1px;
+}
+
+.rename__save,
+.rename__cancel {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rename__save {
+  background: var(--acc);
+  color: #ffffff;
+}
+
+.rename__save:disabled {
+  opacity: 0.5;
+}
+
+.rename__cancel {
+  background: var(--chip);
+  color: var(--fg-dim);
+}
+
 /* ---------- scan hero ---------- */
 
 .scan-hero {

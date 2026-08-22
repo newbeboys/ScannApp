@@ -1,3 +1,4 @@
+import { normalizeDocumentTitle } from '../_shared/documentTitle.ts'
 import { errorResponse, handler, json, serviceClient } from '../_shared/http.ts'
 import { fitsInQuota, quotaBytesFor } from '../_shared/quota.ts'
 import { deleteObject, headObjectSize } from '../_shared/r2.ts'
@@ -87,7 +88,9 @@ Deno.serve(
     }
 
     const fields = {
-      title: body.title?.slice(0, 200) || 'Dokumen',
+      // Shared with rename-document so a backup can never rewrite a title into
+      // a different spelling than the rename that just set it.
+      title: normalizeDocumentTitle(body.title),
       page_count: Number.isFinite(pageCount) && pageCount > 0 ? pageCount : 1,
       file_size_bytes: size,
       export_format: 'pdf',

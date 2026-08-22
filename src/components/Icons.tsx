@@ -120,6 +120,15 @@ export function CropIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function PencilIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7.5 18.5l-4 1 1-4Z" />
+      <path d="M14.5 5.5l3 3" />
+    </svg>
+  )
+}
+
 export function RotateIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">

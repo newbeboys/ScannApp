@@ -11,6 +11,7 @@ import {
   deleteBackup,
   fetchStorageUsage,
   listCloudBackups,
+  renameCloudDocument,
 } from './lib/backupApi'
 import { quotaBytesFor } from './lib/storageQuota'
 import { exportDocument, type ExportFormat } from './lib/documentExport'
@@ -20,6 +21,7 @@ import {
   deleteAllScanDocuments,
   deleteScanDocument,
   listScanDocuments,
+  renameScanDocument,
   saveScanDocument,
   type LocalScanDocument,
 } from './lib/scanStorage'
@@ -66,6 +68,7 @@ function App() {
   /** Sizes of documents that have a cloud copy, keyed by document id. */
   const [backedUp, setBackedUp] = useState<Record<string, number>>({})
   const [backupBusyId, setBackupBusyId] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
   const [usedBytes, setUsedBytes] = useState(0)
   const isNative = Capacitor.isNativePlatform()
   const quotaBytes = quotaBytesFor(profile)
@@ -260,6 +263,33 @@ function App() {
     }
   }
 
+  /**
+   * Local-first: the name changes on the phone straight away, then we try to
+   * point the cloud copy at it. A failed sync is reported but never rolls the
+   * local rename back — and the next backup carries the current name up anyway.
+   */
+  const handleRename = async (id: string, title: string) => {
+    setRenamingId(id)
+    try {
+      const updated = await renameScanDocument(id, title)
+      applyDocumentChange(updated)
+
+      // Always asked, never guessed from `backedUp`: that map is empty whenever
+      // listCloudBackups() failed, which would skip the sync for the whole
+      // session while still reporting success.
+      const result = await renameCloudDocument(id, updated.title)
+      setToast(
+        result === 'failed'
+          ? 'Nama diubah di HP. Nama di cloud menyusul saat dicadangkan lagi.'
+          : 'Nama dokumen diubah.',
+      )
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal mengubah nama dokumen.')
+    } finally {
+      setRenamingId(null)
+    }
+  }
+
   /** Local files stay on the device; only the session is dropped. */
   const handleSignOut = async () => {
     if (!confirm('Keluar dari akun ini? Dokumen yang tersimpan di HP tidak ikut terhapus.')) return
@@ -415,6 +445,8 @@ function App() {
                 : 'local'
           }
           backupSizeBytes={backedUp[activeDocument.id] ?? null}
+          isRenaming={renamingId === activeDocument.id}
+          onRename={(title) => handleRename(activeDocument.id, title)}
           onBack={() => setView({ kind: 'tabs' })}
           onEdit={() => setView({ kind: 'editor', id: activeDocument.id })}
           onExport={() => setExportTarget(activeDocument.id)}

@@ -152,7 +152,19 @@ Total test naik dari 100 ke 123.
 - [ ] "Pulihkan pembelian" bekerja setelah aplikasi di-install ulang
 - [x] ~~**Backup ke cloud masih jalan setelah `confirm-upload` v2.**~~ **Terverifikasi 23 Agustus 2026** dari HP Boss Ali. Dokumen `6f05fafd-…` (1 halaman, PDF) tercatat di `scan_documents` dengan `file_size_bytes` 326.679 dan `local_only=false`, serta `storage_usage.bytes_used` cocok persis. Angka itu **bukan** klaim client: `confirm-upload` mengambilnya dari `headObjectSize()`, yaitu HTTP HEAD sungguhan ke R2 — kalau objeknya tidak ada, R2 balas 404 dan fungsi menolak dengan `UPLOAD_NOT_FOUND` tanpa menulis baris apa pun. Jadi keberadaan baris itu membuktikan objeknya fisik ada di R2. Jalur HEAD terbukti bekerja terhadap R2 sungguhan.
 
+## Ubah Nama Dokumen (semua tier) — 23 Agustus 2026
+
+Diminta Boss Ali saat uji device. Bukan fitur Pro: menamai dokumen sendiri itu kebutuhan dasar, bukan nilai jual.
+
+- [x] Ubah nama dokumen di HP (`renameScanDocument`) — local-first, tidak pernah butuh jaringan
+- [x] Sinkron nama ke salinan cloud lewat Edge Function `rename-document` — client sengaja tidak punya izin tulis ke `scan_documents` (dicabut migration `20260821211059`), jadi rename lewat service role dengan cek kepemilikan dan hanya kolom `title` yang bisa disentuh
+- [x] Normalisasi judul dipakai bersama `confirm-upload` (`_shared/documentTitle.ts`) supaya mencadangkan dokumen tidak menimpa nama yang baru diubah
+- [ ] **Deploy `rename-document` + redeploy `confirm-upload`** (menunggu persetujuan Boss Ali) — tanpa ini nama berubah di HP tapi tidak pernah sampai ke cloud
+- [ ] Uji di HP: ubah nama, lalu cek daftar cadangan cloud ikut berubah; ubah nama saat offline harus tetap berhasil di HP dengan pesan bahwa cloud menyusul
+
 ## Fase 6 — Fitur Pro: OCR & Edit Lanjutan
+
+**Urutan disetujui Boss Ali 23 Agustus 2026:** mulai dari **reorder halaman + filter lanjutan** (paling dekat dengan kode editor, tanpa dependency baru), baru sisanya.
 
 - [ ] Integrasi OCR (searchable PDF)
 - [ ] Annotate (coret/tulis di atas dokumen)

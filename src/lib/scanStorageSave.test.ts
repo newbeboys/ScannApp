@@ -29,7 +29,29 @@ vi.mock('./blobBase64', () => ({
   base64ToBlob: () => new Blob(),
 }))
 
-const { saveScanDocument } = await import('./scanStorage')
+const { saveScanDocument, renameScanDocument } = await import('./scanStorage')
+
+/** Menaruh satu dokumen di index yang dibaca readIndex(). */
+function seedIndex(title: string) {
+  fs.readFile.mockResolvedValue({
+    data: JSON.stringify([
+      {
+        schemaVersion: 2,
+        id: 'doc-1',
+        title,
+        createdAt: '2026-08-23T00:00:00.000Z',
+        pageCount: 1,
+        pages: [{ original: 'scans/doc-1/page-1.jpg' }],
+      },
+    ]),
+  })
+}
+
+/** Index yang ditulis kembali ke disk pada pemanggilan terakhir. */
+function writtenIndex() {
+  const call = fs.writeFile.mock.calls.find((c) => c[0].path === 'scans/index.json')
+  return JSON.parse(call![0].data)
+}
 
 /** Direktori dokumen yang dibuat pada pemanggilan terakhir. */
 function createdDocDir(): string {
@@ -107,5 +129,51 @@ describe('saveScanDocument', () => {
     await expect(saveScanDocument(['https://localhost/_capacitor_file_/cache/a.jpg'])).rejects.toThrow(
       /HTTP 500/,
     )
+  })
+})
+
+describe('renameScanDocument', () => {
+  it('stores the new name in the index', async () => {
+    seedIndex('Scan 22/8/2026')
+
+    const doc = await renameScanDocument('doc-1', 'KTP Ali')
+
+    expect(doc.title).toBe('KTP Ali')
+    expect(writtenIndex()[0].title).toBe('KTP Ali')
+  })
+
+  /**
+   * Judul ikut menyusun nama berkas ekspor, jadi normalisasinya harus sama
+   * persis dengan yang dipakai Edge Function — kalau berbeda, mencadangkan
+   * dokumen akan menulis ulang judul yang baru saja diubah.
+   */
+  it('normalises the name the same way the server does', async () => {
+    seedIndex('lama')
+
+    const doc = await renameScanDocument('doc-1', '  Surat\n\nJalan   2026  ')
+
+    expect(doc.title).toBe('Surat Jalan 2026')
+  })
+
+  it('falls back to a default rather than storing an empty name', async () => {
+    seedIndex('lama')
+
+    expect((await renameScanDocument('doc-1', '   ')).title).toBe('Dokumen')
+  })
+
+  it('never writes anything for a document that does not exist', async () => {
+    seedIndex('lama')
+
+    await expect(renameScanDocument('tidak-ada', 'X')).rejects.toThrow('Dokumen tidak ditemukan.')
+    expect(fs.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('leaves the pages untouched', async () => {
+    seedIndex('lama')
+
+    await renameScanDocument('doc-1', 'Baru')
+
+    expect(writtenIndex()[0].pages).toEqual([{ original: 'scans/doc-1/page-1.jpg' }])
+    expect(writtenIndex()[0].pageCount).toBe(1)
   })
 })

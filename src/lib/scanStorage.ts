@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
+import { normalizeDocumentTitle } from '../../supabase/functions/_shared/documentTitle'
 import { base64ToBlob, blobToBase64 } from './blobBase64'
 import { migrateScanIndex, type LocalScanDocument, type ScanPage } from './scanIndexMigration'
 
@@ -157,6 +158,25 @@ export async function listScanDocuments(): Promise<LocalScanDocument[]> {
 export async function getScanDocument(id: string): Promise<LocalScanDocument | null> {
   const docs = await readIndex()
   return docs.find((doc) => doc.id === id) ?? null
+}
+
+/**
+ * Renames a document on this device. Storage is local-first, so this never
+ * touches the network — syncing the new name to the cloud copy is a separate,
+ * best-effort step the caller runs afterwards.
+ */
+export async function renameScanDocument(
+  id: string,
+  title: string,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === id)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  doc.title = normalizeDocumentTitle(title)
+  await writeIndex(docs)
+
+  return doc
 }
 
 export async function deleteScanDocument(id: string): Promise<void> {

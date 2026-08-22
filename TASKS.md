@@ -144,6 +144,7 @@ Total test naik dari 100 ke 123.
 
 **Belum diverifikasi di device fisik** (butuh Boss Ali):
 
+- [ ] **Aplikasi terbuka sampai layar Landing (versi 2.0.2 / versionCode 4).** Ini prasyarat semua uji di bawahnya. Kalau yang muncul bukan Landing melainkan layar diagnostik putih berisi teks error + UA, screenshot teks itu — isinya menyebut persis apa yang gagal, termasuk versi WebView HP. Kalau layarnya putih polos tanpa teks sama sekali, berarti yang terpasang masih APK lama; cek versinya di Setelan → Aplikasi → ScannApp (harus 2.0.2).
 - [ ] Banner muncul dan tidak menutupi bottom nav
 - [ ] Interstitial benar-benar muncul di scan ke-5 dan setelah export
 - [ ] Pembelian test di Play Console berhasil, lalu `tier` di `profiles` berubah jadi `pro`

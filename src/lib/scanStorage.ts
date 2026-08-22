@@ -9,6 +9,38 @@ export type { LocalScanDocument, ScanPage } from './scanIndexMigration'
 const SCANS_DIR = 'scans'
 const INDEX_PATH = `${SCANS_DIR}/index.json`
 
+/**
+ * crypto.randomUUID() only exists from Chrome 92, and this app supports
+ * Android 7 (minSdkVersion 24), where the system WebView can be much older.
+ *
+ * The fallback must still produce a syntactically valid UUID v4: this id is not
+ * only a local folder name, it also travels to Supabase as the document_id that
+ * `confirm-upload` writes into `scan_documents.id`, which is a `uuid` column.
+ * An arbitrary string is rejected by Postgres (22P02) only *after* the file has
+ * already been PUT to R2, leaving an orphaned object that still costs money.
+ */
+function newDocumentId(): string {
+  if (typeof crypto?.randomUUID === 'function') return crypto.randomUUID()
+
+  const bytes = new Uint8Array(16)
+  if (typeof crypto?.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes)
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40 // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80 // RFC 4122 variant
+
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join('-')
+}
+
 async function ensureScansDir(): Promise<void> {
   try {
     await Filesystem.mkdir({ path: SCANS_DIR, directory: Directory.Data, recursive: true })
@@ -70,7 +102,7 @@ export async function saveScanDocument(
   title?: string,
 ): Promise<LocalScanDocument> {
   await ensureScansDir()
-  const id = crypto.randomUUID()
+  const id = newDocumentId()
   const docDir = `${SCANS_DIR}/${id}`
   await Filesystem.mkdir({ path: docDir, directory: Directory.Data, recursive: true })
 
@@ -202,7 +234,7 @@ export async function createDocumentFromPages(
   sourceDocumentIds: string[],
 ): Promise<LocalScanDocument> {
   await ensureScansDir()
-  const id = crypto.randomUUID()
+  const id = newDocumentId()
   const docDir = `${SCANS_DIR}/${id}`
   await Filesystem.mkdir({ path: docDir, directory: Directory.Data, recursive: true })
 

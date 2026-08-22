@@ -8,9 +8,196 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>ScannApp</title>
+
+    <!--
+      Diagnostik boot — jangan ubah jadi type="module", dan jangan pakai sintaks
+      di atas ES5 (arrow function, const/let, template literal) di dalamnya.
+
+      Alasannya: kalau WebView di HP terlalu tua untuk mem-parse bundel utama,
+      SATU-SATUNYA kode yang masih dieksekusi adalah skrip klasik ES5 ini. Kalau
+      skrip ini ikut memakai sintaks modern, ia gagal bersama bundelnya dan kita
+      kembali ke titik nol: layar putih tanpa sepotong pun petunjuk.
+
+      Tugasnya menampilkan sebab kegagalan ke layar, termasuk user agent —
+      yang langsung memberi tahu versi Chrome/WebView di HP tersebut.
+    -->
+    <script>
+      (function () {
+        var BOOT_TIMEOUT_MS = 12000
+        /* Sudah tampil sesuatu ke layar; jangan menimpanya lagi. */
+        var reported = false
+        /* Error sudah ditangkap tapi DOM-nya belum siap; sedang menunggu <body>. */
+        var pending = false
+        /* React sudah mount. Setelah ini error hanya di-log, tidak boleh
+           membajak layar dan menghapus UI yang sudah berjalan. */
+        var booted = false
+        var timer = null
+
+        function esc(value) {
+          return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+        }
+
+        function environment() {
+          var lines = []
+          lines.push('UA   : ' + navigator.userAgent)
+          lines.push('Native: ' + (window.Capacitor ? 'ya (Capacitor)' : 'tidak'))
+          lines.push('URL  : ' + location.href)
+          return lines.join('\n')
+        }
+
+        /*
+          Mengembalikan false kalau DOM belum cukup siap untuk menampung apa pun.
+          Ini bukan kasus teoretis: listener error fase capture bisa menyala saat
+          <head> masih diparse (mis. <link rel="stylesheet"> gagal dimuat, salah
+          satu penyebab klasik blank screen di Capacitor). Saat itu #root DAN
+          document.body dua-duanya masih null.
+        */
+        function render(title, detail) {
+          var root = document.getElementById('root')
+          if (!root) {
+            var host = document.body
+            if (!host) return false
+            root = document.createElement('div')
+            root.id = 'root'
+            host.appendChild(root)
+          }
+
+          root.innerHTML =
+            '<div style="box-sizing:border-box;min-height:100vh;padding:24px 20px;' +
+            'font-family:system-ui,-apple-system,sans-serif;background:#ffffff;color:#1b2740">' +
+            '<p style="margin:0 0 6px;font-size:12px;letter-spacing:.08em;' +
+            'text-transform:uppercase;color:#ff6b4a;font-weight:700">ScannApp</p>' +
+            '<h1 style="margin:0 0 10px;font-size:20px;line-height:1.3">' +
+            esc(title) +
+            '</h1>' +
+            '<p style="margin:0 0 16px;font-size:14px;line-height:1.5;color:#5c6a86">' +
+            'Ini layar diagnostik, bukan tampilan aplikasi. Screenshot seluruh teks ' +
+            'di bawah dan kirim ke Claude Code — isinya menunjukkan persis apa yang gagal.' +
+            '</p>' +
+            '<pre style="margin:0;padding:14px;border-radius:10px;background:#f2f5fb;' +
+            'border:1px solid rgba(20,34,70,.14);font-size:12px;line-height:1.5;' +
+            'white-space:pre-wrap;word-break:break-word;color:#1b2740">' +
+            esc(detail) +
+            '\n\n' +
+            esc(environment()) +
+            '</pre>' +
+            '</div>'
+
+          return true
+        }
+
+        function show(title, detail) {
+          if (booted) {
+            if (window.console) console.error('[boot] ' + title, detail)
+            return
+          }
+          if (reported || pending) return
+          if (timer) {
+            clearTimeout(timer)
+            timer = null
+          }
+
+          if (render(title, detail)) {
+            reported = true
+            return
+          }
+
+          /*
+            DOM belum siap. Tunggu <body> ada, lalu tampilkan error PERTAMA —
+            yang paling dekat dengan sebab aslinya. `pending` menahan error
+            susulan supaya listener tidak menumpuk.
+          */
+          pending = true
+          document.addEventListener('DOMContentLoaded', function () {
+            pending = false
+            if (reported || booted) return
+            if (render(title, detail)) reported = true
+          })
+        }
+
+        /* Dipakai blok <script nomodule> di bawah dan oleh error boundary React. */
+        window.__scannBootFail = show
+
+        /* Dipanggil BootErrorBoundary setelah pohon React berhasil mount. */
+        window.__scannBooted = function () {
+          booted = true
+          if (timer) {
+            clearTimeout(timer)
+            timer = null
+          }
+        }
+
+        /* Fase capture: error saat memuat <script>/<link> tidak menggelembung. */
+        window.addEventListener(
+          'error',
+          function (event) {
+            var detail
+            if (event.message) {
+              detail =
+                event.message +
+                '\n' +
+                (event.filename || '(tanpa berkas)') +
+                ':' +
+                (event.lineno || 0)
+            } else if (event.target && event.target.src) {
+              detail = 'Gagal memuat berkas: ' + event.target.src
+            } else if (event.target && event.target.href) {
+              detail = 'Gagal memuat berkas: ' + event.target.href
+            } else {
+              detail = 'Error tidak dikenal saat memuat aplikasi.'
+            }
+            show('Aplikasi gagal dijalankan', detail)
+          },
+          true,
+        )
+
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event.reason
+          var detail =
+            (reason && (reason.stack || reason.message)) || String(reason)
+          show('Aplikasi gagal dijalankan', detail)
+        })
+
+        /*
+          Jaring terakhir: bundel ter-parse dan tidak melempar error, tapi layar
+          tetap kosong (mis. modul menggantung menunggu sesuatu yang tidak pernah
+          datang). Tanpa ini, kasus seperti itu tidak terbedakan dari layar putih.
+        */
+        timer = setTimeout(function () {
+          var root = document.getElementById('root')
+          if (root && root.children.length > 0) return
+          show(
+            'Aplikasi tidak selesai dimuat',
+            'Tidak ada error yang dilaporkan, tetapi tampilan tidak pernah muncul ' +
+              'dalam ' +
+              BOOT_TIMEOUT_MS / 1000 +
+              ' detik.',
+          )
+        }, BOOT_TIMEOUT_MS)
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
+
+    <!--
+      Hanya dieksekusi WebView yang TIDAK mendukung <script type="module">
+      (di bawah Chrome 61). Di WebView modern blok ini dilewati begitu saja.
+    -->
+    <script nomodule>
+      if (window.__scannBootFail) {
+        window.__scannBootFail(
+          'WebView terlalu tua',
+          'WebView di perangkat ini tidak mendukung ES modules, jadi kode aplikasi ' +
+            'tidak pernah dijalankan. Perbarui "Android System WebView" dan Chrome ' +
+            'lewat Google Play Store, lalu buka aplikasi lagi.',
+        )
+      }
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

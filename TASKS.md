@@ -162,6 +162,25 @@ Diminta Boss Ali saat uji device. Bukan fitur Pro: menamai dokumen sendiri itu k
 - [x] ~~**Deploy `rename-document` + redeploy `confirm-upload`**~~ — **sudah live 23 Agustus 2026** atas persetujuan Boss Ali (`rename-document` v1, `confirm-upload` v4, keduanya `verify_jwt=true`). Diverifikasi langsung ke endpoint produksi: tanpa token ditolak gateway 401, dan dengan anon key sebagai bearer ditolak 401 dengan pesan milik `handler()` kita sendiri — membuktikan kode kita yang berjalan, dependency `_shared` teresolusi, dan anon key yang bocor tetap tidak bisa mengubah nama dokumen siapa pun. Baris uji tidak tersentuh oleh kedua percobaan itu.
 - [ ] Uji di HP: ubah nama, lalu cek daftar cadangan cloud ikut berubah; ubah nama saat offline harus tetap berhasil di HP dengan pesan bahwa cloud menyusul
 
+## Pulihkan Cadangan Cloud ke HP — 23 Agustus 2026
+
+Lubang di Fase 4: mencadangkan sudah jalan, tapi setelah install ulang aplikasi tampil kosong seolah dokumennya hilang — satu-satunya jalan kembali adalah tombol Unduh di layar Cadangan, yang cuma membuka PDF, bukan mengembalikan dokumen yang bisa diedit/digabung.
+
+- [x] Daftar dokumen menggabungkan isi HP + cadangan cloud (`mergeDocumentEntries`) — cadangan yang belum ada di HP tampil sebagai baris "Di cloud", diurutkan bersama, terbaru dulu
+- [x] Pulihkan satu dokumen (ketuk barisnya) & "Pulihkan semua" — dijalankan berurutan, satu kegagalan tidak membatalkan sisanya
+- [x] `readBackup` mengambil kembali JPEG asli dari PDF cadangan lewat lookup XObject/DCTDecode, tanpa rasterisasi — hasilnya byte-identik dengan halaman aslinya, dan **watermark Basic tidak ikut** (digambar sebagai teks di atas gambar, bukan dibakar ke piksel), jadi cadangkan-pulihkan-cadangkan tidak menumpuk watermark
+- [x] Dokumen dipulihkan memakai **id yang sama** dengan barisnya di `scan_documents` — id baru akan membuat backup berikutnya menulis baris kedua, menghitung byte yang sama dua kali terhadap kuota, dan meninggalkan objek lama jadi yatim
+- [x] Tanggal pindai dibawa di dalam PDF-nya sendiri (`BuildPdfOptions.scannedAt` → creation date). `scan_documents.created_at` adalah waktu **cadangan pertama**, bukan waktu pindai, jadi tanpa ini dokumen Maret yang dicadangkan Agustus akan kembali bertanggal Agustus dan melompat ke puncak daftar. Cadangan lama tetap bisa dipulihkan, jatuh ke tanggal baris
+- [x] Ubah nama menyegarkan judul di daftar cloud — kalau tidak, memulihkan dokumen yang sudah dihapus dari HP akan menulis balik nama lama
+- [x] Test bertambah 36 (total 208); 4 temuan code-review ditutup sebelum commit (judul basi, semantik tanggal, folder dokumen yang sudah ada, dan index yang bisa terinjak kalau user memindai selama "Pulihkan semua" berjalan)
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Install ulang aplikasi (atau hapus dokumen dari HP), buka daftar — dokumen harus muncul sebagai "Di cloud", bukan daftar kosong
+- [ ] Ketuk untuk memulihkan — dokumen harus bisa dibuka, diedit, dan digabung seperti dokumen biasa
+- [ ] Cadangkan ulang dokumen hasil pulihan — `bytes_used` **tidak boleh** naik dua kali lipat (bukti id-nya dipakai ulang dengan benar)
+- [ ] Pulihkan dokumen milik akun Basic — hasilnya harus bersih tanpa watermark ganda
+
 ## Fase 6 — Fitur Pro: OCR & Edit Lanjutan
 
 **Urutan disetujui Boss Ali 23 Agustus 2026:** mulai dari **reorder halaman + filter lanjutan** (paling dekat dengan kode editor, tanpa dependency baru), baru sisanya.

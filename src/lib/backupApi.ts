@@ -8,6 +8,12 @@ export interface CloudBackup {
   title: string
   pageCount: number
   sizeBytes: number
+  /**
+   * When the row was first written — that is, when the document was first
+   * backed up, not when it was scanned. Good enough to order the list by, and
+   * the fallback for restoring a backup whose file carries no scan date.
+   */
+  createdAt: string
   updatedAt: string
 }
 
@@ -130,6 +136,33 @@ export async function backupDownloadUrl(documentId: string): Promise<string> {
 }
 
 /**
+ * Fetches the backup itself, not just a link to it.
+ *
+ * `backupDownloadUrl` hands the URL to the browser, which is right for "open
+ * my PDF" but useless for restoring: to rebuild a document we need the bytes
+ * in hand. The link is signed and short-lived either way, so this reads it
+ * straight through rather than caching anything.
+ */
+export async function downloadBackupBytes(documentId: string): Promise<Uint8Array> {
+  const url = await backupDownloadUrl(documentId)
+
+  // Mirrors the upload path: neither a rejected fetch nor a refused response
+  // carries a message worth showing, so both become one the user can act on.
+  let response: Response
+  try {
+    response = await fetch(url)
+  } catch {
+    throw new Error('Tidak bisa menghubungi penyimpanan cloud. Periksa koneksi lalu coba lagi.')
+  }
+
+  if (!response.ok) {
+    throw new Error('Gagal mengunduh cadangan. Coba lagi sebentar lagi.')
+  }
+
+  return new Uint8Array(await response.arrayBuffer())
+}
+
+/**
  * Read straight from the table — RLS already limits both of these to the
  * signed-in user, so no Edge Function round trip is needed just to look.
  *
@@ -143,7 +176,7 @@ export async function backupDownloadUrl(documentId: string): Promise<string> {
 export async function listCloudBackups(): Promise<CloudBackup[]> {
   const { data, error } = await supabase
     .from('scan_documents')
-    .select('id, title, page_count, file_size_bytes, updated_at')
+    .select('id, title, page_count, file_size_bytes, created_at, updated_at')
     .eq('local_only', false)
     .order('updated_at', { ascending: false })
 
@@ -154,6 +187,7 @@ export async function listCloudBackups(): Promise<CloudBackup[]> {
     title: row.title,
     pageCount: row.page_count,
     sizeBytes: row.file_size_bytes,
+    createdAt: row.created_at,
     updatedAt: row.updated_at,
   }))
 }

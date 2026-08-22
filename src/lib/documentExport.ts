@@ -43,6 +43,9 @@ async function exportPdf(doc: LocalScanDocument, tier: Tier): Promise<ExportFile
   const pdf = await buildPdf(bytes, {
     watermark: shouldWatermark(tier),
     title: doc.title,
+    // Carried into the file so a backup can hand the date back on restore —
+    // and so an exported PDF is dated when it was scanned either way.
+    scannedAt: doc.createdAt,
   })
 
   return [

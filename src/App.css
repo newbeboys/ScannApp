@@ -381,6 +381,97 @@
   margin-top: 2px;
 }
 
+/* ---------- dokumen yang masih di cloud ---------- */
+
+/*
+  Sisi putus-putus & tanpa bayangan: baris ini milik akun, tapi berkasnya belum
+  ada di HP — jadi sengaja tidak terlihat "padat" seperti dokumen lokal.
+*/
+.doc-tile--cloud,
+.doc-row--cloud {
+  background: var(--chip);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+/* Tidak ada thumbnail yang bisa ditampilkan sampai halamannya diunduh. */
+.doc-tile__preview--cloud,
+.doc-row__preview--cloud {
+  display: grid;
+  place-items: center;
+  background: var(--acc-soft);
+  color: var(--acc);
+}
+
+.doc-tile--cloud:disabled,
+.doc-row--cloud .doc-row__open:disabled,
+.doc-row--cloud .icon-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/*
+  Menjawab pertanyaan yang dulu ditimbulkan diam-diam oleh daftar kosong:
+  dokumennya tidak hilang, cuma belum ada di HP ini.
+*/
+.cloud-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--acc-soft);
+  border: 1px solid var(--acc-edge);
+}
+
+.cloud-note__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--chip);
+  color: var(--acc);
+  flex-shrink: 0;
+}
+
+.cloud-note__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cloud-note__body h3 {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cloud-note__body p {
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-top: 2px;
+}
+
+.cloud-note__action {
+  flex-shrink: 0;
+  padding: 10px 13px;
+  border: none;
+  border-radius: 12px;
+  background: var(--acc);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cloud-note__action:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.cloud-note__action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ---------- review flow ---------- */
 
 .review-stage {

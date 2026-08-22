@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core'
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useAuth } from './auth/useAuth'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { ExportSheet } from './components/ExportSheet'
@@ -12,7 +12,10 @@ import {
   fetchStorageUsage,
   listCloudBackups,
   renameCloudDocument,
+  type CloudBackup,
 } from './lib/backupApi'
+import { restoreBackup } from './lib/cloudRestore'
+import { mergeDocumentEntries } from './lib/documentEntries'
 import { quotaBytesFor } from './lib/storageQuota'
 import { exportDocument, type ExportFormat } from './lib/documentExport'
 import { mergeDocuments } from './lib/documentMerge'
@@ -65,9 +68,11 @@ function App() {
   const [isMerging, setIsMerging] = useState(false)
   const [exportTarget, setExportTarget] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-  /** Sizes of documents that have a cloud copy, keyed by document id. */
-  const [backedUp, setBackedUp] = useState<Record<string, number>>({})
+  /** Every document this account has in the cloud, whether or not it is on the phone. */
+  const [backups, setBackups] = useState<CloudBackup[]>([])
   const [backupBusyId, setBackupBusyId] = useState<string | null>(null)
+  const [restoringId, setRestoringId] = useState<string | null>(null)
+  const [isRestoringAll, setIsRestoringAll] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [usedBytes, setUsedBytes] = useState(0)
   const isNative = Capacitor.isNativePlatform()
@@ -84,13 +89,29 @@ function App() {
     setDocuments(await listScanDocuments())
   }, [])
 
-  /** Which local documents already have a cloud copy, and how big it is. */
+  /** What the account has in the cloud, and how much room it is using. */
   const refreshBackupState = useCallback(async () => {
-    const [backups, usage] = await Promise.all([listCloudBackups(), fetchStorageUsage()])
+    const [cloud, usage] = await Promise.all([listCloudBackups(), fetchStorageUsage()])
 
-    setBackedUp(Object.fromEntries(backups.map((backup) => [backup.id, backup.sizeBytes])))
+    setBackups(cloud)
     setUsedBytes(usage?.usedBytes ?? 0)
   }, [])
+
+  /** Sizes of documents that have a cloud copy, keyed by document id. */
+  const backedUp = useMemo(
+    () => Object.fromEntries(backups.map((backup) => [backup.id, backup.sizeBytes])),
+    [backups],
+  )
+
+  /**
+   * The list the user sees: what is on the phone, plus every backup that is
+   * not. Without the second half, a reinstall shows an empty app even though
+   * the account still owns the documents.
+   */
+  const entries = useMemo(
+    () => mergeDocumentEntries(documents, backups),
+    [documents, backups],
+  )
 
   useEffect(() => {
     if (status !== 'signed-in') return
@@ -171,9 +192,16 @@ function App() {
 
   const handleDeleteAll = async () => {
     if (!confirm('Hapus semua dokumen tersimpan? Tindakan ini tidak bisa dibatalkan.')) return
+    const hadBackups = backups.length > 0
     await deleteAllScanDocuments()
     await refreshDocuments()
-    setToast('Semua dokumen dihapus.')
+    // Same reasoning as handleDelete: the cloud copies survive on purpose, and
+    // they are about to reappear in the list as restorable — say so first.
+    setToast(
+      hadBackups
+        ? 'Semua dokumen dihapus dari HP. Cadangan di cloud tetap ada.'
+        : 'Semua dokumen dihapus.',
+    )
   }
 
   const handleExport = async (format: ExportFormat) => {
@@ -264,6 +292,69 @@ function App() {
   }
 
   /**
+   * Pulls one cloud-only document back onto the phone.
+   *
+   * Both lists offer this, and neither hands over the backup itself, so it is
+   * looked up here — the id they pass came out of `backups` to begin with.
+   */
+  const handleRestore = async (id: string) => {
+    const backup = backups.find((entry) => entry.id === id)
+    if (!backup) return
+
+    setRestoringId(id)
+    try {
+      const doc = await restoreBackup(backup)
+      await refreshDocuments()
+      setToast(`"${doc.title}" dipulihkan ke HP — ${doc.pageCount} halaman.`)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal memulihkan dokumen.')
+    } finally {
+      setRestoringId(null)
+    }
+  }
+
+  /**
+   * Restores every document the list shows as cloud-only, one after another.
+   *
+   * Sequential on purpose: these are whole PDFs over a phone connection, and
+   * starting them all at once would only make them compete for the same
+   * bandwidth. One failure does not abandon the rest — a single unreadable
+   * backup should not keep every other document off the phone.
+   */
+  const handleRestoreAll = async () => {
+    const pending = entries.flatMap((entry) => (entry.kind === 'cloud' ? [entry.backup] : []))
+    if (pending.length === 0) return
+
+    setIsRestoringAll(true)
+    let restored = 0
+    try {
+      for (const backup of pending) {
+        setRestoringId(backup.id)
+        try {
+          await restoreBackup(backup)
+          restored++
+        } catch {
+          // Counted by omission — the summary below reports how many failed.
+        }
+      }
+    } finally {
+      setRestoringId(null)
+      setIsRestoringAll(false)
+      // Whatever did land belongs on screen, even if the rest did not.
+      await refreshDocuments()
+    }
+
+    const failed = pending.length - restored
+    if (restored === 0) {
+      setToast('Tidak ada dokumen yang berhasil dipulihkan. Periksa koneksi lalu coba lagi.')
+    } else if (failed > 0) {
+      setToast(`${restored} dokumen dipulihkan, ${failed} gagal. Coba lagi untuk sisanya.`)
+    } else {
+      setToast(`${restored} dokumen dipulihkan ke HP.`)
+    }
+  }
+
+  /**
    * Local-first: the name changes on the phone straight away, then we try to
    * point the cloud copy at it. A failed sync is reported but never rolls the
    * local rename back — and the next backup carries the current name up anyway.
@@ -278,6 +369,17 @@ function App() {
       // listCloudBackups() failed, which would skip the sync for the whole
       // session while still reporting success.
       const result = await renameCloudDocument(id, updated.title)
+      if (result === 'synced') {
+        // Keeps the cloud list from holding the old name: after this document
+        // is deleted from the phone it reappears as a cloud entry, and
+        // restoring it would write that stale name back into local storage.
+        setBackups((current) =>
+          current.map((backup) =>
+            backup.id === id ? { ...backup, title: updated.title } : backup,
+          ),
+        )
+      }
+
       setToast(
         result === 'failed'
           ? 'Nama diubah di HP. Nama di cloud menyusul saat dicadangkan lagi.'
@@ -467,19 +569,26 @@ function App() {
       <main className="app__body">
         {tab === 'home' && (
           <HomeScreen
-            documents={documents}
+            entries={entries}
+            restoringId={restoringId}
+            isRestoringAll={isRestoringAll}
             isScanning={isScanning}
             canScan={isNative}
             onScan={handleStartScan}
             onOpenDocuments={() => setTab('documents')}
             onOpenDocument={(id) => setView({ kind: 'detail', id })}
+            onRestore={handleRestore}
           />
         )}
         {tab === 'documents' && (
           <DocumentsScreen
-            documents={documents}
+            entries={entries}
+            restoringId={restoringId}
+            isRestoringAll={isRestoringAll}
             onDelete={handleDelete}
             onOpen={(id) => setView({ kind: 'detail', id })}
+            onRestore={handleRestore}
+            onRestoreAll={handleRestoreAll}
             onMerge={() => setView({ kind: 'merge' })}
           />
         )}

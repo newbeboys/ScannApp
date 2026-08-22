@@ -9,6 +9,15 @@ export interface BuildPdfOptions {
   /** Basic exports carry the ScannApp mark; Pro exports are clean. */
   watermark: boolean
   title?: string
+  /**
+   * When the pages were scanned, as an ISO string.
+   *
+   * Stored as the PDF's creation date, which is the only place that date
+   * survives a backup: `scan_documents.created_at` is when the row was first
+   * written — that is, when the document was *backed up* — so a scan from
+   * March restored in August would otherwise come back dated August.
+   */
+  scannedAt?: string
 }
 
 /**
@@ -31,6 +40,11 @@ export async function buildPdf(
   const pdf = await PDFDocument.create()
   pdf.setProducer('ScannApp')
   if (options.title) pdf.setTitle(options.title)
+
+  // Guarded rather than trusted: an unparseable date would otherwise be
+  // written as "D:NaN…", which is worse than leaving pdf-lib's own default.
+  const scannedAt = options.scannedAt ? new Date(options.scannedAt) : null
+  if (scannedAt && !Number.isNaN(scannedAt.getTime())) pdf.setCreationDate(scannedAt)
 
   const font = options.watermark ? await pdf.embedFont(StandardFonts.HelveticaBold) : null
 

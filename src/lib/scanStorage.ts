@@ -151,6 +151,91 @@ export async function saveScanDocument(
   return doc
 }
 
+/**
+ * Puts a document from the cloud back on this phone.
+ *
+ * The other half of `backupDocument`: pages that `pdfImport` recovered from
+ * the backup PDF are written to disk and indexed, so a document that only
+ * existed in R2 — after a reinstall or on a new phone — becomes an ordinary
+ * local document again, editable and mergeable like any other.
+ *
+ * The cloud's id is kept rather than minting a new one. That id is the primary
+ * key of the `scan_documents` row and the R2 object name behind it, so a fresh
+ * one would make the next backup write a *second* row, charge the same bytes
+ * against the quota twice, and orphan the copy already up there.
+ */
+export async function restoreDocumentFromJpegs(
+  cloud: { id: string; title: string; createdAt: string },
+  jpegs: Uint8Array[],
+): Promise<LocalScanDocument> {
+  // Checked before writing anything: overwriting a local copy would destroy
+  // page edits that were never backed up. The UI only ever offers documents
+  // that are missing locally, but storage must not depend on the caller for
+  // that. The index is read again at the end, which is the real guard.
+  if ((await readIndex()).some((doc) => doc.id === cloud.id)) {
+    throw new Error('Dokumen ini sudah ada di HP.')
+  }
+
+  await ensureScansDir()
+  const docDir = `${SCANS_DIR}/${cloud.id}`
+  try {
+    await Filesystem.mkdir({ path: docDir, directory: Directory.Data, recursive: true })
+  } catch {
+    // Unlike saveScanDocument, the id comes from the cloud rather than being
+    // freshly minted, so the folder can already exist — a delete whose rmdir
+    // failed still clears the index. An existing folder is no reason to
+    // refuse; a real failure surfaces when the first page is written.
+  }
+
+  const pages: ScanPage[] = []
+  try {
+    for (let i = 0; i < jpegs.length; i++) {
+      const pagePath = `${docDir}/page-${i + 1}.jpg`
+      await Filesystem.writeFile({
+        path: pagePath,
+        directory: Directory.Data,
+        data: await blobToBase64(new Blob([jpegs[i] as BlobPart])),
+      })
+      pages.push({ original: pagePath })
+    }
+  } catch (error) {
+    // Same reasoning as saveScanDocument: the index is written last, so a
+    // failure here would strand docDir with nothing pointing at it.
+    await Filesystem.rmdir({ path: docDir, directory: Directory.Data, recursive: true }).catch(
+      () => {
+        // Nothing better to do; the original failure is what matters.
+      },
+    )
+    throw error
+  }
+
+  const doc: LocalScanDocument = {
+    schemaVersion: 2,
+    id: cloud.id,
+    title: cloud.title,
+    // The day it was scanned, not the day it came back.
+    createdAt: cloud.createdAt,
+    pageCount: pages.length,
+    pages,
+  }
+
+  // Read last, like saveScanDocument. A copy taken before the download started
+  // would be stale by now: restoring is slow enough that the user can finish a
+  // scan meanwhile, and writing that old copy back would drop the new document
+  // from the index while its files stayed on disk as garbage.
+  const docs = await readIndex()
+  if (docs.some((existing) => existing.id === cloud.id)) {
+    // A second restore of the same backup got there first. Its pages are ours
+    // byte for byte — same id, same folder — so there is nothing to clean up.
+    throw new Error('Dokumen ini sudah ada di HP.')
+  }
+
+  docs.unshift(doc)
+  await writeIndex(docs)
+
+  return doc
+}
+
 export async function listScanDocuments(): Promise<LocalScanDocument[]> {
   return readIndex()
 }

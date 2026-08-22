@@ -4,7 +4,9 @@ on:
   push:
     # Feature branches ikut dibuild supaya APK-nya bisa diuji Boss Ali
     # sebelum digabung ke main (mesin dev tidak punya Android SDK).
-    branches: [main, 'feat/**']
+    # `fix/**` ikut sejak 23 Agustus 2026: perbaikan pun perlu diuji di HP,
+    # dan tanpa pola ini push-nya lewat tanpa menghasilkan APK sama sekali.
+    branches: [main, 'feat/**', 'fix/**']
   pull_request:
     branches: [main]
 

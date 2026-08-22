@@ -150,7 +150,7 @@ Total test naik dari 100 ke 123.
 - [ ] Pembelian test di Play Console berhasil, lalu `tier` di `profiles` berubah jadi `pro`
 - [ ] Callback pembelian tidak hilang setelah `launchMode` diubah — uji juga buka app dari launcher setelah di-background, dan kembali dari share sheet/file picker
 - [ ] "Pulihkan pembelian" bekerja setelah aplikasi di-install ulang
-- [ ] **Backup ke cloud masih jalan setelah `confirm-upload` v2.** Fungsinya sekarang mengukur ukuran berkas dari R2 (HEAD) alih-alih mempercayai angka dari client. Jalur HEAD ini belum pernah diuji terhadap R2 sungguhan — kalau bermasalah, gejalanya pesan **"Berkas cadangan belum sampai di cloud"** padahal unggahan berhasil. Uji cadangkan satu dokumen dari HP.
+- [x] ~~**Backup ke cloud masih jalan setelah `confirm-upload` v2.**~~ **Terverifikasi 23 Agustus 2026** dari HP Boss Ali. Dokumen `6f05fafd-…` (1 halaman, PDF) tercatat di `scan_documents` dengan `file_size_bytes` 326.679 dan `local_only=false`, serta `storage_usage.bytes_used` cocok persis. Angka itu **bukan** klaim client: `confirm-upload` mengambilnya dari `headObjectSize()`, yaitu HTTP HEAD sungguhan ke R2 — kalau objeknya tidak ada, R2 balas 404 dan fungsi menolak dengan `UPLOAD_NOT_FOUND` tanpa menulis baris apa pun. Jadi keberadaan baris itu membuktikan objeknya fisik ada di R2. Jalur HEAD terbukti bekerja terhadap R2 sungguhan.
 
 ## Fase 6 — Fitur Pro: OCR & Edit Lanjutan
 

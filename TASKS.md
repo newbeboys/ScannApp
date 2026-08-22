@@ -159,7 +159,7 @@ Diminta Boss Ali saat uji device. Bukan fitur Pro: menamai dokumen sendiri itu k
 - [x] Ubah nama dokumen di HP (`renameScanDocument`) — local-first, tidak pernah butuh jaringan
 - [x] Sinkron nama ke salinan cloud lewat Edge Function `rename-document` — client sengaja tidak punya izin tulis ke `scan_documents` (dicabut migration `20260821211059`), jadi rename lewat service role dengan cek kepemilikan dan hanya kolom `title` yang bisa disentuh
 - [x] Normalisasi judul dipakai bersama `confirm-upload` (`_shared/documentTitle.ts`) supaya mencadangkan dokumen tidak menimpa nama yang baru diubah
-- [ ] **Deploy `rename-document` + redeploy `confirm-upload`** (menunggu persetujuan Boss Ali) — tanpa ini nama berubah di HP tapi tidak pernah sampai ke cloud
+- [x] ~~**Deploy `rename-document` + redeploy `confirm-upload`**~~ — **sudah live 23 Agustus 2026** atas persetujuan Boss Ali (`rename-document` v1, `confirm-upload` v4, keduanya `verify_jwt=true`). Diverifikasi langsung ke endpoint produksi: tanpa token ditolak gateway 401, dan dengan anon key sebagai bearer ditolak 401 dengan pesan milik `handler()` kita sendiri — membuktikan kode kita yang berjalan, dependency `_shared` teresolusi, dan anon key yang bocor tetap tidak bisa mengubah nama dokumen siapa pun. Baris uji tidak tersentuh oleh kedua percobaan itu.
 - [ ] Uji di HP: ubah nama, lalu cek daftar cadangan cloud ikut berubah; ubah nama saat offline harus tetap berhasil di HP dengan pesan bahwa cloud menyusul
 
 ## Fase 6 — Fitur Pro: OCR & Edit Lanjutan

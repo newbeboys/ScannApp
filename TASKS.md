@@ -134,7 +134,7 @@ Total test naik dari 100 ke 123.
 - [ ] Buat akun AdMob, lalu isi `VITE_ADMOB_BANNER_UNIT_ID` & `VITE_ADMOB_INTERSTITIAL_UNIT_ID` di `.env`, dan ganti `APPLICATION_ID` di `AndroidManifest.xml` (sekarang masih App ID test resmi Google)
 - [ ] Buat produk subscription di Play Console: `scannapp_pro_monthly` (Rp 15.000) & `scannapp_pro_yearly` (Rp 150.000)
 - [ ] Di dashboard RevenueCat: hubungkan ke Play Console, buat entitlement `pro`, buat offering berisi kedua produk
-- [ ] Set `REVENUECAT_WEBHOOK_SECRET` di RevenueCat (Integrations → Webhooks → Authorization header) **dan** di Supabase Edge Function Secrets dengan nama yang sama
+- [x] Set `REVENUECAT_WEBHOOK_SECRET` — **HMAC signing secret** dari toggle "HMAC webhook signing" di integrasi webhook RevenueCat (bukan Authorization header, ganti keputusan awal setelah audit 22 Agustus 2026), sudah di-set Boss Ali di Supabase Edge Function Secrets
 - [x] ~~Jalankan 3 migration baru~~ — sudah diterapkan ke production 22 Agustus 2026 lewat MCP, exploit-nya diverifikasi manual:
   - `20260821211033_fase5_subscription_events.sql`
   - `20260821211045_fase5_freeze_pro_plan_in_rls.sql`

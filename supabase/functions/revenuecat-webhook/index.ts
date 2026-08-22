@@ -6,6 +6,10 @@ import {
   type ProfileState,
   type SubscriptionEvent,
 } from '../_shared/subscriptionEvents.ts'
+import { verifyWebhookSignature } from '../_shared/webhookSignature.ts'
+
+/** RevenueCat's own name for the header — see webhookSignature.ts for the format. */
+const SIGNATURE_HEADER = 'X-RevenueCat-Webhook-Signature'
 
 /**
  * Product ids, overridable so Play Console can be renamed without a code
@@ -31,25 +35,6 @@ interface RevenueCatBody {
   }
 }
 
-/**
- * Compares two secrets without leaking their contents through timing.
- *
- * A plain `===` returns as soon as it hits a differing byte, which lets an
- * attacker recover the secret one character at a time by measuring responses.
- */
-function secretsMatch(provided: string, expected: string): boolean {
-  const a = new TextEncoder().encode(provided)
-  const b = new TextEncoder().encode(expected)
-
-  // Length alone is not secret enough to be worth hiding, but the comparison
-  // below still has to run over a fixed length to stay constant-time.
-  if (a.length !== b.length) return false
-
-  let diff = 0
-  for (let i = 0; i < a.length; i += 1) diff |= a[i] ^ b[i]
-  return diff === 0
-}
-
 /** Closes out an event so retries of it become no-ops. */
 async function markApplied(
   db: ReturnType<typeof serviceClient>,
@@ -64,27 +49,55 @@ async function markApplied(
  *
  * Unlike the Fase 4 functions this does not use `handler()`: the caller is
  * RevenueCat's server, not a signed-in user, so there is no JWT to verify.
- * Authorisation is the shared secret configured in the RevenueCat dashboard.
+ * Authenticity comes from RevenueCat's HMAC webhook signing instead — see
+ * `_shared/webhookSignature.ts`. `REVENUECAT_WEBHOOK_SECRET` holds the
+ * *signing secret* from the integration's "HMAC webhook signing" toggle in
+ * the RevenueCat dashboard, not a bearer value pasted into an Authorization
+ * header.
  */
 Deno.serve(async (request: Request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS })
   }
 
-  const expectedSecret = Deno.env.get('REVENUECAT_WEBHOOK_SECRET')
-  if (!expectedSecret) {
+  const signingSecret = Deno.env.get('REVENUECAT_WEBHOOK_SECRET')
+  if (!signingSecret) {
     // Refuse rather than accept everything: an unset secret would turn this
     // endpoint into a way for anyone to grant themselves Pro.
     console.error('REVENUECAT_WEBHOOK_SECRET belum diset.')
     return errorResponse('NOT_CONFIGURED', 'Webhook belum dikonfigurasi.', 503)
   }
 
-  if (!secretsMatch(request.headers.get('Authorization') ?? '', expectedSecret)) {
-    return errorResponse('UNAUTHORIZED', 'Signature webhook tidak cocok.', 401)
+  // Read the body as text FIRST, and verify against those exact bytes. Calling
+  // request.json() here and reserialising it later would compute the HMAC
+  // over different bytes than RevenueCat signed (key order, whitespace, and
+  // unicode escaping can all change on a parse/stringify round trip) and
+  // reject every genuine delivery.
+  const rawBody = await request.text()
+
+  const verification = await verifyWebhookSignature(
+    signingSecret,
+    request.headers.get(SIGNATURE_HEADER),
+    rawBody,
+  )
+
+  if (!verification.ok) {
+    console.warn(`Webhook ditolak: ${verification.reason}`)
+    return errorResponse('UNAUTHORIZED', 'Signature webhook tidak valid.', 401)
+  }
+
+  let body: RevenueCatBody
+  try {
+    body = JSON.parse(rawBody)
+  } catch {
+    // Reaching this after a verified signature would be surprising —
+    // RevenueCat always signs valid JSON — but a parse failure is still a
+    // problem with the body, not with us, so it stays a 400 rather than
+    // falling into the catch-all 500 below.
+    return errorResponse('BAD_REQUEST', 'Body webhook bukan JSON yang valid.', 400)
   }
 
   try {
-    const body: RevenueCatBody = await request.json().catch(() => ({}))
     const raw = body.event
 
     if (!raw?.id || !raw.type) {

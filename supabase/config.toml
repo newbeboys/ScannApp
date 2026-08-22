@@ -23,8 +23,10 @@ verify_jwt = true
 # dikirim. Kalau verify_jwt dibiarkan true, SEMUA webhook ditolak 401 di
 # gateway dan tidak ada pembelian yang pernah mengaktifkan Pro.
 #
-# Ini BUKAN berarti endpoint-nya terbuka: fungsi ini memverifikasi shared
-# secret REVENUECAT_WEBHOOK_SECRET sendiri, dengan perbandingan konstan-waktu,
-# dan menolak 503 kalau secret itu belum di-set.
+# Ini BUKAN berarti endpoint-nya terbuka: fungsi ini memverifikasi signature
+# HMAC-SHA256 RevenueCat sendiri (header X-RevenueCat-Webhook-Signature,
+# lihat _shared/webhookSignature.ts — terikat ke isi body & timestamp,
+# toleransi 5 menit untuk menahan replay), dan menolak 503 kalau
+# REVENUECAT_WEBHOOK_SECRET (signing secret-nya) belum di-set.
 [functions.revenuecat-webhook]
 verify_jwt = false

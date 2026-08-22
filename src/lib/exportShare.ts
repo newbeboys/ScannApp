@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
+import { resumeTracker } from './ads/appOpenGate'
 import { blobToBase64 } from './blobBase64'
 
 export interface ExportFile {
@@ -60,6 +61,9 @@ async function deliverNative(files: ExportFile[]): Promise<DeliveryResult> {
   // Saved first, shared second: if the user dismisses the share sheet the
   // file is still on the device where they can find it.
   try {
+    // Sharing hands the user to another app; coming back from it is our doing,
+    // not a return from elsewhere, so it must not earn an App Open ad.
+    resumeTracker.leaveForOwnFlow()
     await Share.share({
       title: files.length === 1 ? files[0].name : 'Dokumen ScannApp',
       files: uris,

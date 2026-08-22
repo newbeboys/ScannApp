@@ -54,7 +54,10 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 - **Limit merge dokumen:** Basic maksimal 20 halaman per dokumen hasil merge, Pro unlimited.
 - **Milestone referral:** 5 orang→7 hari Pro, 15 orang→25 hari Pro, 30 orang→60 hari Pro.
 - **Harga Pro:** Rp 15.000/bulan atau Rp 150.000/tahun.
-- **Frekuensi iklan Basic:** banner + interstitial tiap 5 scan, ditambah interstitial setelah export.
+- **Frekuensi iklan Basic** (direvisi 23 Agustus 2026, **mengganti** aturan lama "tiap 5 scan + setelah export"):
+  - Banner di layar tab saja.
+  - **Interstitial** setelah selesai edit dokumen, setelah selesai merge, dan setelah **7 scan berurutan dalam kurang dari 10 menit**. Export **tidak lagi** memicu iklan.
+  - **App Open ad** saat aplikasi dibuka, dan saat user kembali setelah meninggalkan aplikasi **lebih dari 5 detik**. Kembali dari alur yang aplikasi sendiri yang memulai (pemindai, share sheet, file picker, pembelian) **tidak** dihitung — lihat `src/lib/ads/appOpenGate.ts`.
 - **Quota storage R2:** Basic 100MB, Pro bulanan 500MB, Pro tahunan 1GB, **Pro dari referral 500MB** (ditetapkan 26 Juli 2026 saat Fase 4).
 - **Paket Pro selalu berjangka:** hanya ada 1 bulan & 1 tahun — **tidak ada Pro permanen**. Baris `profiles` dengan `tier='pro'` tapi `tier_expires_at` kosong dianggap data rusak dan diperlakukan sebagai Basic (ditetapkan 26 Juli 2026 saat Fase 3).
 - **Reward referral untuk teman yang diundang:** 1 hari akses Pro (reward dua arah "give X get Y").
@@ -69,6 +72,12 @@ Angka-angka di atas dipakai langsung sebagai konstanta/env var (lihat `.env.exam
 - **Project Supabase:** nama "ScannApp", region Asia Pacific (Tokyo)
 - **Supabase Secret Key** (setara `service_role`) sudah disimpan di Edge Function Secrets dengan nama **`ScannAppsecret`** — panggil dengan `Deno.env.get('ScannAppsecret')` di dalam Edge Function, **jangan** menamai ulang atau bikin secret baru untuk ini.
 - **Cloudflare R2 bucket:** nama `scanappstorage`, region Asia-Pacific (APAC), storage class Standard.
+- **Akun AdMob sudah ada** (diberikan Boss Ali 23 Agustus 2026). Bukan rahasia — semuanya ikut terkirim di dalam APK, jadi tidak melanggar Aturan Keras #1:
+  - App ID `ca-app-pub-1798871739591323~7781334359` — ditulis di `AndroidManifest.xml`
+  - Banner `ca-app-pub-1798871739591323/4963599326`
+  - Interstitial `ca-app-pub-1798871739591323/1215875677`
+  - App Open `ca-app-pub-1798871739591323/5682085946`
+  - **Unit asli hanya dipakai build rilis.** Build dev dan APK debug dari CI selalu memakai unit test resmi Google — impresi berulang dari HP developer sendiri itu invalid traffic dan AdMob menutup akun karenanya.
 - **4 secret R2 sudah tersimpan di Supabase Edge Function Secrets** (bukan di `.env` client):
   - `R2_ACCESS_KEY_ID`
   - `R2_SECRET_ACCESS_KEY`

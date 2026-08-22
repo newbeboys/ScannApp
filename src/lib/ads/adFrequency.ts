@@ -1,79 +1,100 @@
 import type { Tier } from '../tier'
 
 /**
- * `ADS_INTERSTITIAL_FREQUENCY=every_5_scans_plus_after_export` (CLAUDE.md
- * Bagian 6). The "5" lives here as the single definition; the env var records
- * the policy, this constant implements it.
+ * `ADS_INTERSTITIAL_FREQUENCY=after_edit_merge_and_7_scan_streak` (CLAUDE.md
+ * Bagian 6, keputusan Boss Ali 23 Agustus 2026). The numbers live here as the
+ * single definition; the env var records the policy, these constants
+ * implement it.
  */
-export const SCANS_PER_INTERSTITIAL = 5
+export const SCAN_STREAK_LENGTH = 7
+export const SCAN_STREAK_WINDOW_MS = 10 * 60 * 1000
 
-const COUNTER_KEY = 'scannapp.ads.scanCount'
+const STREAK_KEY = 'scannapp.ads.scanTimes'
 
 /** What made us consider showing an interstitial. */
-export type AdTrigger = 'scan-saved' | 'export-finished'
+export type AdTrigger = 'scan-saved' | 'document-edited' | 'merge-finished'
 
 /**
- * Reads the persisted scan counter.
+ * When each recent scan was saved, oldest first.
  *
- * Persisted rather than kept in memory on purpose: a counter that resets on
- * every app start would let a user who restarts often never reach the fifth
+ * Persisted rather than kept in memory on purpose: a streak that resets on
+ * every app start would let a user who restarts often never reach the seventh
  * scan, quietly turning off half the ad policy.
  *
  * Storage can be unavailable (private mode, WebView with data cleared), and a
- * broken counter must never break scanning — every failure path returns 0.
+ * broken counter must never break scanning — every failure path returns [].
  */
-export function readScanCount(storage: Storage = localStorage): number {
+function readScanTimes(storage: Storage): number[] {
   try {
-    const parsed = Number.parseInt(storage.getItem(COUNTER_KEY) ?? '', 10)
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+    const parsed: unknown = JSON.parse(storage.getItem(STREAK_KEY) ?? '[]')
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
   } catch {
-    return 0
+    return []
   }
 }
 
-function writeScanCount(value: number, storage: Storage): void {
+function writeScanTimes(times: number[], storage: Storage): void {
   try {
-    storage.setItem(COUNTER_KEY, String(value))
+    storage.setItem(STREAK_KEY, JSON.stringify(times))
   } catch {
     // Counting ads is never worth failing a scan over.
   }
 }
 
 /**
- * Decides whether this trigger earns an interstitial, and advances the counter
- * as a side effect when the trigger is a saved scan.
+ * The scans that still count towards a streak: recent enough, and not dated
+ * in the future.
  *
- * Pro never sees an ad, and — importantly — Pro does not advance the counter
- * either. Otherwise a subscription lapsing back to Basic would fire an
- * interstitial immediately on the next scan, which reads as a punishment.
+ * The future check is not paranoia — a phone whose clock jumps back (timezone
+ * change, NTP correction) would otherwise hold a timestamp that never expires,
+ * either freezing the streak or firing an ad hours later out of nowhere.
+ */
+function withinWindow(times: number[], now: number): number[] {
+  return times.filter((time) => time <= now && now - time < SCAN_STREAK_WINDOW_MS)
+}
+
+/**
+ * Decides whether this trigger earns an interstitial, and records the scan as
+ * a side effect when the trigger is a saved scan.
+ *
+ * Pro never sees an ad, and — importantly — Pro does not record scans either.
+ * Otherwise a subscription lapsing back to Basic would fire an interstitial
+ * immediately on the next scan, which reads as a punishment.
  */
 export function shouldShowInterstitial(
   trigger: AdTrigger,
   tier: Tier,
   storage: Storage = localStorage,
+  now: number = Date.now(),
 ): boolean {
   if (tier === 'pro') return false
 
-  // Every export is worth an ad; no counter involved (PRD Bagian 6).
-  if (trigger === 'export-finished') return true
+  // Finishing an edit or a merge is a natural pause in the work, so each one
+  // earns an ad on its own — no streak involved.
+  if (trigger !== 'scan-saved') return true
 
-  const next = readScanCount(storage) + 1
-  const reached = next >= SCANS_PER_INTERSTITIAL
+  const times = [...withinWindow(readScanTimes(storage), now), now]
+  writeScanTimes(times, storage)
 
-  // Reset on the fifth scan so the next cycle starts clean, rather than
-  // letting the number grow and relying on a modulo that drifts if the
-  // stored value is ever tampered with.
-  writeScanCount(reached ? 0 : next, storage)
-
-  return reached
+  // The streak is deliberately *not* cleared here. Clearing on the decision
+  // rather than on the ad actually appearing would throw the ad away whenever
+  // none had finished loading — and with a ten-minute window that ad is gone,
+  // not postponed. `resetScanStreak` is called once one is really shown.
+  return times.length >= SCAN_STREAK_LENGTH
 }
 
 /** Scans still to go before the next interstitial. Only used by dev tooling. */
-export function scansUntilNextInterstitial(storage: Storage = localStorage): number {
-  return SCANS_PER_INTERSTITIAL - readScanCount(storage)
+export function scansUntilNextInterstitial(
+  storage: Storage = localStorage,
+  now: number = Date.now(),
+): number {
+  // Floored at zero: the streak keeps growing while no ad manages to load, so
+  // the remaining count can otherwise go negative.
+  return Math.max(0, SCAN_STREAK_LENGTH - withinWindow(readScanTimes(storage), now).length)
 }
 
-/** Clears the counter — called on sign-out so it never crosses accounts. */
-export function resetScanCount(storage: Storage = localStorage): void {
-  writeScanCount(0, storage)
+/** Clears the streak — called on sign-out so it never crosses accounts. */
+export function resetScanStreak(storage: Storage = localStorage): void {
+  writeScanTimes([], storage)
 }

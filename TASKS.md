@@ -113,7 +113,7 @@ Desain: `docs/superpowers/specs/2026-08-22-fase5-iklan-monetisasi-design.md`
 
 - [x] Integrasi AdMob — `@capacitor-community/admob` 8.1.0
 - [x] Banner ad di layar utama — hanya di layar tab, tidak di alur scan/editor/merge/paywall
-- [x] Interstitial ad: tiap 5 scan + setelah export (`ADS_INTERSTITIAL_FREQUENCY=every_5_scans_plus_after_export`) — penghitung disimpan di localStorage supaya restart aplikasi tidak meresetnya, dan naik hanya saat dokumen benar-benar tersimpan
+- [x] ~~Interstitial ad: tiap 5 scan + setelah export~~ — **aturan ini diganti 23 Agustus 2026**, lihat bagian "Kebijakan Iklan Baru" di bawah
 - [x] Gating Pro: tanpa iklan, dan penghitung scan tidak ikut naik selama Pro (langganan yang habis tidak langsung disambut interstitial)
 
 ### B. Pembelian Pro
@@ -131,7 +131,7 @@ Total test naik dari 100 ke 123.
 
 **Langkah manual Boss Ali (di luar repo, memblokir rilis):**
 
-- [ ] Buat akun AdMob, lalu isi `VITE_ADMOB_BANNER_UNIT_ID` & `VITE_ADMOB_INTERSTITIAL_UNIT_ID` di `.env`, dan ganti `APPLICATION_ID` di `AndroidManifest.xml` (sekarang masih App ID test resmi Google)
+- [x] ~~Buat akun AdMob, isi unit ID di `.env`, ganti `APPLICATION_ID` di `AndroidManifest.xml`~~ — **selesai 23 Agustus 2026.** ID diberikan Boss Ali, semuanya sudah terpasang (lihat CLAUDE.md Bagian 7)
 - [ ] Buat produk subscription di Play Console: `scannapp_pro_monthly` (Rp 15.000) & `scannapp_pro_yearly` (Rp 150.000)
 - [ ] Di dashboard RevenueCat: hubungkan ke Play Console, buat entitlement `pro`, buat offering berisi kedua produk
 - [x] Set `REVENUECAT_WEBHOOK_SECRET` — **HMAC signing secret** dari toggle "HMAC webhook signing" di integrasi webhook RevenueCat (bukan Authorization header, ganti keputusan awal setelah audit 22 Agustus 2026), sudah di-set Boss Ali di Supabase Edge Function Secrets
@@ -180,6 +180,39 @@ Lubang di Fase 4: mencadangkan sudah jalan, tapi setelah install ulang aplikasi 
 - [ ] Ketuk untuk memulihkan — dokumen harus bisa dibuka, diedit, dan digabung seperti dokumen biasa
 - [ ] Cadangkan ulang dokumen hasil pulihan — `bytes_used` **tidak boleh** naik dua kali lipat (bukti id-nya dipakai ulang dengan benar)
 - [ ] Pulihkan dokumen milik akun Basic — hasilnya harus bersih tanpa watermark ganda
+
+## Kebijakan Iklan Baru + Akun AdMob Asli — 23 Agustus 2026
+
+Keputusan Boss Ali, **mengganti** aturan lama di CLAUDE.md Bagian 6 ("interstitial tiap 5 scan + setelah export").
+
+- [x] Akun AdMob asli terpasang: App ID di `AndroidManifest.xml`, tiga unit ID (banner, interstitial, app open) di `.env`
+- [x] **Interstitial** sekarang dipicu tiga hal: selesai edit dokumen, selesai merge, dan **7 scan berurutan dalam kurang dari 10 menit**. Export tidak lagi memicu iklan
+- [x] Rentetan scan dihitung dengan jendela geser cap waktu di localStorage, bukan penghitung sederhana — supaya "berurutan" benar-benar berarti berdempetan, dan scan santai sekali beberapa menit tidak pernah memicu apa pun. Cap waktu di masa depan dibuang (jam HP bisa mundur saat ganti timezone)
+- [x] Iklan setelah edit hanya muncul kalau **ada yang benar-benar diubah** — membuka editor lalu keluar lagi bukan "selesai edit"
+- [x] **App Open ad** saat aplikasi dibuka & saat user kembali setelah pergi >5 detik, lewat `visibilitychange` (tanpa menambah plugin Capacitor baru)
+- [x] **Kembali dari alur yang kita sendiri yang memulai tidak dihitung** — pemindai ML Kit, share sheet, file picker, dan pembelian Play semuanya activity terpisah, jadi WebView melihatnya persis seperti user pergi ke aplikasi lain. Tanpa penanda ini, tiap selesai memindai user langsung disambut iklan layar penuh, dan pembelian mendarat di balik iklan
+- [x] Unit asli **hanya** masuk build rilis (`build-aab.yml`). APK debug dari CI tetap memakai unit test resmi Google — impresi berulang dari HP Boss Ali sendiri itu invalid traffic yang bisa menutup akun AdMob
+- [x] Test bertambah 15 (total 223)
+
+Empat temuan code-review ditutup sebelum commit, semuanya di kode iklan baru:
+
+1. **Iklan beruntun tanpa henti.** Iklan layar penuh AdMob juga activity terpisah, jadi menampilkannya membuat WebView background. Menutup interstitial setelah >5 detik akan langsung memanggil App Open ad di atasnya — dan App Open ad menutup dirinya dengan cara yang sama, jadi rantainya tidak berhenti. Sekarang iklan kita sendiri ikut ditandai sebagai kepergian internal.
+2. **User Pro bisa kena iklan.** `tier` membaca Basic sampai profil termuat, dan `status` jadi `signed-in` sebelum itu. User Pro yang login di HP baru bisa disambut App Open ad. Ditutup dengan flag `tierResolved` baru di AuthProvider.
+3. **Penanda alur internal bisa nyangkut** kalau panggilan yang mengirim user pergi ternyata gagal (mis. permintaan signed URL timeout) — penanda itu lalu memakan kepergian sungguhan berikutnya. Sekarang penandanya kedaluwarsa sendiri setelah 10 detik.
+4. **Iklan hilang, bukan tertunda.** Rentetan 7 scan dikosongkan saat keputusan dibuat, padahal iklannya bisa gagal tampil karena belum termuat. Sekarang rentetan hanya habis setelah iklannya sungguh tampil.
+
+**Langkah manual Boss Ali (memblokir pendapatan iklan, bukan rilisnya):**
+
+- [ ] Set 3 secret di GitHub → Settings → Secrets → Actions: `VITE_ADMOB_BANNER_UNIT_ID`, `VITE_ADMOB_INTERSTITIAL_UNIT_ID`, `VITE_ADMOB_APP_OPEN_UNIT_ID` (nilainya ada di CLAUDE.md Bagian 7). **Kalau tidak di-set, aplikasi rilis tidak crash — ia diam-diam menyajikan iklan test yang tidak menghasilkan apa pun.**
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Scan 7 dokumen cepat berturut-turut → interstitial muncul di yang ketujuh; scan santai (jeda >10 menit) tidak memicu apa pun
+- [ ] Selesai edit → iklan muncul. Buka editor lalu langsung keluar tanpa mengubah apa pun → **tidak** ada iklan
+- [ ] Selesai merge → iklan muncul
+- [ ] Pindah ke aplikasi lain >5 detik lalu kembali → App Open ad muncul. Pindah sekejap (<5 detik) → tidak muncul
+- [ ] **Paling penting:** selesai memindai, dan selesai share hasil export → **tidak boleh** ada App Open ad. Kalau muncul, penanda alur internalnya tidak bekerja
+- [ ] Akun Pro → tidak ada iklan sama sekali, termasuk App Open
 
 ## Fase 6 — Fitur Pro: OCR & Edit Lanjutan
 

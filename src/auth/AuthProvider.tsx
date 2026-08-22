@@ -24,19 +24,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null)
   const [email, setEmail] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  /**
+   * False for the moment between signing in and knowing which tier the user
+   * is. `tier` says Basic in that gap — right for gating a Pro feature, wrong
+   * for showing an ad, which a Pro user has paid not to see.
+   */
+  const [tierResolved, setTierResolved] = useState(false)
 
   /**
    * Cache-first: show the last known profile immediately so gating is correct
    * offline, then replace it with the server copy when the network allows.
    */
   const loadProfile = useCallback(async (id: string) => {
-    setProfile(readCachedProfile(id))
+    const cached = readCachedProfile(id)
+    setProfile(cached)
+    // A cached profile is already an answer — the phone has seen this account
+    // before, so nothing has to wait for the network to know the tier.
+    if (cached) setTierResolved(true)
 
-    const fresh = await fetchOwnProfile()
-    if (!fresh) return // offline, or the signup trigger has not landed yet
+    try {
+      const fresh = await fetchOwnProfile()
+      if (!fresh) return // offline, or the signup trigger has not landed yet
 
-    setProfile(fresh)
-    writeCachedProfile(fresh)
+      setProfile(fresh)
+      writeCachedProfile(fresh)
+    } finally {
+      // Resolved either way: offline with no cache means Basic is the best
+      // answer available, and waiting forever would mean no ads ever.
+      setTierResolved(true)
+    }
   }, [])
 
   /**
@@ -77,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void identifyForPurchases(user.id)
       } else {
         setProfile(null)
+        setTierResolved(false)
         void forgetPurchaseIdentity()
       }
     })
@@ -123,13 +140,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       profile,
       tier: resolveTier(profile),
+      tierResolved,
       signIn,
       signUp,
       signOut,
       sendPasswordReset,
       refreshProfile,
     }),
-    [status, userId, email, profile, signIn, signUp, signOut, sendPasswordReset, refreshProfile],
+    [
+      status,
+      userId,
+      email,
+      profile,
+      tierResolved,
+      signIn,
+      signUp,
+      signOut,
+      sendPasswordReset,
+      refreshProfile,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

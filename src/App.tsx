@@ -3,9 +3,10 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { useAuth } from './auth/useAuth'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { ExportSheet } from './components/ExportSheet'
-import { resetScanCount } from './lib/ads/adFrequency'
+import { resetScanStreak } from './lib/ads/adFrequency'
 import { maybeShowInterstitial } from './lib/ads/adsService'
 import { useAdBanner } from './lib/ads/useAdBanner'
+import { useAppOpenAd } from './lib/ads/useAppOpenAd'
 import {
   backupDocument,
   deleteBackup,
@@ -55,7 +56,7 @@ type View =
 type AuthView = { kind: 'landing' } | { kind: 'auth'; mode: AuthMode } | { kind: 'forgot' }
 
 function App() {
-  const { status, tier, profile, signOut, refreshProfile } = useAuth()
+  const { status, tier, tierResolved, profile, signOut, refreshProfile } = useAuth()
   const [authView, setAuthView] = useState<AuthView>({ kind: 'landing' })
   const [tab, setTab] = useState<TabId>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
@@ -74,6 +75,14 @@ function App() {
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [isRestoringAll, setIsRestoringAll] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  /**
+   * Whether anything was actually changed in the editor session that is open.
+   *
+   * "Selesai edit" earns an interstitial, but opening the editor and backing
+   * straight out is not an edit — charging an ad for a look would be the kind
+   * of unexpected full-screen ad that makes people uninstall.
+   */
+  const [editedInSession, setEditedInSession] = useState(false)
   const [usedBytes, setUsedBytes] = useState(0)
   const isNative = Capacitor.isNativePlatform()
   const quotaBytes = quotaBytesFor(profile)
@@ -84,6 +93,11 @@ function App() {
     status === 'signed-in' && view.kind === 'tabs' && pendingPages === null,
     tier,
   )
+
+  // Waits for `tierResolved`, not just for being signed in: `tier` reads Basic
+  // until the profile lands, so a Pro user signing in on a new phone would be
+  // met with a full-screen ad they have paid not to see.
+  useAppOpenAd(status === 'signed-in' && tierResolved, tier)
 
   const refreshDocuments = useCallback(async () => {
     setDocuments(await listScanDocuments())
@@ -212,8 +226,8 @@ function App() {
       const result = await exportDocument(doc, format, tier)
       setExportTarget(null)
       setToast(result.message)
-      // After delivery, so the ad never races the Android share sheet.
-      void maybeShowInterstitial('export-finished', tier)
+      // No ad here any more. Exporting stopped being a trigger when Boss Ali
+      // rewrote the policy on 23 Agustus 2026 — see CLAUDE.md Bagian 6.
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Gagal mengekspor dokumen.')
     } finally {
@@ -240,6 +254,9 @@ function App() {
       await refreshDocuments()
       setView({ kind: 'detail', id: merged.id })
       setToast(`Dokumen digabung — ${merged.pageCount} halaman.`)
+      // Fired after the result is on screen, so the user sees what they made
+      // before the ad rather than after dismissing it.
+      void maybeShowInterstitial('merge-finished', tier)
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Gagal menggabungkan dokumen.')
     } finally {
@@ -399,7 +416,7 @@ function App() {
       await signOut()
       // The scan counter is per person, not per device — the next account to
       // sign in should not inherit someone else's progress toward an ad.
-      resetScanCount()
+      resetScanStreak()
       setTab('home')
       setView({ kind: 'tabs' })
       setAuthView({ kind: 'landing' })
@@ -525,8 +542,18 @@ function App() {
       <div className="app">
         <EditorScreen
           document={activeDocument}
-          onDocumentChange={applyDocumentChange}
-          onClose={() => setView({ kind: 'detail', id: activeDocument.id })}
+          onDocumentChange={(updated) => {
+            setEditedInSession(true)
+            applyDocumentChange(updated)
+          }}
+          onClose={() => {
+            setView({ kind: 'detail', id: activeDocument.id })
+            if (!editedInSession) return
+            setEditedInSession(false)
+            // After the editor has closed, so the document is on screen behind
+            // the ad rather than the ad interrupting the save.
+            void maybeShowInterstitial('document-edited', tier)
+          }}
           onError={setToast}
         />
         {toast && <p className="toast">{toast}</p>}
@@ -550,7 +577,12 @@ function App() {
           isRenaming={renamingId === activeDocument.id}
           onRename={(title) => handleRename(activeDocument.id, title)}
           onBack={() => setView({ kind: 'tabs' })}
-          onEdit={() => setView({ kind: 'editor', id: activeDocument.id })}
+          onEdit={() => {
+            // Fresh session: an edit made an hour ago must not make merely
+            // opening the editor now count as editing.
+            setEditedInSession(false)
+            setView({ kind: 'editor', id: activeDocument.id })
+          }}
           onExport={() => setExportTarget(activeDocument.id)}
           onDelete={() => handleDelete(activeDocument.id)}
           onBackup={() => handleBackup(activeDocument)}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeftIcon, DownloadIcon, TrashIcon } from '../components/Icons'
 import { QuotaBar } from '../components/QuotaBar'
+import { resumeTracker } from '../lib/ads/appOpenGate'
 import { backupDownloadUrl, deleteBackup, listCloudBackups, type CloudBackup } from '../lib/backupApi'
 import { formatBytes } from '../lib/formatBytes'
 
@@ -40,7 +41,13 @@ export function CloudBackupScreen({
     setBusyId(backup.id)
     try {
       // Signed link, valid ten minutes — the browser or Android takes it from here.
-      window.open(await backupDownloadUrl(backup.id), '_blank')
+      const url = await backupDownloadUrl(backup.id)
+
+      // Marked only once the link is in hand. Announcing the excursion before
+      // the request would leave the mark set when the request fails and the
+      // app never goes anywhere, swallowing the next genuine return.
+      resumeTracker.leaveForOwnFlow()
+      window.open(url, '_blank')
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Gagal membuka cadangan.')
     } finally {

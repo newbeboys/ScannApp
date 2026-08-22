@@ -71,11 +71,19 @@ Dokumen ini adalah rujukan arsitektur teknis tunggal untuk Claude Code. Kalau ad
 User buka app → tap "Scan" → Capacitor Plugin buka ML Kit Document Scanner
 → user capture (1 atau banyak halaman) → ML Kit proses (deteksi tepi,
 koreksi perspektif) → hasil balik ke React app → simpan ke Local Storage
-Device → (opsional) insert metadata ke tabel scan_documents via Supabase
-client SDK (local_only = true)
+Device. SELESAI — tidak ada tulisan ke backend sama sekali.
 ```
 
-Catatan: langkah ini **sepenuhnya offline-capable** kecuali langkah terakhir (insert metadata) — kalau tidak ada koneksi internet, insert metadata bisa di-queue dan disinkronkan saat online kembali (lihat Bagian 6, Open Item).
+Alur ini **sepenuhnya offline**, tanpa pengecualian. Dokumen hasil scan hidup di `Directory.Data/scans/<id>/` plus satu index JSON, dan seluruh daftar dokumen di UI (`HomeScreen`, `DocumentsScreen`, `DocumentDetailScreen`, `MergeScreen`) dibaca dari sana lewat `listScanDocuments()`.
+
+**Baris di `scan_documents` hanya lahir dari `confirm-upload`** saat user menekan "Cadangkan ke cloud" (Bagian 3.2), dan selalu dengan `local_only = false`. Client tidak punya hak tulis apa pun ke tabel itu — policy INSERT/UPDATE/DELETE-nya dicabut 22 Agustus 2026 karena `file_size_bytes` yang bisa ditulis client membuat kuota R2 bisa dilewati (rincian di spec Fase 4 Bagian 9).
+
+> **Versi awal dokumen ini menulis** bahwa client melakukan "(opsional) insert metadata ke tabel `scan_documents` via Supabase client SDK (`local_only = true`)". Langkah itu **tidak pernah dibangun**, dan sekarang tidak mungkin dibangun lewat jalur itu.
+
+Dua hal yang mengikat siapa pun yang nanti mengerjakan sinkronisasi metadata offline (Bagian 6, Open Item):
+
+1. **Sinkronisasinya wajib lewat Edge Function, bukan insert langsung dari client.** Mengembalikan hak tulis client ke `scan_documents` berarti membuka lagi bypass kuota yang persis sama — ukuran file yang dipakai menghitung kuota tidak boleh berasal dari pihak yang diuntungkan kalau angkanya salah.
+2. **Baris `local_only = true` belum pernah ada, dan begitu ada, ia mengubah arti tabel ini.** `listCloudBackups()` sudah memfilter `local_only = false` sejak sekarang supaya siap. Tanpa filter itu, layar "Cadangan di cloud" akan mendaftar dokumen yang tidak punya salinan cloud, dan badge cadangan di `DocumentDetailScreen` akan menyatakan dokumen aman padahal belum diunggah ke mana pun.
 
 ### 3.2 Alur Backup File ke Cloud (opsional, lihat `BACKEND_API_DESIGN.md` untuk detail signed URL)
 

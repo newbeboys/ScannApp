@@ -1,0 +1,634 @@
+/* Layar sebelum masuk aplikasi: splash, landing, masuk/daftar, lupa password.
+   Semua warna diambil dari variabel tema (index.css), jadi keempat tema ikut. */
+
+/* ---------- Splash ---------- */
+
+.splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 100%;
+  animation: splash-in 260ms ease-out both;
+}
+
+.splash__mark {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 20px;
+  color: #fff;
+  background: var(--acc);
+  box-shadow: var(--shadow);
+}
+
+.splash__label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+@keyframes splash-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------- Landing ---------- */
+
+.landing {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 30px 22px calc(26px + env(safe-area-inset-bottom));
+}
+
+/* The scanner's own moment: brackets lock onto a sheet, one sweep passes. */
+.landing__stage {
+  position: relative;
+  align-self: center;
+  width: min(224px, 62vw);
+  aspect-ratio: 3 / 4;
+  margin: 8px 0 34px;
+  flex-shrink: 1;
+}
+
+.landing__sheet {
+  position: absolute;
+  /* Clears the detection brackets so all four read as complete corners. */
+  inset: 21px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 11px;
+  overflow: hidden;
+  padding: 0 20px;
+  border-radius: 6px;
+  /* Warm paper white in every theme — a document should read as a document,
+     not as another tinted surface. */
+  background: #fbfaf6;
+  box-shadow: 0 16px 40px rgba(10, 16, 32, 0.28);
+  animation: sheet-in 620ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.landing__line {
+  height: 7px;
+  border-radius: 3px;
+  background: rgba(27, 39, 64, 0.13);
+}
+
+.landing__line--title {
+  height: 11px;
+  width: 62%;
+  margin-bottom: 5px;
+  background: rgba(27, 39, 64, 0.28);
+}
+
+.landing__line--short {
+  width: 68%;
+}
+
+.landing__sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34%;
+  top: -34%;
+  background: linear-gradient(to bottom, transparent, var(--acc-soft) 60%, transparent);
+  border-bottom: 1.5px solid var(--acc-edge);
+  animation: sweep 1500ms 700ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.landing__bracket {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 2.5px solid var(--acc);
+  animation: bracket-in 520ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+.landing__bracket--nw {
+  top: 0;
+  left: 0;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 5px;
+  animation-delay: 180ms;
+}
+
+.landing__bracket--ne {
+  top: 0;
+  right: 0;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 5px;
+  animation-delay: 260ms;
+}
+
+.landing__bracket--sw {
+  bottom: 0;
+  left: 0;
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 5px;
+  animation-delay: 340ms;
+}
+
+.landing__bracket--se {
+  bottom: 0;
+  right: 0;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 5px;
+  animation-delay: 420ms;
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+@keyframes bracket-in {
+  from {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+
+@keyframes sweep {
+  to {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.landing__copy {
+  animation: rise-in 520ms 480ms ease-out both;
+}
+
+.landing__eyebrow {
+  margin: 0 0 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--acc);
+}
+
+.landing__title {
+  margin: 0;
+  font-size: clamp(1.95rem, 8.5vw, 2.5rem);
+  font-weight: 800;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+
+.landing__lede {
+  margin: 12px 0 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--fg-dim);
+}
+
+.landing__points {
+  list-style: none;
+  margin: 26px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  animation: rise-in 520ms 620ms ease-out both;
+}
+
+.landing__points li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.landing__point-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  color: var(--acc);
+  background: var(--acc-soft);
+}
+
+.landing__actions {
+  margin-top: auto;
+  padding-top: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: rise-in 520ms 760ms ease-out both;
+}
+
+.landing__link {
+  border: none;
+  background: none;
+  padding: 13px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.landing__link:active {
+  color: var(--fg);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* ---------- Masuk / Daftar / Lupa password ---------- */
+
+.auth {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 20px 22px calc(26px + env(safe-area-inset-bottom));
+  animation: rise-in 300ms ease-out both;
+}
+
+.auth__back {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin: 0 0 18px -10px;
+  border: none;
+  border-radius: 14px;
+  background: none;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.auth__back:active {
+  background: var(--chip);
+}
+
+.auth__title {
+  margin: 0;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.auth__lede {
+  margin: 8px 0 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--fg-dim);
+}
+
+.auth__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 24px 0 22px;
+  padding: 4px;
+  border-radius: 15px;
+  background: var(--chip);
+}
+
+.auth__tab {
+  padding: 11px;
+  border: none;
+  border-radius: 11px;
+  background: none;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.auth__tab--active {
+  color: var(--fg);
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(10, 16, 32, 0.12);
+}
+
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.field__wrap {
+  position: relative;
+  display: block;
+}
+
+.field__input {
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--chip-border);
+  border-radius: 15px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.98rem;
+  color: var(--fg);
+}
+
+.field__wrap .field__input {
+  padding-right: 52px;
+}
+
+.field__input::placeholder {
+  color: var(--fg-dim);
+  opacity: 0.65;
+}
+
+.field__input:focus-visible {
+  outline: none;
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px var(--acc-soft);
+}
+
+.field__reveal {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.field__reveal:active {
+  background: var(--chip);
+}
+
+.auth__forgot {
+  align-self: flex-start;
+  margin-top: -4px;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--acc);
+  cursor: pointer;
+}
+
+.auth__error {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 13px;
+  border: 1px solid rgba(220, 65, 60, 0.35);
+  background: rgba(220, 65, 60, 0.1);
+  font-size: 0.87rem;
+  line-height: 1.45;
+  color: #e2554e;
+}
+
+.auth__form .button--primary {
+  margin-top: 6px;
+}
+
+.auth__confirm {
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+
+.auth__confirm .auth__lede {
+  margin: 0;
+}
+
+.auth__confirm .button {
+  margin-top: 8px;
+}
+
+/* ---------- Kartu akun di Settings ---------- */
+
+.account-card {
+  display: flex;
+  /* .card stacks its children; this one reads as avatar + details side by side. */
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+}
+
+.account-card__avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  background: var(--acc);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.account-card__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.account-card__name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.account-card__email {
+  margin: 2px 0 0;
+  font-size: 0.83rem;
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-card__tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--chip-border);
+  background: var(--chip);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.account-card__tier--pro {
+  border-color: var(--acc-edge);
+  background: var(--acc-soft);
+  color: var(--acc);
+}
+
+.account-card__remaining {
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* ---------- Backup ke cloud ---------- */
+
+.backup-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 13px;
+}
+
+.backup-row__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  color: var(--fg-dim);
+  background: var(--chip);
+}
+
+.backup-row__icon--done {
+  color: #fff;
+  background: var(--acc);
+}
+
+.backup-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.backup-row__title {
+  margin: 0;
+  font-size: 0.93rem;
+  font-weight: 700;
+}
+
+.backup-row__note {
+  margin: 2px 0 0;
+  font-size: 0.79rem;
+  color: var(--fg-dim);
+}
+
+/* .button on its own carries no colours — it inherits them from the container
+   it normally sits in (.editor-actions). Outside that, state them here. */
+.backup-row__action {
+  flex-shrink: 0;
+  width: auto;
+  padding: 10px 16px;
+  font-size: 0.86rem;
+  color: var(--acc);
+  background: var(--acc-soft);
+  border: 1px solid var(--acc-edge);
+}
+
+.backup-item {
+  gap: 8px;
+}
+
+.quota {
+  gap: 10px;
+}
+
+.quota__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.quota__label {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.quota__value {
+  font-size: 0.81rem;
+  color: var(--fg-dim);
+}
+
+.quota__track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  overflow: hidden;
+}
+
+.quota__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--acc);
+  transition: width 240ms ease-out;
+}
+
+.quota__fill--full {
+  background: #e2554e;
+}
+
+.quota__warning {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #e2554e;
+}
+
+.card__row-icon {
+  vertical-align: -3px;
+  margin-right: 9px;
+  color: var(--fg-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash,
+  .landing__sheet,
+  .landing__bracket,
+  .landing__copy,
+  .landing__points,
+  .landing__actions,
+  .auth {
+    animation: none;
+  }
+
+  .landing__sweep {
+    display: none;
+  }
+}

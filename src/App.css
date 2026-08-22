@@ -10,7 +10,9 @@
 .app__body {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(
+    var(--nav-height) + var(--ad-banner-height) + env(safe-area-inset-bottom, 0px)
+  );
 }
 
 .screen {
@@ -89,6 +91,78 @@
 
 .flow-header__titles p {
   font-size: 13px;
+  color: var(--fg-dim);
+}
+
+/* ---------- ubah nama dokumen ---------- */
+
+/*
+  Judulnya sendiri jadi tombol, bukan ikon pensil terpisah di sebelahnya:
+  targetnya jadi selebar judul — jauh lebih mudah ditekan dengan jempol — dan
+  ikonnya cuma penanda bahwa teks itu bisa diubah.
+*/
+.flow-header__rename {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+}
+
+.flow-header__rename-icon {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+}
+
+.rename {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rename__input {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--acc-edge);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 16px; /* di bawah 16px, WebView Android ikut men-zoom halaman */
+  font-weight: 600;
+}
+
+.rename__input:focus {
+  outline: 2px solid var(--acc-soft);
+  outline-offset: 1px;
+}
+
+.rename__save,
+.rename__cancel {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rename__save {
+  background: var(--acc);
+  color: #ffffff;
+}
+
+.rename__save:disabled {
+  opacity: 0.5;
+}
+
+.rename__cancel {
+  background: var(--chip);
   color: var(--fg-dim);
 }
 
@@ -587,7 +661,8 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  /* Banner AdMob menutup dasar layar; nav naik di atasnya. */
+  bottom: var(--ad-banner-height);
   z-index: 10;
   max-width: 560px;
   margin: 0 auto;
@@ -645,7 +720,9 @@
   position: fixed;
   left: 16px;
   right: 16px;
-  bottom: calc(var(--nav-height) + 12px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(
+    var(--nav-height) + var(--ad-banner-height) + 12px + env(safe-area-inset-bottom, 0px)
+  );
   max-width: 528px;
   margin: 0 auto;
   font-size: 12px;
@@ -660,7 +737,7 @@
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--nav-height) + 58px);
+  bottom: calc(var(--nav-height) + var(--ad-banner-height) + 58px);
   transform: translateX(-50%);
   z-index: 20;
   font-size: 13px;
@@ -689,4 +766,550 @@
   font-size: 12px;
   color: var(--fg-dim);
   margin-top: 4px;
+}
+
+/* ---------- editor ---------- */
+
+.editor-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+  touch-action: none;
+}
+
+.editor-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: fill;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.editor-actions .button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 13px 10px;
+  font-size: 14px;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+  color: var(--fg);
+}
+
+.editor-actions .button--primary {
+  background: var(--acc);
+  border-color: transparent;
+  color: #fff;
+}
+
+.editor-thumb {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  border: 1px solid var(--chip-border);
+  background: var(--chip);
+  color: var(--fg-dim);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.editor-thumb--active {
+  border-color: var(--acc);
+  color: var(--acc);
+  background: var(--acc-soft);
+}
+
+.editor-thumb__dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--acc);
+}
+
+.detail-note {
+  font-size: 13px;
+  color: var(--fg-dim);
+  padding: 10px 13px;
+  border-radius: 12px;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+}
+
+/* ---------- crop overlay ---------- */
+
+.crop-overlay {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.crop-window {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgba(10, 12, 20, 0.55);
+  border: 1.5px solid #fff;
+  cursor: move;
+}
+
+.crop-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 1px, transparent 1px);
+  background-size: 33.33% 33.33%;
+  pointer-events: none;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 3px solid #fff;
+  background: transparent;
+}
+
+.crop-handle--nw {
+  top: -2px;
+  left: -2px;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 4px;
+  cursor: nwse-resize;
+}
+
+.crop-handle--ne {
+  top: -2px;
+  right: -2px;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 4px;
+  cursor: nesw-resize;
+}
+
+.crop-handle--sw {
+  bottom: -2px;
+  left: -2px;
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 4px;
+  cursor: nesw-resize;
+}
+
+.crop-handle--se {
+  bottom: -2px;
+  right: -2px;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 4px;
+  cursor: nwse-resize;
+}
+
+.doc-row__open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+}
+
+.doc-row__open:active {
+  opacity: 0.7;
+}
+
+.dev-bar {
+  margin: 0 20px 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px dashed var(--chip-border);
+  background: var(--chip);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.dev-bar button {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--acc-edge);
+  background: var(--acc-soft);
+  color: var(--acc);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ---------- bottom sheet ---------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(8, 10, 18, 0.5);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fade-in 180ms ease;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  background: var(--surface);
+  border: 1px solid var(--chip-border);
+  border-bottom: none;
+  border-radius: 22px 22px 0 0;
+  padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow);
+  animation: sheet-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+.sheet__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.sheet__head div {
+  flex: 1 1 auto;
+}
+
+.sheet__head h2 {
+  font-size: 18px;
+}
+
+.sheet__head p {
+  font-size: 13px;
+  color: var(--fg-dim);
+  margin-top: 2px;
+}
+
+.sheet__status {
+  text-align: center;
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+
+.format-option {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--chip-border);
+  background: var(--chip);
+  color: var(--fg);
+  text-align: left;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.format-option:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.format-option:disabled {
+  opacity: 0.55;
+}
+
+.format-option__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: var(--acc-soft);
+  color: var(--acc);
+  flex-shrink: 0;
+}
+
+.format-option__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.format-option__text strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.format-option__text small {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+/* ---------- merge ---------- */
+
+.merge-meter {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 13px 15px;
+  border-radius: 15px;
+  background: var(--acc-soft);
+  border: 1px solid var(--acc-edge);
+}
+
+.merge-meter strong {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--acc);
+}
+
+.merge-meter span {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.merge-meter--over {
+  background: rgba(229, 72, 77, 0.12);
+  border-color: rgba(229, 72, 77, 0.5);
+}
+
+.merge-meter--over strong {
+  color: #e5484d;
+}
+
+.merge-warning {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #e5484d;
+  padding: 11px 14px;
+  border-radius: 13px;
+  background: rgba(229, 72, 77, 0.1);
+  border: 1px solid rgba(229, 72, 77, 0.3);
+}
+
+.merge-check {
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  border: 1.5px solid var(--chip-border);
+  background: var(--chip);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: transparent;
+}
+
+.merge-check--on {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: #fff;
+}
+
+/* ---------- paywall / upgrade ---------- */
+
+.pro-badge {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #3b2a05;
+  background: var(--pro-gold);
+  border-radius: 7px;
+  padding: 4px 9px;
+}
+
+/*
+  Ledger batas: tiap baris menunjukkan satu batas Basic yang hilang. Ini bentuk
+  yang jujur untuk produk ini — PRD Bagian 2 menegaskan beda Basic dan Pro ada
+  di limit, bukan di kualitas scan, jadi daftar centang fitur akan menyesatkan.
+*/
+.upgrade-ledger ul {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.upgrade-ledger li + li {
+  border-top: 1px solid var(--chip-border);
+  padding-top: 14px;
+}
+
+.upgrade-ledger__label {
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-bottom: 5px;
+}
+
+.upgrade-ledger__change {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.upgrade-ledger__from {
+  font-size: 14px;
+  color: var(--fg-dim);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.upgrade-ledger__arrow {
+  color: var(--upgrade);
+  flex-shrink: 0;
+}
+
+.upgrade-ledger__to {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.plan-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plan-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 15px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--chip-border);
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.plan-option--active {
+  border-color: var(--upgrade);
+  background: var(--upgrade-soft);
+}
+
+.plan-option__check {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  border: 1.5px solid var(--chip-border);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.plan-option--active .plan-option__check {
+  background: var(--upgrade);
+  border-color: var(--upgrade);
+}
+
+.plan-option__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.plan-option__name {
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+
+.plan-option__price {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.plan-option__per {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-dim);
+  margin-left: 4px;
+}
+
+.plan-option__save {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--upgrade);
+  background: var(--upgrade-soft);
+  border-radius: 999px;
+  padding: 4px 9px;
+  flex-shrink: 0;
+}
+
+.button--upgrade {
+  background: var(--upgrade);
+  color: #fff;
+  box-shadow: 0 12px 26px var(--upgrade-soft);
+}
+
+.upgrade-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-dim);
+  padding: 4px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link-button:disabled {
+  opacity: 0.6;
+}
+
+.upgrade-terms {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+/* Baris upgrade di Settings — satu-satunya tombol coral di layar itu. */
+.upgrade-row {
+  color: var(--upgrade);
+  font-weight: 700;
 }

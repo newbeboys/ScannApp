@@ -14,7 +14,7 @@
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:exported="true">
 
             <intent-filter>
@@ -23,6 +23,16 @@
             </intent-filter>
 
         </activity>
+
+        <!--
+            AdMob APPLICATION_ID. SDK Google Mobile Ads sengaja membuat aplikasi
+            crash saat start kalau meta-data ini tidak ada, jadi nilainya tidak
+            boleh kosong. Sekarang memakai App ID test resmi Google; GANTI dengan
+            App ID asli dari dashboard AdMob (ADMOB_APP_ID di .env) sebelum rilis.
+        -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -45,4 +55,13 @@
         it is declared here explicitly so the app's billing usage is self-documenting.
     -->
     <uses-permission android:name="com.android.vending.BILLING" />
+
+    <!--
+        Ekspor menulis PDF/JPG ke folder Documents publik supaya file-nya
+        bisa ditemukan lewat file manager. Izin ini hanya diperlukan di
+        Android 10 ke bawah; Android 11+ (scoped storage) tidak memintanya.
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
 </manifest>

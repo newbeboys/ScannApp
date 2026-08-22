@@ -1,0 +1,109 @@
+import { BASIC_COMPRESSION } from './exportLimits'
+
+/** Crop area expressed as fractions of the source image (0..1), so it survives resizing. */
+export interface CropRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export type Rotation = 90 | 180 | 270
+
+export interface CompressOptions {
+  quality: number
+  maxEdgePx: number
+}
+
+const JPEG = 'image/jpeg'
+
+/**
+ * `from-image` makes the browser apply EXIF orientation while decoding, so
+ * every downstream canvas operation works on an already-upright bitmap.
+ */
+async function decode(blob: Blob): Promise<ImageBitmap> {
+  return createImageBitmap(blob, { imageOrientation: 'from-image' })
+}
+
+function draw(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(width))
+  canvas.height = Math.max(1, Math.round(height))
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas tidak tersedia di perangkat ini.')
+  ctx.imageSmoothingQuality = 'high'
+  return [canvas, ctx]
+}
+
+function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('Gagal mengubah gambar.'))),
+      JPEG,
+      quality,
+    )
+  })
+}
+
+export async function rotateImage(blob: Blob, degrees: Rotation): Promise<Blob> {
+  const bitmap = await decode(blob)
+  const swapsAxes = degrees === 90 || degrees === 270
+  const [canvas, ctx] = draw(
+    swapsAxes ? bitmap.height : bitmap.width,
+    swapsAxes ? bitmap.width : bitmap.height,
+  )
+
+  ctx.translate(canvas.width / 2, canvas.height / 2)
+  ctx.rotate((degrees * Math.PI) / 180)
+  ctx.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2)
+  bitmap.close()
+
+  return toBlob(canvas, 0.92)
+}
+
+export async function cropImage(blob: Blob, rect: CropRect): Promise<Blob> {
+  const bitmap = await decode(blob)
+
+  const sx = clamp(rect.x, 0, 1) * bitmap.width
+  const sy = clamp(rect.y, 0, 1) * bitmap.height
+  const sWidth = clamp(rect.width, 0.01, 1 - clamp(rect.x, 0, 1)) * bitmap.width
+  const sHeight = clamp(rect.height, 0.01, 1 - clamp(rect.y, 0, 1)) * bitmap.height
+
+  const [canvas, ctx] = draw(sWidth, sHeight)
+  ctx.drawImage(bitmap, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height)
+  bitmap.close()
+
+  return toBlob(canvas, 0.92)
+}
+
+/**
+ * Single standard compression level for Basic (PRD Bagian 3): cap the long
+ * edge and re-encode as JPEG. Pro gets a manual quality slider in Fase 6,
+ * which is why the options are a parameter rather than baked in.
+ */
+export async function compressImage(
+  blob: Blob,
+  options: CompressOptions = BASIC_COMPRESSION,
+): Promise<Blob> {
+  const bitmap = await decode(blob)
+  const longEdge = Math.max(bitmap.width, bitmap.height)
+  const scale = longEdge > options.maxEdgePx ? options.maxEdgePx / longEdge : 1
+
+  const [canvas, ctx] = draw(bitmap.width * scale, bitmap.height * scale)
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  bitmap.close()
+
+  return toBlob(canvas, options.quality)
+}
+
+/** Natural pixel size of an image, used by the crop overlay to keep its aspect ratio honest. */
+export async function getImageSize(blob: Blob): Promise<{ width: number; height: number }> {
+  const bitmap = await decode(blob)
+  const size = { width: bitmap.width, height: bitmap.height }
+  bitmap.close()
+  return size
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}

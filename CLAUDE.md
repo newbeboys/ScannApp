@@ -47,13 +47,16 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 
 6. kamu bisa lihat pada folder atau file yang di ScannApp Design Prototap kemungkinan seperti itu design aplikasiku, kamu bisa membuatnya lebih bagus atau smoot dengan menggunakan skill/plugin yang tersedia tanpa aku perintahkan, tinggal kamu kerjakan jikan selesai tunjukan nanti aku akan membuat keputusannya.
 
+7. gunakan bahasa indonesia disetiap laporan yang kamu buat dan kegiatan/tugas apa yang kamu sedeng kerjan pastikan kmau menggunakan bahasa indonesia agar aku memahami mu.
+
 ## 6. Angka Final yang Wajib Dipakai (bukan lagi open decision — lihat PRD v2 Bagian 7)
 
 - **Limit merge dokumen:** Basic maksimal 20 halaman per dokumen hasil merge, Pro unlimited.
 - **Milestone referral:** 5 orang→7 hari Pro, 15 orang→25 hari Pro, 30 orang→60 hari Pro.
 - **Harga Pro:** Rp 15.000/bulan atau Rp 150.000/tahun.
 - **Frekuensi iklan Basic:** banner + interstitial tiap 5 scan, ditambah interstitial setelah export.
-- **Quota storage R2:** Basic 100MB, Pro bulanan 500MB, Pro tahunan 1GB.
+- **Quota storage R2:** Basic 100MB, Pro bulanan 500MB, Pro tahunan 1GB, **Pro dari referral 500MB** (ditetapkan 26 Juli 2026 saat Fase 4).
+- **Paket Pro selalu berjangka:** hanya ada 1 bulan & 1 tahun — **tidak ada Pro permanen**. Baris `profiles` dengan `tier='pro'` tapi `tier_expires_at` kosong dianggap data rusak dan diperlakukan sebagai Basic (ditetapkan 26 Juli 2026 saat Fase 3).
 - **Reward referral untuk teman yang diundang:** 1 hari akses Pro (reward dua arah "give X get Y").
 - **Interval job `expire-pro-status`:** tiap hari (jam 00:00), bukan tiap jam.
 - **Signed URL R2:** langsung dari Supabase Edge Function, **tanpa** Cloudflare Worker tambahan — jangan tambah komponen infrastruktur baru untuk ini kecuali ada kebutuhan eksplisit (mis. resize gambar server-side) di kemudian hari.
@@ -76,3 +79,32 @@ Angka-angka di atas dipakai langsung sebagai konstanta/env var (lihat `.env.exam
 ## 8. Filosofi Kerja Claude Code di Proyek Ini
 
 Boss Ali ingin Claude Code berperan besar dalam implementasi — ambil inisiatif teknis, buat keputusan detail implementasi sendiri. **Yang wajib dieskalasi ke Boss Ali hanya:** keputusan bisnis/angka baru yang belum ada di dokumen (lihat Bagian 6 & PRD Bagian 7), perubahan arsitektur besar (mis. ganti provider, ganti framework), atau pilihan yang punya trade-off signifikan tanpa jawaban jelas dari dokumen yang ada. Keputusan implementasi teknis kecil (struktur komponen, nama variabel, cara menulis query) tidak perlu ditanyakan — langsung kerjakan sesuai konvensi di Bagian 4.
+
+## 9. Konvensi Plugin & Skill Claude Code
+
+Plugin berikut sudah terpasang di scope user/project — **tidak perlu diinstall ulang atau ditanyakan lagi**, langsung dipakai sesuai konteks. Sebagian bersifat otomatis (model-invoked), sebagian butuh aturan tambahan supaya hasilnya konsisten dengan proyek ini.
+
+### 9.1 Plugin otomatis (tidak butuh perintah manual)
+
+- **security-guidance** — scan otomatis tiap ada perubahan kode untuk pola injection, XSS, secret ter-expose, IDOR. Kalau ada temuan, laporkan sebelum lanjut, jangan diamkan.
+- **typescript-lsp** — diagnostik TypeScript real-time (type errors, jump-to-definition). Berjalan di background, tidak perlu dipanggil.
+- **frontend-design** — aktif otomatis saat mengerjakan UI/frontend. **Lihat aturan wajib di 9.2 sebelum skill ini dipakai.**
+
+### 9.2 Aturan wajib untuk frontend-design (mengikat, bukan saran)
+
+Skill ini cenderung mendorong pemilihan font/warna/aksen baru yang "distinctive" demi menghindari tampilan AI generik. **Proyek ini sudah punya design token final (3-layer: primitive → semantic → component)** — blue `#2563EB` primary, coral `#FF6B4A` khusus elemen Pro/upgrade, amber `#F59E0B` warning, gold `#F5C443` badge Pro.
+
+- **Wajib pakai token yang sudah ada.** Jangan perkenalkan palet warna atau font baru tanpa konfirmasi eksplisit dari Boss Ali, meskipun skill frontend-design menyarankan arah estetik berbeda demi "distinctiveness".
+- Kebebasan skill ini **hanya berlaku** pada aspek yang belum ditentukan: layout, spacing, micro-interaction, tipografi pendukung (bukan warna brand), komposisi visual.
+- Kalau ragu apakah suatu keputusan visual menyentuh token yang sudah final atau area bebas — berhenti dan tanyakan, jangan menebak (konsisten dengan Aturan Keras di Bagian 3).
+
+### 9.3 Superpowers (alur brainstorm → plan → execute)
+
+- **Task baru/besar** (subsistem baru, fitur belum ada sebelumnya): ikuti alur penuh — brainstorm dulu, baru write-plan, baru execute-plan.
+- **Fix kecil / perubahan config / typo**: boleh skip langsung ke eksekusi kalau Boss Ali eksplisit bilang "langsung kerjakan" atau semacamnya — jangan paksakan proses penuh untuk perubahan trivial.
+- Proses ini **tidak menggantikan** Aturan Keras di Bagian 3 & alur kerja Bagian 5 — kalau brainstorm/plan mengarah ke keputusan bisnis/angka yang belum ada di PRD/System Design, tetap berhenti dan tanya (bukan diputuskan sendiri oleh proses Superpowers).
+
+### 9.4 code-review & commit-commands
+
+- **code-review**: jalankan sebelum commit untuk perubahan yang menyentuh lebih dari satu file atau logic non-trivial. Untuk perubahan satu baris/config, boleh dilewati.
+- **commit-commands**: pakai untuk format commit message, ikuti conventional commits — tidak perlu approval manual per commit message kecuali isinya menyangkut perubahan yang juga butuh review kode.

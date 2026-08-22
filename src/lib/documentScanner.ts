@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import { DocumentScanner } from '@capacitor-mlkit/document-scanner'
 
 export interface DocumentScanFailure {
@@ -11,6 +12,16 @@ export type DocumentScanOutcome = string[] | DocumentScanFailure
  * Opens the ML Kit document scanner UI (camera, crop, multi-page) and
  * returns the captured page image URIs. Android only — see
  * @capacitor-mlkit/document-scanner, which has no web/iOS implementation.
+ *
+ * The URIs are converted here, at the boundary where they enter the app, so no
+ * caller downstream ever handles a raw one. The plugin hands back the value of
+ * `page.getImageUri()`, which is a `file://` URI into the app's own cache. The
+ * webview runs on the `https://localhost` origin and cannot touch that scheme
+ * at all: `<img src>` renders a broken-image icon and `fetch()` rejects with
+ * "Failed to fetch". convertFileSrc rewrites it to
+ * `https://localhost/_capacitor_file_/...`, which Capacitor's own asset loader
+ * serves, so both work. It also covers `content://` URIs, and leaves anything
+ * already converted untouched — so it is safe to apply more than once.
  */
 export async function scanDocument(): Promise<DocumentScanOutcome> {
   try {
@@ -24,7 +35,7 @@ export async function scanDocument(): Promise<DocumentScanOutcome> {
       return { reason: 'cancelled' }
     }
 
-    return result.scannedImages
+    return result.scannedImages.map((uri) => Capacitor.convertFileSrc(uri))
   } catch (error) {
     return {
       reason: 'error',

@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    "types": ["vite/client", "node"],
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*.test.ts",
+    // vitest.config.ts sudah menjalankan test Edge Function; tanpa baris ini
+    // `tsc -b` melewatinya, jadi type error di sana lolos sampai runtime.
+    "supabase/functions/**/*.test.ts",
+    "vitest.config.ts"
+  ]
+}

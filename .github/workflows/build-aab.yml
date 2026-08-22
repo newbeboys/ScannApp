@@ -28,6 +28,13 @@ jobs:
         run: npm ci
 
       - name: Build web assets
+        # WAJIB: src/lib/supabase.ts throw di top-level module kalau kosong,
+        # dan tidak ada error boundary di main.tsx — tanpa ini AAB terbuild
+        # sempurna dan lolos signing, tapi layar putih kosong untuk semua
+        # user begitu terpasang dari Play Store.
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Sync Capacitor

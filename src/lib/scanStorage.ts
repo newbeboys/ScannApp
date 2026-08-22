@@ -87,13 +87,21 @@ async function writeIndex(docs: LocalScanDocument[]): Promise<void> {
 
 /**
  * The document scanner returns file/content URIs owned by Google Play
- * services, not paths under our own storage. fetch() can read them inside
- * the Capacitor webview, so we pull the bytes and write our own copy —
- * otherwise the source files can disappear once the scanner's temp cache
- * is cleared.
+ * services, not paths under our own storage. We pull the bytes and write our
+ * own copy — otherwise the source files can disappear once the scanner's temp
+ * cache is cleared.
+ *
+ * convertFileSrc is applied again here even though scanDocument already did it.
+ * It is idempotent (an https URL matches none of its prefixes and is returned
+ * unchanged), and a raw `file://` URI reaching fetch() is precisely what failed
+ * before: it rejects with the bare message "Failed to fetch", which says nothing
+ * about the real cause. Cheap insurance at the layer that actually broke.
  */
 async function fetchAsBase64(uri: string): Promise<string> {
-  const response = await fetch(uri)
+  const response = await fetch(Capacitor.convertFileSrc(uri))
+  if (!response.ok) {
+    throw new Error(`Gagal membaca halaman hasil pindai (HTTP ${response.status}).`)
+  }
   return blobToBase64(await response.blob())
 }
 
@@ -107,11 +115,23 @@ export async function saveScanDocument(
   await Filesystem.mkdir({ path: docDir, directory: Directory.Data, recursive: true })
 
   const pages: ScanPage[] = []
-  for (let i = 0; i < imageUris.length; i++) {
-    const base64 = await fetchAsBase64(imageUris[i])
-    const pagePath = `${docDir}/page-${i + 1}.jpg`
-    await Filesystem.writeFile({ path: pagePath, directory: Directory.Data, data: base64 })
-    pages.push({ original: pagePath })
+  try {
+    for (let i = 0; i < imageUris.length; i++) {
+      const base64 = await fetchAsBase64(imageUris[i])
+      const pagePath = `${docDir}/page-${i + 1}.jpg`
+      await Filesystem.writeFile({ path: pagePath, directory: Directory.Data, data: base64 })
+      pages.push({ original: pagePath })
+    }
+  } catch (error) {
+    // The index is written last, so a page that fails half way through would
+    // strand docDir with no entry pointing at it — and deleteScanDocument only
+    // works from the index, so nothing would ever reclaim those bytes.
+    await Filesystem.rmdir({ path: docDir, directory: Directory.Data, recursive: true }).catch(
+      () => {
+        // Nothing better to do; the original failure is what matters.
+      },
+    )
+    throw error
   }
 
   const doc: LocalScanDocument = {

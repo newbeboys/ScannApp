@@ -2,9 +2,13 @@ import { useEffect, useState } from 'react'
 import { getScanPageDisplayUri } from '../lib/scanStorage'
 
 interface PageImageProps {
-  /** Stored page path (Directory.Data-relative) or a raw URI straight from the scanner. */
+  /** Stored page path (Directory.Data-relative), or a scanner URI from scanDocument(). */
   source: string
-  /** Scanner URIs are already displayable; stored paths need resolving first. */
+  /**
+   * True for URIs coming straight out of scanDocument(), which are already
+   * displayable because that function converts them (see the note there — a raw
+   * `file://` URI renders as a broken image). Stored paths still need resolving.
+   */
   raw?: boolean
   className?: string
   alt?: string

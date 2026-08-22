@@ -31,6 +31,13 @@ jobs:
         run: npm test
 
       - name: Typecheck & build
+        # VITE_* di sini WAJIB ada: src/lib/supabase.ts throw di top-level
+        # module kalau kosong, dan tidak ada error boundary di main.tsx — jadi
+        # tanpa secret ini APK-nya "berhasil" dibuild tapi layar putih kosong
+        # di device (JS gagal mount sebelum sempat render apa pun).
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
   android:
@@ -50,6 +57,11 @@ jobs:
         run: npm ci
 
       - name: Build web assets
+        # Sama seperti job "web" di atas — tanpa ini APK terbuild sempurna
+        # tapi layar putih kosong di device fisik (lihat komentar job web).
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Sync Capacitor Android

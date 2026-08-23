@@ -24,16 +24,12 @@ import {
 } from '../lib/documentEditing'
 import { getImageSize, type CropRect } from '../lib/imageEditor'
 import { effectiveFilter, type LocalScanDocument } from '../lib/scanStorage'
-import type { Tier } from '../lib/tier'
 
 interface EditorScreenProps {
   document: LocalScanDocument
-  tier: Tier
   onDocumentChange: (doc: LocalScanDocument) => void
   onClose: () => void
   onError: (message: string) => void
-  /** Basic taps a Pro tool: send them to the paywall rather than doing nothing. */
-  onUpgrade: () => void
 }
 
 const FULL_CROP: CropRect = { x: 0.05, y: 0.05, width: 0.9, height: 0.9 }
@@ -50,11 +46,9 @@ const TITLES: Record<Mode, string> = {
 
 export function EditorScreen({
   document: doc,
-  tier,
   onDocumentChange,
   onClose,
   onError,
-  onUpgrade,
 }: EditorScreenProps) {
   const [pageIndex, setPageIndex] = useState(0)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -123,18 +117,7 @@ export function EditorScreen({
     setMode('crop')
   }
 
-  /**
-   * Reorder and filters are Pro (PRD Bagian 3). Enforced here rather than only
-   * by hiding the buttons — Basic still sees them, because a tool nobody can
-   * see is a tool nobody knows they could buy.
-   */
-  const openProTool = (tool: 'filter' | 'reorder') => {
-    if (tier !== 'pro') return onUpgrade()
-    setMode(tool)
-  }
-
   const handlePick = async (pick: Parameters<typeof pickToChoice>[0]) => {
-    if (tier !== 'pro') return onUpgrade()
     const choice = pickToChoice(pick, scope)
 
     setIsBusy(true)
@@ -143,12 +126,12 @@ export function EditorScreen({
         // Every page is re-rendered, so a long document needs to say so.
         setProgress({ done: 0, total: doc.pages.length })
         onDocumentChange(
-          await setDocumentFilter(doc, tier, choice.document, (done, total) =>
+          await setDocumentFilter(doc, choice.document, (done, total) =>
             setProgress({ done, total }),
           ),
         )
       } else {
-        onDocumentChange(await setPageFilter(doc, tier, pageIndex, choice.page))
+        onDocumentChange(await setPageFilter(doc, pageIndex, choice.page))
       }
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Gagal menerapkan filter.')
@@ -160,7 +143,7 @@ export function EditorScreen({
 
   const handleMove = async (direction: -1 | 1) => {
     const target = pageIndex + direction
-    await run(() => movePage(doc, tier, pageIndex, direction))
+    await run(() => movePage(doc, pageIndex, direction))
     // Follow the page that moved, not the slot it left behind.
     setPageIndex(target)
   }
@@ -259,27 +242,25 @@ export function EditorScreen({
             </button>
           </div>
 
-          {/* The whole document. Both Pro. */}
+          {/* The whole document — filter and reorder, open to every tier. */}
           <div className="editor-actions">
             <button
               type="button"
               className="button"
-              onClick={() => openProTool('filter')}
+              onClick={() => setMode('filter')}
               disabled={isBusy}
             >
               <ImageIcon size={17} />
               <span>Filter</span>
-              {tier !== 'pro' && <span className="pro-tag">Pro</span>}
             </button>
             <button
               type="button"
               className="button"
-              onClick={() => openProTool('reorder')}
+              onClick={() => setMode('reorder')}
               disabled={isBusy || doc.pages.length < 2}
             >
               <MergeIcon size={17} />
               <span>Urutkan</span>
-              {tier !== 'pro' && <span className="pro-tag">Pro</span>}
             </button>
           </div>
 

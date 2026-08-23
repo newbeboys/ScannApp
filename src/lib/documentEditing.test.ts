@@ -172,43 +172,28 @@ describe('revertPage', () => {
 })
 
 /**
- * Reorder and filters are Pro-exclusive (PRD Bagian 3). EditorScreen already
- * blocks Basic before ever calling these, the same way MergeScreen does for
- * merge — but mergeDocuments re-checks and throws on its own regardless, and
- * these three do the same, so a future caller that skips the screen cannot
- * bypass the paywall by construction.
+ * Reorder and filters are available to every tier (keputusan Boss Ali 23
+ * Agustus 2026, menggantikan PRD Bagian 3's original "Pro-exclusive" —
+ * see PRD's changelog note). No tier is passed in or checked here at all.
  */
-describe('Pro gating', () => {
+describe('available to every tier', () => {
   const doc = { id: 'd', pages: [{ original: 'a.jpg' }, { original: 'b.jpg' }] }
 
-  it('refuses to set a document filter for Basic', async () => {
-    await expect(setDocumentFilter(doc, 'basic', 'bw')).rejects.toThrow(
-      'Filter dokumen hanya tersedia untuk Pro.',
-    )
-    expect(scanStorage.applyDocumentFilter).not.toHaveBeenCalled()
-  })
-
-  it('refuses to set a page filter exception for Basic', async () => {
-    await expect(setPageFilter(doc, 'basic', 0, 'bw')).rejects.toThrow(
-      'Filter dokumen hanya tersedia untuk Pro.',
-    )
-    expect(scanStorage.applyPageFilter).not.toHaveBeenCalled()
-  })
-
-  it('refuses to reorder pages for Basic', async () => {
-    await expect(movePage(doc, 'basic', 0, 1)).rejects.toThrow(
-      'Mengurutkan halaman hanya tersedia untuk Pro.',
-    )
-    expect(scanStorage.reorderPages).not.toHaveBeenCalled()
-  })
-
-  it('allows Pro to do all three', async () => {
+  it('sets a document filter without asking about tier', async () => {
     scanStorage.applyDocumentFilter.mockResolvedValue(doc)
+
+    await expect(setDocumentFilter(doc, 'bw')).resolves.toBe(doc)
+  })
+
+  it('sets a page filter exception without asking about tier', async () => {
     scanStorage.applyPageFilter.mockResolvedValue(doc)
+
+    await expect(setPageFilter(doc, 0, 'bw')).resolves.toBe(doc)
+  })
+
+  it('reorders pages without asking about tier', async () => {
     scanStorage.reorderPages.mockResolvedValue(doc)
 
-    await expect(setDocumentFilter(doc, 'pro', 'bw')).resolves.toBe(doc)
-    await expect(setPageFilter(doc, 'pro', 0, 'bw')).resolves.toBe(doc)
-    await expect(movePage(doc, 'pro', 0, 1)).resolves.toBe(doc)
+    await expect(movePage(doc, 0, 1)).resolves.toBe(doc)
   })
 })

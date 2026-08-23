@@ -30,16 +30,18 @@ Aplikasi scan dokumen untuk Android dengan dua tier: **Basic** (gratis, ad-suppo
 | Area | Basic (gratis, ada iklan) | Pro (berbayar, no ads) |
 |---|---|---|
 | Scan engine | ML Kit (kualitas penuh) | ML Kit (kualitas penuh, sama) |
-| Edit dasar | Crop manual, rotate | Sama, plus edit lanjutan di bawah |
+| Edit dasar | Crop manual, rotate, reorder halaman, filter dokumen (5 pilihan) | Sama, plus edit lanjutan di bawah |
 | Merge dokumen | ✅ Maksimal **20 halaman** per dokumen hasil merge | ✅ **Unlimited** |
 | Edit dibantu AI ("AI Enhance") | ❌ Tidak tersedia | ✅ Auto-enhance gambar (cahaya/kontras/noise/ketajaman) + auto-deskew & auto-crop presisi |
-| Edit lanjutan lain | ❌ | Annotate, tanda tangan digital, reorder halaman, filter lanjutan (B&W, magic color) |
+| Edit lanjutan lain | ❌ | Annotate, tanda tangan digital |
 | OCR (searchable text) | ❌ | ✅ |
 | Export format | PDF, JPG (kompresi otomatis, 1 level) | PDF, JPG, DOCX, PNG + kontrol level kompresi manual |
 | Watermark hasil export | Ada (kecil) | Tidak ada |
 | Batch scan/export | ❌ | ✅ |
 | Iklan | Banner + interstitial tiap 5 scan, + interstitial setelah export | Tidak ada |
 | Quota storage cloud (R2) | 100 MB | 500 MB (langganan bulanan) / **1 GB (langganan tahunan)** |
+
+> **Direvisi 23 Agustus 2026:** reorder halaman dan filter dokumen **pindah dari Pro-exclusive ke tersedia untuk semua tier**, menggantikan baris "Edit lanjutan lain" versi sebelumnya yang mencantumkan keduanya sebagai Pro. Filter sekaligus naik dari 2 pilihan (B&W, magic color) jadi 5 (Magic Color, Cerah, Abu-abu, Hitam-Putih, Hemat Tinta) — lihat CLAUDE.md Bagian 6 & `TASKS.md` Fase 6. Annotate dan tanda tangan digital tetap Pro-exclusive, belum diimplementasikan.
 
 ---
 

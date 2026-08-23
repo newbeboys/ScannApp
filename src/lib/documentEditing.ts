@@ -15,24 +15,6 @@ import {
   type PageFilter,
   type ScanPage,
 } from './scanStorage'
-import type { Tier } from './tier'
-
-/** Filter and reorder are Pro-exclusive (PRD Bagian 3). */
-const PRO_ONLY_MESSAGE: Record<'filter' | 'reorder', string> = {
-  filter: 'Filter dokumen hanya tersedia untuk Pro.',
-  reorder: 'Mengurutkan halaman hanya tersedia untuk Pro.',
-}
-
-/**
- * Enforced here, not only in EditorScreen's button handlers — the same
- * defense-in-depth the merge feature already uses (mergeDocuments throws on
- * its own rather than trusting MergeScreen's disabled state). A UI check
- * alone would leave every other caller of these functions free to bypass the
- * paywall, and there is no way to see that from the screen's code.
- */
-function requirePro(tier: Tier, tool: 'filter' | 'reorder'): void {
-  if (tier !== 'pro') throw new Error(PRO_ONLY_MESSAGE[tool])
-}
 
 /** Loads whatever the page currently shows — the filter, else the edit, else the original. */
 export async function loadPageBlob(page: ScanPage): Promise<Blob> {
@@ -131,11 +113,9 @@ export async function revertPage(
  */
 export async function setDocumentFilter(
   doc: LocalScanDocument,
-  tier: Tier,
   filter: DocumentFilter | null,
   onProgress?: (done: number, total: number) => void,
 ): Promise<LocalScanDocument> {
-  requirePro(tier, 'filter')
   return applyDocumentFilter(doc.id, filter, filterImage, onProgress)
 }
 
@@ -147,21 +127,17 @@ export async function setDocumentFilter(
  */
 export async function setPageFilter(
   doc: LocalScanDocument,
-  tier: Tier,
   pageIndex: number,
   choice: PageFilter | null,
 ): Promise<LocalScanDocument> {
-  requirePro(tier, 'filter')
   return applyPageFilter(doc.id, pageIndex, choice, filterImage)
 }
 
 /** Moves a page one step towards the front or the back of the document. */
 export async function movePage(
   doc: LocalScanDocument,
-  tier: Tier,
   pageIndex: number,
   direction: -1 | 1,
 ): Promise<LocalScanDocument> {
-  requirePro(tier, 'reorder')
   return reorderPages(doc.id, pageIndex, pageIndex + direction)
 }

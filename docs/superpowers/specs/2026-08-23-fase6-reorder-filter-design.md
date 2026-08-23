@@ -1,11 +1,11 @@
 # Fase 6 (bagian 1) — Reorder Halaman & Filter Dokumen
 
 Tanggal: 23 Agustus 2026
-Status: disetujui Boss Ali, siap diimplementasikan
+Status: disetujui Boss Ali, diimplementasikan
 
 Bagian pertama Fase 6, sesuai urutan yang disetujui Boss Ali: **reorder halaman + filter lanjutan** dulu, karena keduanya paling dekat dengan kode editor yang sudah ada dan tidak butuh dependency baru. OCR, anotasi, dan tanda tangan menyusul terpisah.
 
-Keduanya **fitur Pro** (PRD Bagian 3).
+Keduanya **fitur Pro** (PRD Bagian 3) — **direvisi 23 Agustus 2026 setelah implementasi**: Boss Ali memutuskan reorder & filter tersedia untuk **semua tier**, bukan Pro-exclusive. Lihat catatan revisi di PRD Bagian 3 dan CLAUDE.md Bagian 6. Bagian 2.5 dan 5 di bawah tetap ditulis dengan asumsi Pro-exclusive sebagai catatan sejarah keputusan aslinya — bacaan yang mengikat sekarang ada di dua dokumen itu.
 
 ---
 

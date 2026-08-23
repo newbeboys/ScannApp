@@ -1506,22 +1506,3 @@
   color: var(--fg-dim);
   text-align: center;
 }
-
-/*
-  Sama seperti `.pro-badge` di layar Upgrade — token gold "badge Pro"
-  (CLAUDE.md Bagian 9.2), bukan coral upgrade, karena ini juga sekadar
-  penanda "fitur ini Pro", bukan tombol ajakan aksi. Ukurannya dikecilkan
-  dan `align-self`-nya dilepas karena badge aslinya berdiri sendiri di atas
-  daftar, sedangkan ini duduk sebaris dengan ikon & label di dalam tombol.
-*/
-.pro-tag {
-  margin-left: 2px;
-  padding: 2px 6px;
-  border-radius: 7px;
-  color: #3b2a05;
-  background: var(--pro-gold);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}

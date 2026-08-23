@@ -63,6 +63,7 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 - **Reward referral untuk teman yang diundang:** 1 hari akses Pro (reward dua arah "give X get Y").
 - **Interval job `expire-pro-status`:** tiap hari (jam 00:00), bukan tiap jam.
 - **Signed URL R2:** langsung dari Supabase Edge Function, **tanpa** Cloudflare Worker tambahan — jangan tambah komponen infrastruktur baru untuk ini kecuali ada kebutuhan eksplisit (mis. resize gambar server-side) di kemudian hari.
+- **Reorder halaman & filter dokumen** (direvisi 23 Agustus 2026, **mengganti** PRD v2 Bagian 3 yang semula menandai keduanya Pro-exclusive): tersedia untuk **semua tier**, Basic maupun Pro — tidak ada gerbang tier untuk fitur ini. Filter naik dari 2 pilihan jadi **5**: Magic Color, Cerah, Abu-abu, Hitam-Putih, Hemat Tinta. Annotate dan tanda tangan digital tetap Pro-exclusive.
 
 Angka-angka di atas dipakai langsung sebagai konstanta/env var (lihat `.env.example`) — jangan tanyakan ulang ke Boss Ali kecuali ada perubahan eksplisit.
 

@@ -218,14 +218,32 @@ Empat temuan code-review ditutup sebelum commit, semuanya di kode iklan baru:
 
 **Urutan disetujui Boss Ali 23 Agustus 2026:** mulai dari **reorder halaman + filter lanjutan** (paling dekat dengan kode editor, tanpa dependency baru), baru sisanya.
 
+Desain: `docs/superpowers/specs/2026-08-23-fase6-reorder-filter-design.md`
+
 - [ ] Integrasi OCR (searchable PDF)
 - [ ] Annotate (coret/tulis di atas dokumen)
 - [ ] Tanda tangan digital
-- [ ] Reorder halaman
-- [ ] Filter lanjutan (B&W, magic color/enhance kontras)
+- [x] Reorder halaman — tombol geser kiri/kanan (bukan seret-lepas, lihat spec Bagian 2.6), Pro
+- [x] Filter lanjutan — **5 filter** (Boss Ali menaikkan dari 2 di PRD Bagian 3): Magic Color, Cerah, Abu-abu, Hitam-Putih (ambang adaptif lokal), Hemat Tinta. Berlaku untuk seluruh dokumen, bisa dikecualikan per halaman. Pro
 - [ ] Export tambahan: DOCX, PNG
 - [ ] Kontrol level kompresi manual (slider kualitas vs ukuran)
 - [ ] Batch scan/export
+
+Catatan tambahan di luar daftar asli (lihat spec Bagian 2 & 3):
+
+- [x] Model halaman naik ke `schemaVersion: 3` — filter disimpan terpisah dari `edited`, tidak ditumpuk seperti crop/putar, supaya ganti filter tidak menghapus crop. File hasil filter diturunkan ulang dari rantai geometri (`edited ?? original`), tidak pernah dari filter sebelumnya, jadi crop setelah filter tidak membakar filter ke `edited`. Migrasi otomatis dari v2, dokumen Fase 2 tidak berubah tampilannya
+- [x] `resolvePage()` jadi satu-satunya titik yang tahu urutan `filtered ?? edited ?? original` — ekspor, merge, dan cadangan cloud otomatis ikut berfilter tanpa satu pun disentuh
+- [x] Gating Pro ditegakkan di lapisan `documentEditing.ts` (bukan cuma UI), mengikuti pola `mergeDocuments` yang sudah ada — supaya jalur pemanggilan lain di masa depan tidak bisa melewati paywall
+- [x] Nama file hasil edit/filter diturunkan dari `original` (stabil, sekali dibuat), bukan dari posisi array — reorder tidak menyentuh file, jadi kalau namanya berbasis index, halaman yang pindah posisi bisa menimpa file halaman lain
+- [x] Unit test bertambah 44 (total 278) — termasuk matematika lima filter di piksel yang diketahui (bisa diuji tanpa canvas), migrasi v3, tabrakan nama file akibat reorder, dan gating Pro
+- [x] Code-review 3-sudut (correctness + reuse + simplification/efficiency) sebelum commit — 4 temuan correctness ditutup (tabrakan nama file, filter tidak dirender ulang setelah "Asli", gating Pro cuma di UI, campur bahasa komentar), beberapa temuan kerapian ikut dibereskan (token warna badge Pro yang salah, duplikasi logika render-ulang-filter)
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Reorder halaman terasa enak dipakai dengan jempol di HP sungguhan
+- [ ] Filter untuk dokumen 15+ halaman tidak terasa lama/macet (progress bar muncul selama proses)
+- [ ] Hasil Hitam-Putih tetap bersih di halaman yang tercahaya tidak rata (foto dokumen dengan bayangan tangan)
+- [ ] User Basic melihat tombol Filter & Urutkan (dengan lencana "Pro"), ketuk → langsung ke layar Upgrade
 
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 

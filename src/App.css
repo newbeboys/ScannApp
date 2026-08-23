@@ -1404,3 +1404,124 @@
   color: var(--upgrade);
   font-weight: 700;
 }
+
+/* ---------- filter dokumen & urutkan halaman (Pro, Fase 6) ---------- */
+
+.filter-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/*
+  Cakupan dipisah dari daftar filternya supaya jelas: chip yang sama berarti
+  dua hal berbeda tergantung tombol mana yang aktif di sini.
+*/
+.filter-scope {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+}
+
+.filter-scope__option {
+  flex: 1 1 0;
+  padding: 9px 8px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--fg-dim);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.filter-scope__option--active {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+}
+
+.filter-scope__option:disabled {
+  opacity: 0.6;
+}
+
+/* Bisa digulir mendatar: enam pilihan tidak muat di layar HP sempit. */
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 6px;
+  scrollbar-width: none;
+}
+
+.filter-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--chip-border);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.filter-chip:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.filter-chip--active {
+  border-color: var(--acc);
+  background: var(--acc-soft);
+  color: var(--acc);
+}
+
+.filter-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.filter-progress {
+  font-size: 12px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+.reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.reorder__hint {
+  font-size: 12px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+/*
+  Sama seperti `.pro-badge` di layar Upgrade — token gold "badge Pro"
+  (CLAUDE.md Bagian 9.2), bukan coral upgrade, karena ini juga sekadar
+  penanda "fitur ini Pro", bukan tombol ajakan aksi. Ukurannya dikecilkan
+  dan `align-self`-nya dilepas karena badge aslinya berdiri sendiri di atas
+  daftar, sedangkan ini duduk sebaris dengan ikon & label di dalam tombol.
+*/
+.pro-tag {
+  margin-left: 2px;
+  padding: 2px 6px;
+  border-radius: 7px;
+  color: #3b2a05;
+  background: var(--pro-gold);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

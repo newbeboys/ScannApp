@@ -2,10 +2,24 @@ import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { normalizeDocumentTitle } from '../../supabase/functions/_shared/documentTitle'
 import { base64ToBlob, blobToBase64 } from './blobBase64'
-import { migrateScanIndex, type LocalScanDocument, type ScanPage } from './scanIndexMigration'
+import {
+  effectiveFilter,
+  filterSource,
+  migrateScanIndex,
+  type DocumentFilter,
+  type LocalScanDocument,
+  type PageFilter,
+  type ScanPage,
+} from './scanIndexMigration'
 
-export { resolvePage, hasEdits } from './scanIndexMigration'
-export type { LocalScanDocument, ScanPage } from './scanIndexMigration'
+export {
+  resolvePage,
+  hasEdits,
+  effectiveFilter,
+  filterSource,
+  DOCUMENT_FILTERS,
+} from './scanIndexMigration'
+export type { LocalScanDocument, ScanPage, DocumentFilter, PageFilter } from './scanIndexMigration'
 
 const SCANS_DIR = 'scans'
 const INDEX_PATH = `${SCANS_DIR}/index.json`
@@ -70,7 +84,7 @@ async function readIndex(): Promise<LocalScanDocument[]> {
 
   const docs = migrateScanIndex(parsed)
   const needsRewrite =
-    Array.isArray(parsed) && parsed.some((doc) => (doc as LocalScanDocument)?.schemaVersion !== 2)
+    Array.isArray(parsed) && parsed.some((doc) => (doc as LocalScanDocument)?.schemaVersion !== 3)
   if (needsRewrite) {
     await writeIndex(docs)
   }
@@ -136,7 +150,7 @@ export async function saveScanDocument(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     id,
     title: title ?? `Scan ${new Date().toLocaleString('id-ID')}`,
     createdAt: new Date().toISOString(),
@@ -210,7 +224,7 @@ export async function restoreDocumentFromJpegs(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: cloud.id,
     title: cloud.title,
     // The day it was scanned, not the day it came back.
@@ -338,6 +352,22 @@ export async function readPageBlob(pagePath: string): Promise<Blob> {
 }
 
 /**
+ * Derives a page's edit/filter file path from its own stable `original` path
+ * rather than from its current position in the array.
+ *
+ * `reorderPages` only changes array order — it never renames a page's files.
+ * A path keyed on `pageIndex` would therefore collide the moment two pages
+ * swap places: page A (cropped, `edited: page-1-edited.jpg`) moved to index 1
+ * and page B moved into index 0 would both compute `page-1-edited.jpg` the
+ * next time either was edited, and one page's file would silently overwrite
+ * the other's. `original` is assigned once, at creation, and never changes,
+ * so it stays a safe, unique key for the document's lifetime.
+ */
+function derivedPath(original: string, suffix: 'edited' | 'filtered'): string {
+  return original.replace(/\.jpg$/i, `-${suffix}.jpg`)
+}
+
+/**
  * Stores an edited version of a page alongside — never over — the original.
  * A page can be edited repeatedly; each save replaces the previous edit.
  */
@@ -353,14 +383,25 @@ export async function savePageEdit(
   const page = doc.pages[pageIndex]
   if (!page) throw new Error('Halaman tidak ditemukan.')
 
-  const editedPath = `${SCANS_DIR}/${docId}/page-${pageIndex + 1}-edited.jpg`
+  const editedPath = derivedPath(page.original, 'edited')
   await Filesystem.writeFile({
     path: editedPath,
     directory: Directory.Data,
     data: await blobToBase64(edited),
   })
 
-  doc.pages[pageIndex] = { ...page, edited: editedPath }
+  // The filter render was made from the *old* geometry, so it is now wrong —
+  // it would show the page at its pre-crop shape. Dropped here; the caller
+  // re-renders it from the new edit (see documentEditing.editPage).
+  const { filtered, ...rest } = page
+  if (filtered) {
+    invalidateDisplayUri(filtered)
+    await Filesystem.deleteFile({ path: filtered, directory: Directory.Data }).catch(() => {
+      // Already gone; the index no longer points at it either way.
+    })
+  }
+
+  doc.pages[pageIndex] = { ...rest, edited: editedPath }
   await writeIndex(docs)
   return doc
 }
@@ -377,13 +418,165 @@ export async function resetPageEdit(
   const page = doc.pages[pageIndex]
   if (!page?.edited) return doc
 
-  try {
-    await Filesystem.deleteFile({ path: page.edited, directory: Directory.Data })
-  } catch {
-    // file already gone; clearing the index entry below is what matters
+  // The filter render was made from the geometry that is about to be thrown
+  // away, so it is now wrong and gets deleted here — but *not* regenerated:
+  // that needs a canvas, which this module deliberately has no access to.
+  // documentEditing.revertPage does that step right after calling this, using
+  // the page this function returns.
+  for (const path of [page.edited, page.filtered]) {
+    if (!path) continue
+    invalidateDisplayUri(path)
+    try {
+      await Filesystem.deleteFile({ path, directory: Directory.Data })
+    } catch {
+      // file already gone; clearing the index entry below is what matters
+    }
   }
 
-  doc.pages[pageIndex] = { original: page.original }
+  // The page's own filter *choice* survives — reverting a crop is not the
+  // same thing as changing the user's mind about this page's filter. Losing
+  // it here would silently pull the page back onto the document's filter, or
+  // strip a deliberate 'none' exception, neither of which "Asli" ever asked for.
+  doc.pages[pageIndex] = {
+    original: page.original,
+    ...(page.filter ? { filter: page.filter } : {}),
+  }
+  await writeIndex(docs)
+  return doc
+}
+
+/** Renders one page's filter, or clears it, and returns the new page entry. */
+async function renderPageFilter(
+  page: ScanPage,
+  filter: DocumentFilter | null,
+  render: FilterRenderer,
+): Promise<ScanPage> {
+  const path = derivedPath(page.original, 'filtered')
+
+  if (filter === null) {
+    if (page.filtered) {
+      invalidateDisplayUri(page.filtered)
+      await Filesystem.deleteFile({ path: page.filtered, directory: Directory.Data }).catch(() => {
+        // Already gone. The index entry is what decides what gets displayed.
+      })
+    }
+    const { filtered: _dropped, ...rest } = page
+    return rest
+  }
+
+  // Always from the geometry chain, never from the previous render — this is
+  // what lets a filter be swapped without eating the crop underneath it.
+  const rendered = await render(await readPageBlob(filterSource(page)), filter)
+  await Filesystem.writeFile({
+    path,
+    directory: Directory.Data,
+    data: await blobToBase64(rendered),
+  })
+  // The path is stable across re-renders, so any cached object URL is stale.
+  invalidateDisplayUri(path)
+
+  return { ...page, filtered: path }
+}
+
+/**
+ * Renders a filter, supplied by the caller rather than imported.
+ *
+ * Storage has no business touching a canvas — keeping the rendering out here
+ * is what lets this module stay free of the DOM, and lets these functions be
+ * tested without one.
+ */
+export type FilterRenderer = (source: Blob, filter: DocumentFilter) => Promise<Blob>
+
+/**
+ * Sets the filter for the whole document and re-renders every page that is
+ * not carrying its own exception.
+ *
+ * One index write at the end rather than one per page: twenty pages would
+ * otherwise mean twenty rewrites of the same file, each a window in which a
+ * crash leaves the index disagreeing with what is on disk.
+ */
+export async function applyDocumentFilter(
+  docId: string,
+  filter: DocumentFilter | null,
+  render: FilterRenderer,
+  onProgress?: (done: number, total: number) => void,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const next: LocalScanDocument = { ...doc, filter: filter ?? undefined }
+  if (filter === null) delete next.filter
+
+  const pages: ScanPage[] = []
+  for (const [index, page] of doc.pages.entries()) {
+    pages.push(await renderPageFilter(page, effectiveFilter(next, page), render))
+    onProgress?.(index + 1, doc.pages.length)
+  }
+
+  next.pages = pages
+  docs[docs.indexOf(doc)] = next
+  await writeIndex(docs)
+  return next
+}
+
+/**
+ * Sets one page's exception to the document filter.
+ *
+ * `null` puts the page back under the document's choice; `'none'` is the
+ * opposite — the user deliberately keeping this one page plain.
+ */
+export async function applyPageFilter(
+  docId: string,
+  pageIndex: number,
+  choice: PageFilter | null,
+  render: FilterRenderer,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const page = doc.pages[pageIndex]
+  if (!page) throw new Error('Halaman tidak ditemukan.')
+
+  const withChoice: ScanPage = { ...page }
+  if (choice === null) delete withChoice.filter
+  else withChoice.filter = choice
+
+  doc.pages[pageIndex] = await renderPageFilter(
+    withChoice,
+    effectiveFilter(doc, withChoice),
+    render,
+  )
+
+  await writeIndex(docs)
+  return doc
+}
+
+/**
+ * Moves a page to a new position.
+ *
+ * Only the order in the index changes — no file is touched or rewritten, so
+ * this stays instant however large the pages are. The filenames deliberately
+ * keep their original numbers; they are identifiers, not positions, and
+ * renaming them would mean rewriting every page to fix an ordering that the
+ * index already expresses.
+ */
+export async function reorderPages(
+  docId: string,
+  from: number,
+  to: number,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const lastIndex = doc.pages.length - 1
+  if (from < 0 || from > lastIndex || to < 0 || to > lastIndex || from === to) return doc
+
+  const [moved] = doc.pages.splice(from, 1)
+  doc.pages.splice(to, 0, moved)
+
   await writeIndex(docs)
   return doc
 }
@@ -416,7 +609,7 @@ export async function createDocumentFromPages(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     id,
     title,
     createdAt: new Date().toISOString(),

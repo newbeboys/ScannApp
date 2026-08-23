@@ -542,6 +542,8 @@ function App() {
       <div className="app">
         <EditorScreen
           document={activeDocument}
+          tier={tier}
+          onUpgrade={() => setView({ kind: 'upgrade' })}
           onDocumentChange={(updated) => {
             setEditedInSession(true)
             applyDocumentChange(updated)

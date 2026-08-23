@@ -38,7 +38,7 @@ function seedIndex(title: string) {
   fs.readFile.mockResolvedValue({
     data: JSON.stringify([
       {
-        schemaVersion: 2,
+        schemaVersion: 3,
         id: 'doc-1',
         title,
         createdAt: '2026-08-23T00:00:00.000Z',
@@ -51,7 +51,7 @@ function seedIndex(title: string) {
 
 /** Index yang ditulis kembali ke disk pada pemanggilan terakhir. */
 function writtenIndex() {
-  const call = fs.writeFile.mock.calls.find((c) => c[0].path === 'scans/index.json')
+  const call = fs.writeFile.mock.calls.filter((c) => c[0].path === 'scans/index.json').at(-1)
   return JSON.parse(call![0].data)
 }
 
@@ -245,7 +245,7 @@ describe('restoreDocumentFromJpegs', () => {
     fs.readFile.mockResolvedValue({
       data: JSON.stringify([
         {
-          schemaVersion: 2,
+          schemaVersion: 3,
           id: cloudDoc.id,
           title: 'Dok agent',
           createdAt: cloudDoc.createdAt,
@@ -289,7 +289,7 @@ describe('restoreDocumentFromJpegs', () => {
    */
   it('keeps a document saved while the download was still running', async () => {
     const scannedMeanwhile = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       id: 'dipindai-saat-memulihkan',
       title: 'Scan baru',
       createdAt: '2026-08-23T01:00:00.000Z',

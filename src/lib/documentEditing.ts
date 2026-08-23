@@ -1,17 +1,66 @@
-import { cropImage, rotateImage, type CropRect, type Rotation } from './imageEditor'
+import { cropImage, filterImage, rotateImage, type CropRect, type Rotation } from './imageEditor'
 import {
+  applyDocumentFilter,
+  applyPageFilter,
+  effectiveFilter,
+  filterSource,
   invalidateDisplayUri,
   readPageBlob,
+  reorderPages,
   resetPageEdit,
   resolvePage,
   savePageEdit,
+  type DocumentFilter,
   type LocalScanDocument,
+  type PageFilter,
   type ScanPage,
 } from './scanStorage'
+import type { Tier } from './tier'
 
-/** Loads whatever the page currently shows — the edit if present, else the original. */
+/** Filter and reorder are Pro-exclusive (PRD Bagian 3). */
+const PRO_ONLY_MESSAGE: Record<'filter' | 'reorder', string> = {
+  filter: 'Filter dokumen hanya tersedia untuk Pro.',
+  reorder: 'Mengurutkan halaman hanya tersedia untuk Pro.',
+}
+
+/**
+ * Enforced here, not only in EditorScreen's button handlers — the same
+ * defense-in-depth the merge feature already uses (mergeDocuments throws on
+ * its own rather than trusting MergeScreen's disabled state). A UI check
+ * alone would leave every other caller of these functions free to bypass the
+ * paywall, and there is no way to see that from the screen's code.
+ */
+function requirePro(tier: Tier, tool: 'filter' | 'reorder'): void {
+  if (tier !== 'pro') throw new Error(PRO_ONLY_MESSAGE[tool])
+}
+
+/** Loads whatever the page currently shows — the filter, else the edit, else the original. */
 export async function loadPageBlob(page: ScanPage): Promise<Blob> {
   return readPageBlob(resolvePage(page))
+}
+
+/**
+ * Re-renders a page's filter after its geometry changed underneath it.
+ *
+ * `savePageEdit`/`resetPageEdit` both delete the now-outdated filter file as a
+ * side effect — right, since it was rendered from geometry that no longer
+ * exists — but neither can regenerate it themselves; they are storage,
+ * with no canvas to render with. This is the one place that closes the gap,
+ * shared by both `editPage` (after a crop/rotate) and `revertPage` (after
+ * undoing one), so the rule lives once rather than being copied per caller.
+ *
+ * A no-op when nothing is actually filtered — most pages, most of the time.
+ */
+async function reapplyFilter(
+  docId: string,
+  pageIndex: number,
+  doc: LocalScanDocument,
+): Promise<LocalScanDocument> {
+  const page = doc.pages[pageIndex]
+  const filter = effectiveFilter(doc, page)
+  if (!filter) return doc
+
+  return applyPageFilter(docId, pageIndex, page.filter ?? null, filterImage)
 }
 
 async function editPage(
@@ -22,13 +71,17 @@ async function editPage(
   const page = doc.pages[pageIndex]
   if (!page) throw new Error('Halaman tidak ditemukan.')
 
-  const source = await loadPageBlob(page)
+  // Read from the geometry chain rather than from what is on screen. Cropping
+  // the filtered render would bake the filter into `edited`, and the filter
+  // could never be changed again without losing the crop with it.
+  const source = await readPageBlob(filterSource(page))
   const result = await transform(source)
-  const updated = await savePageEdit(doc.id, pageIndex, result)
+  const saved = await savePageEdit(doc.id, pageIndex, result)
 
   // The edit reuses the same file path, so any cached object URL is stale.
-  invalidateDisplayUri(resolvePage(updated.pages[pageIndex]))
-  return updated
+  invalidateDisplayUri(resolvePage(saved.pages[pageIndex]))
+
+  return reapplyFilter(doc.id, pageIndex, saved)
 }
 
 /**
@@ -52,12 +105,63 @@ export async function cropPage(
   return editPage(doc, pageIndex, (blob) => cropImage(blob, rect))
 }
 
-/** Throws away every edit on a page and goes back to the untouched scan. */
+/**
+ * Throws away the crop/rotate on a page and goes back to the untouched scan.
+ * The page's own filter choice, if any, is untouched — "Asli" undoes geometry,
+ * not the user's mind about colour.
+ */
 export async function revertPage(
   doc: LocalScanDocument,
   pageIndex: number,
 ): Promise<LocalScanDocument> {
   const page = doc.pages[pageIndex]
-  if (page?.edited) invalidateDisplayUri(page.edited)
-  return resetPageEdit(doc.id, pageIndex)
+  if (!page?.edited) return doc
+
+  invalidateDisplayUri(page.edited)
+  const reverted = await resetPageEdit(doc.id, pageIndex)
+
+  return reapplyFilter(doc.id, pageIndex, reverted)
+}
+
+/**
+ * Sets the filter for the whole document.
+ *
+ * Every page without its own exception is re-rendered, which for a long
+ * document takes a few seconds — hence the progress callback.
+ */
+export async function setDocumentFilter(
+  doc: LocalScanDocument,
+  tier: Tier,
+  filter: DocumentFilter | null,
+  onProgress?: (done: number, total: number) => void,
+): Promise<LocalScanDocument> {
+  requirePro(tier, 'filter')
+  return applyDocumentFilter(doc.id, filter, filterImage, onProgress)
+}
+
+/**
+ * Sets one page's exception to the document filter — the colour chart in the
+ * middle of a black-and-white contract.
+ *
+ * `null` puts the page back under the document's choice.
+ */
+export async function setPageFilter(
+  doc: LocalScanDocument,
+  tier: Tier,
+  pageIndex: number,
+  choice: PageFilter | null,
+): Promise<LocalScanDocument> {
+  requirePro(tier, 'filter')
+  return applyPageFilter(doc.id, pageIndex, choice, filterImage)
+}
+
+/** Moves a page one step towards the front or the back of the document. */
+export async function movePage(
+  doc: LocalScanDocument,
+  tier: Tier,
+  pageIndex: number,
+  direction: -1 | 1,
+): Promise<LocalScanDocument> {
+  requirePro(tier, 'reorder')
+  return reorderPages(doc.id, pageIndex, pageIndex + direction)
 }

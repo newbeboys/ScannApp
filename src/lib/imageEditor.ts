@@ -1,3 +1,5 @@
+import { applyFilter } from './filters'
+import type { DocumentFilter } from './scanIndexMigration'
 import { BASIC_COMPRESSION } from './exportLimits'
 
 /** Crop area expressed as fractions of the source image (0..1), so it survives resizing. */
@@ -94,6 +96,29 @@ export async function compressImage(
   bitmap.close()
 
   return toBlob(canvas, options.quality)
+}
+
+/**
+ * Renders one of the document filters onto a page.
+ *
+ * Only the canvas work lives here — the pixel maths is in `filters.ts`, kept
+ * free of the DOM so it can be tested against known pixels under Node.
+ *
+ * Encoded at a higher quality than an ordinary edit: a filtered page is what
+ * the export and the backup are built from, and JPEG artefacts around
+ * thresholded text compound badly through a second encode.
+ */
+export async function filterImage(blob: Blob, filter: DocumentFilter): Promise<Blob> {
+  const bitmap = await decode(blob)
+  const [canvas, ctx] = draw(bitmap.width, bitmap.height)
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close()
+
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  applyFilter(filter, image.data, canvas.width, canvas.height)
+  ctx.putImageData(image, 0, 0)
+
+  return toBlob(canvas, 0.95)
 }
 
 /** Natural pixel size of an image, used by the crop overlay to keep its aspect ratio honest. */

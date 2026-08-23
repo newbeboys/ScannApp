@@ -1,35 +1,78 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CropOverlay } from '../components/CropOverlay'
-import { CheckIcon, ChevronLeftIcon, CloseIcon, CropIcon, RotateIcon, UndoIcon } from '../components/Icons'
-import { cropPage, loadPageBlob, revertPage, rotatePage } from '../lib/documentEditing'
+import { FilterPicker } from '../components/FilterPicker'
+import { pickToChoice, type FilterScope } from '../lib/filterChoice'
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  CloseIcon,
+  CropIcon,
+  ImageIcon,
+  MergeIcon,
+  RotateIcon,
+  UndoIcon,
+} from '../components/Icons'
+import { PageReorder } from '../components/PageReorder'
+import {
+  cropPage,
+  loadPageBlob,
+  movePage,
+  revertPage,
+  rotatePage,
+  setDocumentFilter,
+  setPageFilter,
+} from '../lib/documentEditing'
 import { getImageSize, type CropRect } from '../lib/imageEditor'
-import type { LocalScanDocument } from '../lib/scanStorage'
+import { effectiveFilter, type LocalScanDocument } from '../lib/scanStorage'
+import type { Tier } from '../lib/tier'
 
 interface EditorScreenProps {
   document: LocalScanDocument
+  tier: Tier
   onDocumentChange: (doc: LocalScanDocument) => void
   onClose: () => void
   onError: (message: string) => void
+  /** Basic taps a Pro tool: send them to the paywall rather than doing nothing. */
+  onUpgrade: () => void
 }
 
 const FULL_CROP: CropRect = { x: 0.05, y: 0.05, width: 0.9, height: 0.9 }
 
+/** Which tool is open. Only one at a time — they all want the whole screen. */
+type Mode = 'none' | 'crop' | 'filter' | 'reorder'
+
+const TITLES: Record<Mode, string> = {
+  none: 'Edit Halaman',
+  crop: 'Potong Halaman',
+  filter: 'Filter Dokumen',
+  reorder: 'Urutkan Halaman',
+}
+
 export function EditorScreen({
   document: doc,
+  tier,
   onDocumentChange,
   onClose,
   onError,
+  onUpgrade,
 }: EditorScreenProps) {
   const [pageIndex, setPageIndex] = useState(0)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [aspect, setAspect] = useState(1 / Math.SQRT2)
-  const [cropping, setCropping] = useState(false)
+  const [mode, setMode] = useState<Mode>('none')
   const [rect, setRect] = useState<CropRect>(FULL_CROP)
   const [isBusy, setIsBusy] = useState(false)
+  const [scope, setScope] = useState<FilterScope>('document')
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
 
   const page = doc.pages[pageIndex]
 
-  // Re-read the page whenever it changes on disk so edits show immediately.
+  // Re-read the page whenever it changes so edits — including a filter, which
+  // changes which file the page resolves to — show up immediately. Every
+  // storage mutation (crop, rotate, revert, filter) returns a fresh page
+  // object rather than mutating in place, so `page` itself is a new reference
+  // whenever what it resolves to has actually changed; nothing extra needs
+  // watching alongside it.
   useEffect(() => {
     if (!page) return
     let objectUrl: string | null = null
@@ -71,45 +114,92 @@ export function EditorScreen({
 
   const handleApplyCrop = async () => {
     await run(() => cropPage(doc, pageIndex, rect))
-    setCropping(false)
+    setMode('none')
     setRect(FULL_CROP)
   }
 
   const startCrop = () => {
     setRect(FULL_CROP)
-    setCropping(true)
+    setMode('crop')
+  }
+
+  /**
+   * Reorder and filters are Pro (PRD Bagian 3). Enforced here rather than only
+   * by hiding the buttons — Basic still sees them, because a tool nobody can
+   * see is a tool nobody knows they could buy.
+   */
+  const openProTool = (tool: 'filter' | 'reorder') => {
+    if (tier !== 'pro') return onUpgrade()
+    setMode(tool)
+  }
+
+  const handlePick = async (pick: Parameters<typeof pickToChoice>[0]) => {
+    if (tier !== 'pro') return onUpgrade()
+    const choice = pickToChoice(pick, scope)
+
+    setIsBusy(true)
+    try {
+      if ('document' in choice) {
+        // Every page is re-rendered, so a long document needs to say so.
+        setProgress({ done: 0, total: doc.pages.length })
+        onDocumentChange(
+          await setDocumentFilter(doc, tier, choice.document, (done, total) =>
+            setProgress({ done, total }),
+          ),
+        )
+      } else {
+        onDocumentChange(await setPageFilter(doc, tier, pageIndex, choice.page))
+      }
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Gagal menerapkan filter.')
+    } finally {
+      setProgress(null)
+      setIsBusy(false)
+    }
+  }
+
+  const handleMove = async (direction: -1 | 1) => {
+    const target = pageIndex + direction
+    await run(() => movePage(doc, tier, pageIndex, direction))
+    // Follow the page that moved, not the slot it left behind.
+    setPageIndex(target)
   }
 
   return (
     <div className="screen screen--flow">
       <header className="flow-header">
-        <button type="button" className="icon-button" onClick={onClose} aria-label="Kembali">
+        <button
+          type="button"
+          className="icon-button"
+          onClick={() => (mode === 'none' ? onClose() : setMode('none'))}
+          aria-label="Kembali"
+          disabled={isBusy}
+        >
           <ChevronLeftIcon size={20} />
         </button>
         <div className="flow-header__titles">
-          <h1>{cropping ? 'Potong Halaman' : 'Edit Halaman'}</h1>
+          <h1>{TITLES[mode]}</h1>
           <p>
-            {cropping
+            {mode === 'crop'
               ? 'Geser sudut untuk mengatur area'
               : `Halaman ${pageIndex + 1} dari ${doc.pageCount}`}
           </p>
         </div>
-        {page?.edited && !cropping && <span className="app-header__tier">Diedit</span>}
+        {page?.edited && mode === 'none' && <span className="app-header__tier">Diedit</span>}
       </header>
 
-      <div className="editor-stage" style={{ aspectRatio: String(aspect) }}>
-        {previewUrl && <img className="editor-image" src={previewUrl} alt={`Halaman ${pageIndex + 1}`} />}
-        {cropping && <CropOverlay rect={rect} onChange={setRect} />}
-      </div>
+      {mode !== 'reorder' && (
+        <div className="editor-stage" style={{ aspectRatio: String(aspect) }}>
+          {previewUrl && (
+            <img className="editor-image" src={previewUrl} alt={`Halaman ${pageIndex + 1}`} />
+          )}
+          {mode === 'crop' && <CropOverlay rect={rect} onChange={setRect} />}
+        </div>
+      )}
 
-      {cropping ? (
+      {mode === 'crop' && (
         <div className="editor-actions">
-          <button
-            type="button"
-            className="button"
-            onClick={() => setCropping(false)}
-            disabled={isBusy}
-          >
+          <button type="button" className="button" onClick={() => setMode('none')} disabled={isBusy}>
             <CloseIcon size={17} />
             <span>Batal</span>
           </button>
@@ -123,8 +213,32 @@ export function EditorScreen({
             <span>{isBusy ? 'Memproses…' : 'Terapkan'}</span>
           </button>
         </div>
-      ) : (
+      )}
+
+      {mode === 'filter' && page && (
+        <FilterPicker
+          active={effectiveFilter(doc, page)}
+          scope={scope}
+          progress={progress}
+          pageNumber={pageIndex + 1}
+          onScopeChange={setScope}
+          onPick={handlePick}
+        />
+      )}
+
+      {mode === 'reorder' && (
+        <PageReorder
+          pageCount={doc.pages.length}
+          pageIndex={pageIndex}
+          isBusy={isBusy}
+          onSelect={setPageIndex}
+          onMove={handleMove}
+        />
+      )}
+
+      {mode === 'none' && (
         <>
+          {/* This page's geometry. */}
           <div className="editor-actions">
             <button type="button" className="button" onClick={startCrop} disabled={isBusy}>
               <CropIcon size={17} />
@@ -145,11 +259,35 @@ export function EditorScreen({
             </button>
           </div>
 
+          {/* The whole document. Both Pro. */}
+          <div className="editor-actions">
+            <button
+              type="button"
+              className="button"
+              onClick={() => openProTool('filter')}
+              disabled={isBusy}
+            >
+              <ImageIcon size={17} />
+              <span>Filter</span>
+              {tier !== 'pro' && <span className="pro-tag">Pro</span>}
+            </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => openProTool('reorder')}
+              disabled={isBusy || doc.pages.length < 2}
+            >
+              <MergeIcon size={17} />
+              <span>Urutkan</span>
+              {tier !== 'pro' && <span className="pro-tag">Pro</span>}
+            </button>
+          </div>
+
           {doc.pages.length > 1 && (
             <div className="review-strip">
               {doc.pages.map((entry, index) => (
                 <button
-                  key={entry.original}
+                  key={`${entry.original}-${index}`}
                   type="button"
                   className={`editor-thumb${index === pageIndex ? ' editor-thumb--active' : ''}`}
                   onClick={() => setPageIndex(index)}

@@ -96,13 +96,9 @@ Catatan tambahan di luar daftar asli:
 - [x] Uji nyata ke R2: unggah, unduh (isi identik), tolak tanpa token (401), hapus (object 404 & hitungan kembali 0)
 - [x] Semua peringatan advisor `SECURITY DEFINER` ditutup, termasuk `rls_auto_enable()` peninggalan setup awal. Fungsinya dipertahankan (jaring pengaman yang menyalakan RLS otomatis tiap `CREATE TABLE`), hanya hak EXECUTE role publik yang dicabut — diverifikasi jaring pengamannya masih bekerja setelah itu
 
-**Terblokir — butuh Boss Ali (5 menit di dashboard Cloudflare):**
+**~~Terblokir — CORS bucket `scanappstorage`~~ — ternyata tidak memblokir aplikasi native.** Diperiksa langsung di database produksi 23 Agustus 2026: dua dokumen milik `demofimance@gmail.com` benar-benar tercatat di `scan_documents` dengan `local_only=false` — 326.679 dan 340.191 byte, berjumlah **persis** sama dengan `storage_usage.bytes_used` (666.870). Ukuran itu bukan klaim client: `confirm-upload` mengambilnya dari HTTP HEAD sungguhan ke R2, jadi barisnya tidak akan ada kalau objeknya tidak benar-benar sampai. Entah CORS sudah dipasang Boss Ali tanpa dicatat di sini, atau lapisan native memang tidak melewati preflight browser — yang jelas unggahan dari HP berhasil. Kalau nanti ada versi web (bukan APK), CORS perlu ditinjau ulang; JSON-nya ada di spec Fase 4 Bagian 9.
 
-- [ ] **Pasang kebijakan CORS di bucket `scanappstorage`.** Tanpa ini, unggah dari aplikasi diblokir preflight browser. Kredensial R2 yang tersimpan cuma punya izin Object Read & Write, jadi `PutBucketCors` ditolak 403 — harus lewat dashboard. JSON-nya ada di spec Fase 4 Bagian 9.
-
-**Belum diverifikasi di device fisik:**
-
-- [ ] Cadangkan dokumen sungguhan dari HP setelah CORS dipasang
+- [x] Cadangkan dokumen sungguhan dari HP — terbukti dari dua baris di atas
 - [ ] Unduh cadangan di HP (harus membuka/menyimpan PDF)
 
 ## Fase 5 — Fitur Iklan & Monetisasi (Basic)

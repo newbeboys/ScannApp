@@ -492,8 +492,19 @@ export type FilterRenderer = (source: Blob, filter: DocumentFilter) => Promise<B
  * not carrying its own exception.
  *
  * One index write at the end rather than one per page: twenty pages would
- * otherwise mean twenty rewrites of the same file, each a window in which a
- * crash leaves the index disagreeing with what is on disk.
+ * otherwise mean twenty rewrites of the same file, each its own chance to be
+ * interrupted half-written.
+ *
+ * That does not make a failure atomic, and it is worth being plain about what
+ * it costs. Page files are written before the index is, so giving up at page
+ * five leaves five pages already re-rendered on disk under an index that still
+ * describes the old filter. The state is visible (those pages look different)
+ * and self-healing (the derived path is fixed per page, so the next successful
+ * run overwrites them and the index catches up), and nothing the user cannot
+ * regenerate is lost — `original` and `edited` are never touched here. Making
+ * it truly atomic needs the render written to a path that carries the filter's
+ * name, so a half-finished run leaves files the index simply never mentions;
+ * that is a storage-layout change, not a tweak to this loop.
  */
 export async function applyDocumentFilter(
   docId: string,

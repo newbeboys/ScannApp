@@ -264,9 +264,28 @@ Pengelompokan `Export tambahan: DOCX, PNG` di daftar asli dipecah: PNG masuk ke 
 
 **Diubah 23 Agustus 2026 (sore):** export PNG semula Pro-exclusive di PRD Bagian 3, sekarang **semua tier** atas permintaan Boss Ali. Menggantikan baris "Export format" di PRD; lihat catatan di PRD Bagian 3 dan CLAUDE.md Bagian 6.
 
+**Tiga perbaikan dari code-review, dikerjakan sebelum lanjut ke potongan B (permintaan Boss Ali):**
+
+- [x] **Filter per-halaman bisa jalan dobel.** `FilterPicker` cuma menerima `progress`, yang hanya diisi untuk scope dokumen — chip tetap hidup selama render satu halaman, dan ketukan kedua memulai render kedua yang menulis file dan index yang sama. Sekarang komponennya menerima `isBusy`
+- [x] **Chip "Asli" bisa menghapus filter seluruh dokumen.** Chip yang tersorot selalu diambil dari filter efektif halaman yang terbuka, padahal scope bisa "Semua halaman": dokumen Hitam-Putih dengan halaman yang dikecualikan menyalakan "Asli", jadi terlihat seolah dokumen tidak berfilter — dan menekannya (tampak tanpa efek) justru menjalankan `setDocumentFilter(null)`. Sekarang sorotan mengikuti scope
+- [x] **Seleksi pindah walau geseran gagal.** `run()` menelan error, jadi `setPageIndex` tetap jalan dan geseran berikutnya mengenai halaman yang salah. `run()` sekarang melaporkan berhasil/gagal
+
+Temuan keempat (**file filter yatim kalau `applyDocumentFilter` gagal di tengah**) **tidak diubah** — itu trade-off yang memang disengaja dan sudah tertulis di komentarnya: satu tulisan index di akhir, bukan dua puluh. Yang diperbaiki komentarnya, yang tadinya menjanjikan lebih dari yang sebenarnya dijamin. Keadaan setelah gagal terlihat oleh user, sembuh sendiri saat filter diterapkan lagi (nama file turunan tetap per halaman, jadi ditimpa), dan tidak ada yang hilang — `original` dan `edited` tidak pernah disentuh di situ. Membuatnya benar-benar atomik butuh nama file yang memuat nama filter, yaitu perubahan tata letak penyimpanan, bukan perbaikan loop.
+
+**Terverifikasi di Chromium sungguhan** (bukan di HP — lihat catatan di bawah). `imageEditor.compressImage` dijalankan langsung di browser lewat halaman uji sekali pakai:
+
+- JPEG keluar sebagai JPEG (`ff d8 ff e0`), PNG keluar sebagai PNG (`89 50 4e 47`) — jalur PNG betul-betul memakai encoder PNG
+- Batas sisi terpanjang dipatuhi: 3000×4200 → 1714×2400 di Standar, → 2857×4000 di Maksimal, rasio terjaga
+- Ukuran menurun monoton menurut level: 200 KB (Kecil) → 395 KB (Standar) → 956 KB (Maksimal)
+- **Jebakan PNG-dari-JPEG terbukti nyata:** PNG dari halaman asli 102 KB, PNG dari hasil JPEG 191 KB — 87% lebih berat tanpa satu piksel pun membaik
+- **PNG vs JPEG sangat bergantung isi halaman:** scan kamera ber-noise 11,3× lebih besar; bercahaya rata 13,8× lebih besar; setelah filter Hitam-Putih justru **4× lebih kecil**. Rentang ini yang membuat perkiraan ukuran harus **diukur dari halamannya**, bukan ditebak dengan rumus — dan yang membenarkan teks "pas untuk Hitam-Putih" di lembar Ekspor
+
 **Belum diverifikasi di device fisik** (butuh Boss Ali):
 
 - [ ] Geser slider di HP — takiknya terasa jelas dengan jempol, tidak meleset antar level
+- [ ] Ekspor PNG dokumen **tanpa filter** — angkanya bisa puluhan MB (11× JPEG). Pastikan HP tidak kehabisan memori saat menulis & membagikannya
+- [ ] Filter satu halaman: ketuk cepat dua chip berbeda — chip harus terkunci sejak ketukan pertama
+- [ ] Dokumen berfilter Hitam-Putih dengan satu halaman dikecualikan: buka Filter di halaman itu dengan scope "Semua halaman" — chip yang menyala harus **Hitam-Putih**, bukan "Asli"
 - [ ] Perkiraan ukuran muncul dalam waktu wajar untuk dokumen 15+ halaman, dan tidak membuat lembar Ekspor terasa macet saat slider digeser cepat
 - [ ] Ekspor PNG dari akun **Basic** berhasil — tidak ada paywall yang menghadang
 - [ ] Bandingkan ukuran berkas sungguhan dengan angka perkiraan; kalau melenceng jauh, `PDF_STRUCTURE_BYTES_PER_PAGE` perlu disetel ulang

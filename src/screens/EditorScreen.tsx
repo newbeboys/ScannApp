@@ -88,13 +88,16 @@ export function EditorScreen({
     }
   }, [page, onError])
 
+  /** Reports whether the change went through — the error itself is already shown. */
   const run = useCallback(
-    async (action: () => Promise<LocalScanDocument>) => {
+    async (action: () => Promise<LocalScanDocument>): Promise<boolean> => {
       setIsBusy(true)
       try {
         onDocumentChange(await action())
+        return true
       } catch (error) {
         onError(error instanceof Error ? error.message : 'Gagal mengubah halaman.')
+        return false
       } finally {
         setIsBusy(false)
       }
@@ -143,9 +146,11 @@ export function EditorScreen({
 
   const handleMove = async (direction: -1 | 1) => {
     const target = pageIndex + direction
-    await run(() => movePage(doc, pageIndex, direction))
-    // Follow the page that moved, not the slot it left behind.
-    setPageIndex(target)
+    // Follow the page that moved, not the slot it left behind — but only once
+    // it really has moved. `run` reports the failure and leaves the order
+    // alone, so moving the selection anyway would leave it on a page the user
+    // never chose, and the next tap would shift the wrong one.
+    if (await run(() => movePage(doc, pageIndex, direction))) setPageIndex(target)
   }
 
   return (
@@ -200,8 +205,17 @@ export function EditorScreen({
 
       {mode === 'filter' && page && (
         <FilterPicker
-          active={effectiveFilter(doc, page)}
+          /*
+            Which filter reads as chosen depends on the scope the chips are
+            about to act on. Always answering with the open page's effective
+            filter lit "Asli" whenever that page carried a 'none' exception —
+            even while the document itself was black-and-white — so the chip
+            claimed the document was unfiltered, and tapping it (an apparent
+            no-op) stripped the filter from every other page.
+          */
+          active={scope === 'document' ? (doc.filter ?? null) : effectiveFilter(doc, page)}
           scope={scope}
+          isBusy={isBusy}
           progress={progress}
           pageNumber={pageIndex + 1}
           onScopeChange={setScope}

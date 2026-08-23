@@ -76,7 +76,16 @@ async function exportPdf(
  *
  * PNG runs the same resize but a different encoder — it is never derived from
  * the JPEG one. Re-wrapping an already-compressed page losslessly produces a
- * far larger file without recovering a single pixel of what JPEG discarded.
+ * far larger file without recovering a single pixel of what JPEG discarded:
+ * measured in Chromium on a 3000x4200 page, PNG from the original came to
+ * 102 KB against 191 KB for PNG from the JPEG intermediate — 87% heavier for
+ * nothing.
+ *
+ * The same measurements are why the sheet shows a size per format rather than
+ * describing PNG in words. Against JPEG, PNG came out 11x larger on a noisy
+ * camera scan, 14x larger on an evenly lit one, and 4x *smaller* once the
+ * Hitam-Putih filter had reduced the page to two colours. No rule of thumb
+ * survives that spread, so the number is measured from the page itself.
  */
 async function exportImages(
   doc: LocalScanDocument,

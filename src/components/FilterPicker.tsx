@@ -3,9 +3,18 @@ import { FILTER_LABELS } from '../lib/filters'
 import type { FilterScope } from '../lib/filterChoice'
 
 interface FilterPickerProps {
-  /** What the open page renders with right now, or null for no filter. */
+  /** The filter the chips should show as chosen, for the scope in force. */
   active: DocumentFilter | null
   scope: FilterScope
+  /**
+   * Any render in flight, page-scope included.
+   *
+   * `progress` alone is not enough: it is only filled for a whole-document
+   * render, so relying on it left the chips live during a single-page one —
+   * long enough to start a second render that writes the same file and the
+   * same index as the first.
+   */
+  isBusy: boolean
   /** Progress while a long document is being re-rendered, or null when idle. */
   progress: { done: number; total: number } | null
   pageNumber: number
@@ -24,12 +33,13 @@ interface FilterPickerProps {
 export function FilterPicker({
   active,
   scope,
+  isBusy,
   progress,
   pageNumber,
   onScopeChange,
   onPick,
 }: FilterPickerProps) {
-  const busy = progress !== null
+  const busy = isBusy || progress !== null
 
   return (
     <div className="filter-picker">

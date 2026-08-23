@@ -1,6 +1,6 @@
 import { applyFilter } from './filters'
 import type { DocumentFilter } from './scanIndexMigration'
-import { BASIC_COMPRESSION } from './exportLimits'
+import { BASIC_COMPRESSION, type CompressOptions } from './exportLimits'
 
 /** Crop area expressed as fractions of the source image (0..1), so it survives resizing. */
 export interface CropRect {
@@ -11,11 +11,6 @@ export interface CropRect {
 }
 
 export type Rotation = 90 | 180 | 270
-
-export interface CompressOptions {
-  quality: number
-  maxEdgePx: number
-}
 
 const JPEG = 'image/jpeg'
 
@@ -37,11 +32,16 @@ function draw(width: number, height: number): [HTMLCanvasElement, CanvasRenderin
   return [canvas, ctx]
 }
 
-function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+function toBlob(
+  canvas: HTMLCanvasElement,
+  quality: number,
+  mimeType: string = JPEG,
+): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error('Gagal mengubah gambar.'))),
-      JPEG,
+      mimeType,
+      // Ignored by the PNG encoder, which is lossless — harmless to pass.
       quality,
     )
   })
@@ -79,9 +79,11 @@ export async function cropImage(blob: Blob, rect: CropRect): Promise<Blob> {
 }
 
 /**
- * Single standard compression level for Basic (PRD Bagian 3): cap the long
- * edge and re-encode as JPEG. Pro gets a manual quality slider in Fase 6,
- * which is why the options are a parameter rather than baked in.
+ * Caps the long edge and re-encodes the page for export.
+ *
+ * Basic always arrives here with the standard preset; Pro can arrive with any
+ * of the four levels (`COMPRESSION_PRESETS`). `mimeType` picks the encoder —
+ * PNG exports run this same resize and then encode losslessly.
  */
 export async function compressImage(
   blob: Blob,
@@ -95,7 +97,7 @@ export async function compressImage(
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
   bitmap.close()
 
-  return toBlob(canvas, options.quality)
+  return toBlob(canvas, options.quality, options.mimeType)
 }
 
 /**

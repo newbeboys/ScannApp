@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { checkMergeAllowed, MAX_BASIC_MERGE_PAGES, shouldWatermark } from './exportLimits'
+import {
+  canChooseCompression,
+  checkMergeAllowed,
+  COMPRESSION_LABELS,
+  COMPRESSION_LEVELS,
+  COMPRESSION_PRESETS,
+  MAX_BASIC_MERGE_PAGES,
+  resolveCompressionLevel,
+  shouldWatermark,
+  type CompressionLevel,
+} from './exportLimits'
 
 /** Angka final dari PRD Bagian 3 / CLAUDE.md Bagian 6. */
 describe('MAX_BASIC_MERGE_PAGES', () => {
@@ -46,5 +56,73 @@ describe('shouldWatermark', () => {
 
   it('leaves Pro exports clean', () => {
     expect(shouldWatermark('pro')).toBe(false)
+  })
+})
+
+/**
+ * Fase 6 potongan A: the manual compression control (Pro).
+ *
+ * The slider is only honest if the presets really do trade quality against
+ * size in one direction, so that is asserted rather than assumed.
+ */
+describe('COMPRESSION_PRESETS', () => {
+  it('lists the levels from smallest file to best quality', () => {
+    expect(COMPRESSION_LEVELS).toEqual(['small', 'standard', 'high', 'max'])
+  })
+
+  it('leaves the standard level exactly where Basic has always been', () => {
+    expect(COMPRESSION_PRESETS.standard).toEqual({ quality: 0.75, maxEdgePx: 2400 })
+  })
+
+  it('raises quality at every step up', () => {
+    const qualities = COMPRESSION_LEVELS.map((level) => COMPRESSION_PRESETS[level].quality)
+
+    expect(qualities).toEqual([...qualities].sort((a, b) => a - b))
+    expect(new Set(qualities).size).toBe(qualities.length)
+  })
+
+  it('raises the pixel ceiling at every step up', () => {
+    const edges = COMPRESSION_LEVELS.map((level) => COMPRESSION_PRESETS[level].maxEdgePx)
+
+    expect(edges).toEqual([...edges].sort((a, b) => a - b))
+    expect(new Set(edges).size).toBe(edges.length)
+  })
+
+  it('caps even the best level, so a huge scan cannot exhaust a low-end phone', () => {
+    expect(COMPRESSION_PRESETS.max.maxEdgePx).toBeLessThanOrEqual(4000)
+  })
+
+  it('names every level in Indonesian for the slider', () => {
+    for (const level of COMPRESSION_LEVELS) {
+      expect(COMPRESSION_LABELS[level]).toBeTruthy()
+    }
+  })
+})
+
+describe('resolveCompressionLevel', () => {
+  it('gives Pro the level it asked for', () => {
+    expect(resolveCompressionLevel('pro', 'small')).toBe('small')
+    expect(resolveCompressionLevel('pro', 'max')).toBe('max')
+  })
+
+  /**
+   * Enforced here rather than only in the sheet: hiding the control in the UI
+   * is not the same as refusing it, and Fase 6 bagian 1 already produced one
+   * review finding for exactly that mistake.
+   */
+  it('pins Basic to standard however it asks', () => {
+    expect(resolveCompressionLevel('basic', 'max')).toBe('standard')
+    expect(resolveCompressionLevel('basic', 'small')).toBe('standard')
+  })
+
+  it('falls back to standard for a level it does not recognise', () => {
+    expect(resolveCompressionLevel('pro', 'enormous' as CompressionLevel)).toBe('standard')
+  })
+})
+
+describe('canChooseCompression', () => {
+  it('is a Pro control (PRD Bagian 3)', () => {
+    expect(canChooseCompression('pro')).toBe(true)
+    expect(canChooseCompression('basic')).toBe(false)
   })
 })

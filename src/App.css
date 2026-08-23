@@ -1155,6 +1155,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .format-option__text strong {
@@ -1165,6 +1166,143 @@
 .format-option__text small {
   font-size: 12px;
   color: var(--fg-dim);
+}
+
+/*
+  Estimated size, right-aligned so the three formats form a column the eye can
+  compare down — which is the whole point of showing PNG's number rather than
+  warning about it in a sentence.
+*/
+.format-option__size {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- kontrol kualitas ekspor (Fase 6) ---------- */
+
+.export-quality {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--chip-border);
+  background: var(--chip);
+}
+
+.export-quality__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.export-quality__value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--acc);
+}
+
+.export-quality__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  margin: 0;
+}
+
+/*
+  `--fill` comes from the element's inline style. A uniformly grey track reads
+  as a setting that is switched off rather than one resting at a level.
+*/
+.export-quality__slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--acc) 0 var(--fill, 0%),
+    var(--chip-border) var(--fill, 0%) 100%
+  );
+}
+
+.export-quality__slider:disabled::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    var(--fg-dim) 0 var(--fill, 0%),
+    var(--chip-border) var(--fill, 0%) 100%
+  );
+}
+
+.export-quality__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--acc);
+  border: 3px solid var(--surface);
+  box-shadow: 0 2px 6px rgba(20, 34, 70, 0.28);
+}
+
+.export-quality__slider:disabled::-webkit-slider-thumb {
+  background: var(--fg-dim);
+}
+
+.export-quality__slider:disabled {
+  opacity: 0.7;
+}
+
+.export-quality__ticks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  font-size: 11px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+.export-quality__tick:first-child {
+  text-align: left;
+}
+
+.export-quality__tick:last-child {
+  text-align: right;
+}
+
+.export-quality__tick--on {
+  color: var(--acc);
+  font-weight: 700;
+}
+
+.export-quality__hint {
+  font-size: 12px;
+  color: var(--fg-dim);
+  line-height: 1.45;
+}
+
+/* Basic sees the control it does not have yet, not a blank space. */
+.export-quality__lock {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 2px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  border: 1px solid var(--upgrade-soft);
+  background: var(--upgrade-soft);
+  color: var(--upgrade);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.export-quality__lock .pro-badge {
+  align-self: center;
 }
 
 /* ---------- merge ---------- */

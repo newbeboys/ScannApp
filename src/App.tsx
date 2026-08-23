@@ -19,6 +19,9 @@ import { restoreBackup } from './lib/cloudRestore'
 import { mergeDocumentEntries } from './lib/documentEntries'
 import { quotaBytesFor } from './lib/storageQuota'
 import { exportDocument, type ExportFormat } from './lib/documentExport'
+import { estimateExportSizes, type ExportSizeEstimate } from './lib/exportEstimate'
+import { readExportLevel, writeExportLevel } from './lib/exportPreference'
+import type { CompressionLevel } from './lib/exportLimits'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
 import {
@@ -68,6 +71,9 @@ function App() {
   const [isExporting, setIsExporting] = useState(false)
   const [isMerging, setIsMerging] = useState(false)
   const [exportTarget, setExportTarget] = useState<string | null>(null)
+  // Read once at mount: what the user chose on a previous export.
+  const [exportLevel, setExportLevel] = useState<CompressionLevel>(() => readExportLevel())
+  const [exportEstimate, setExportEstimate] = useState<ExportSizeEstimate | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   /** Every document this account has in the cloud, whether or not it is on the phone. */
   const [backups, setBackups] = useState<CloudBackup[]>([])
@@ -138,6 +144,47 @@ function App() {
     const timer = setTimeout(() => setToast(null), 2600)
     return () => clearTimeout(timer)
   }, [toast])
+
+  /**
+   * Measures what each format would weigh at the chosen level, so the export
+   * sheet can put a number next to every option instead of asking the user to
+   * trade quality against a size they cannot see.
+   *
+   * Held back by a short delay rather than started on every step. Each run
+   * decodes a full-resolution page and encodes it twice — once of that is
+   * cheap, four overlapping copies of it on a low-end phone is not, and a drag
+   * from Kecil to Maksimal passes through every stop on the way. `cancelled`
+   * covers the run already in flight when the next one starts, so a slower
+   * earlier measurement cannot land last and label the wrong level.
+   */
+  useEffect(() => {
+    const doc = documents.find((entry) => entry.id === exportTarget)
+    if (!doc) {
+      setExportEstimate(null)
+      return
+    }
+
+    let cancelled = false
+    // Cleared straight away: a stale number under a level the user just moved
+    // off is worse than no number at all.
+    setExportEstimate(null)
+
+    const timer = setTimeout(() => {
+      estimateExportSizes(doc, tier, exportLevel)
+        .then((sizes) => {
+          if (!cancelled) setExportEstimate(sizes)
+        })
+        .catch(() => {
+          // No number is better than a wrong one; the sheet simply shows none.
+          if (!cancelled) setExportEstimate(null)
+        })
+    }, 220)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [documents, exportTarget, exportLevel, tier])
 
   const runScanner = async (): Promise<string[] | null> => {
     setIsScanning(true)
@@ -223,7 +270,7 @@ function App() {
     if (!doc) return
     setIsExporting(true)
     try {
-      const result = await exportDocument(doc, format, tier)
+      const result = await exportDocument(doc, format, tier, exportLevel)
       setExportTarget(null)
       setToast(result.message)
       // No ad here any more. Exporting stopped being a trigger when Boss Ali
@@ -431,7 +478,17 @@ function App() {
       pageCount={exportDoc.pageCount}
       tier={tier}
       isBusy={isExporting}
+      level={exportLevel}
+      estimate={exportEstimate}
+      onLevelChange={(next) => {
+        setExportLevel(next)
+        writeExportLevel(next)
+      }}
       onExport={handleExport}
+      onUpgrade={() => {
+        setExportTarget(null)
+        setView({ kind: 'upgrade' })
+      }}
       onClose={() => setExportTarget(null)}
     />
   )

@@ -225,8 +225,8 @@ Desain: `docs/superpowers/specs/2026-08-23-fase6-reorder-filter-design.md`
 - [ ] Tanda tangan digital
 - [x] Reorder halaman — tombol geser kiri/kanan (bukan seret-lepas, lihat spec Bagian 2.6). **Semua tier**
 - [x] Filter lanjutan — **5 filter** (Boss Ali menaikkan dari 2 di PRD Bagian 3): Magic Color, Cerah, Abu-abu, Hitam-Putih (ambang adaptif lokal), Hemat Tinta. Berlaku untuk seluruh dokumen, bisa dikecualikan per halaman. **Semua tier**
-- [ ] Export tambahan: DOCX, PNG
-- [ ] Kontrol level kompresi manual (slider kualitas vs ukuran)
+- [x] Export tambahan: **PNG** — **semua tier** (lihat catatan di bawah). DOCX belum: tanpa OCR isinya cuma gambar tertempel, jadi dipindah ke potongan yang sama dengan OCR
+- [x] Kontrol level kompresi manual (slider kualitas vs ukuran) — **4 takik**, tetap Pro
 - [ ] Batch scan/export
 
 **Diubah 23 Agustus 2026 (keputusan Boss Ali):** reorder halaman & filter dokumen semula Pro-exclusive, sekarang **tersedia untuk Basic maupun Pro** — bukan cuma akun Pro. Menggantikan baris di PRD Bagian 3 dan CLAUDE.md Bagian 6; lihat catatan di kedua file itu. Annotate dan tanda tangan digital di daftar di atas tetap Pro-exclusive (belum dikerjakan).
@@ -245,6 +245,33 @@ Catatan tambahan di luar daftar asli (lihat spec Bagian 2 & 3):
 - [ ] Filter untuk dokumen 15+ halaman tidak terasa lama/macet (progress bar muncul selama proses)
 - [ ] Hasil Hitam-Putih tetap bersih di halaman yang tercahaya tidak rata (foto dokumen dengan bayangan tangan)
 - [ ] Akun Basic melihat tombol Filter & Urutkan **tanpa** lencana "Pro" dan bisa langsung memakainya
+
+### Fase 6 bagian 2 — Kontrol Export (23 Agustus 2026)
+
+Sisa Fase 6 dipecah jadi empat potongan yang bisa jalan sendiri-sendiri; ini yang pertama. Urutan sisanya: **B** annotate + tanda tangan (satu pipeline kanvas), **C** batch scan/export, **D** OCR + DOCX (paling berat, butuh engine OCR on-device — perlu spike memilih engine dulu).
+
+Pengelompokan `Export tambahan: DOCX, PNG` di daftar asli dipecah: PNG masuk ke potongan ini (cuma varian encoder dari export JPG yang sudah ada), DOCX ikut OCR karena DOCX tanpa lapisan teks isinya hanya gambar tertempel.
+
+- [x] **Export PNG — semua tier.** PNG diturunkan langsung dari halaman hasil `resolvePage()`, hanya lewat bagian perkecilan dari level yang dipilih, lalu di-encode `image/png`. **Tidak pernah** lewat encoder JPEG dulu: PNG dari hasil JPEG adalah salinan lossless dari piksel yang sudah lossy — berkasnya membengkak tanpa satu piksel pun jadi lebih baik
+- [x] **Slider kompresi manual (Pro) — 4 takik**, bukan 0–100 bebas. Mata tidak membedakan q=0.72 dari q=0.75, jadi slider bebas menjanjikan presisi yang tidak ada dan memaksa encode ulang tiap geseran. Standar = 0.75/2400px, identik dengan nilai Basic yang lama
+- [x] Gerbang Pro ditegakkan di `resolveCompressionLevel()`, bukan cuma di UI — Basic yang meminta level apa pun tetap dapat Standar
+- [x] Pilihan level diingat di `localStorage`; nilai rusak/hilang/storage terkunci semuanya jatuh ke Standar tanpa melempar error
+- [x] **Perkiraan ukuran per format** di lembar Ekspor (`≈ 2,3 MB` / `≈ 17 MB`) — halaman pertama saja yang di-encode lalu dikali jumlah halaman, supaya menggeser slider di dokumen 30 halaman tidak makan waktu. Angka PNG yang jauh lebih besar jadi terlihat sendiri, tidak perlu kalimat peringatan
+- [x] Perkiraannya memakai tier yang sama dengan ekspor sungguhan, jadi Basic tidak pernah diperlihatkan ukuran yang tidak bisa ia dapatkan
+- [x] Test bertambah 31 (total 308)
+
+**Cadangan cloud sengaja tidak ikut level ini** (keputusan Boss Ali): `buildPdfFile()` dipaku ke Standar. Kalau ikut, satu pilihan di lembar Ekspor diam-diam menentukan berapa kuota R2 yang dimakan sebuah cadangan dan mutu maksimal yang bisa dikembalikan `cloudRestore` — dua hal yang tidak sedang dipikirkan user saat menekan tombol ekspor.
+
+**Diubah 23 Agustus 2026 (sore):** export PNG semula Pro-exclusive di PRD Bagian 3, sekarang **semua tier** atas permintaan Boss Ali. Menggantikan baris "Export format" di PRD; lihat catatan di PRD Bagian 3 dan CLAUDE.md Bagian 6.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Geser slider di HP — takiknya terasa jelas dengan jempol, tidak meleset antar level
+- [ ] Perkiraan ukuran muncul dalam waktu wajar untuk dokumen 15+ halaman, dan tidak membuat lembar Ekspor terasa macet saat slider digeser cepat
+- [ ] Ekspor PNG dari akun **Basic** berhasil — tidak ada paywall yang menghadang
+- [ ] Bandingkan ukuran berkas sungguhan dengan angka perkiraan; kalau melenceng jauh, `PDF_STRUCTURE_BYTES_PER_PAGE` perlu disetel ulang
+- [ ] Akun Basic: slider terkunci di Standar & baris "Pro" membuka paywall
+- [ ] Cadangkan dokumen setelah memilih level Maksimal — ukuran di layar Cadangan **tidak boleh** ikut membengkak (bukti cadangan tetap Standar)
 
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 

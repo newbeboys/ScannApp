@@ -235,3 +235,14 @@ export function ImageIcon({ size = 24, className }: IconProps) {
     </svg>
   )
 }
+
+/** PNG: the same picture frame as JPG but stacked, so the two rows never read alike. */
+export function ImageStackIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <rect x="7.5" y="3.5" width="13" height="13" rx="2" />
+      <path d="M16.5 20.5h-9a2 2 0 0 1-2-2v-9" />
+      <path d="m9.5 13.6 3-3.2 2.3 2.4 1.8-1.6 2.9 2.9" />
+    </svg>
+  )
+}

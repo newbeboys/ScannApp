@@ -29,6 +29,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Suite "browser" menjalankan imageEditor & komponen React di Chromium
+      # sungguhan — canvas dan encoder JPEG/PNG-nya tidak bisa dipalsukan.
+      # Tanpa langkah ini `npm test` gagal di runner yang belum punya browser.
+      - name: Install Chromium for browser tests
+        run: npx playwright install --with-deps chromium
+
       - name: Unit tests
         run: npm test
 

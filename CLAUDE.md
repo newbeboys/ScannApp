@@ -36,6 +36,11 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 - Penamaan file/folder: `kebab-case` untuk file, `PascalCase` untuk komponen React.
 - State management: gunakan pola yang sama dengan FinanceApp kecuali ada alasan kuat untuk berbeda (konsistensi antar proyek Boss Ali).
 - Setiap fitur baru yang menyentuh tabel Supabase wajib menyertakan migration SQL, bukan perubahan manual lewat dashboard.
+- **Dua suite test, pilih yang benar** (ditetapkan 23 Agustus 2026, lihat `vitest.config.ts`):
+  - `*.test.ts` → suite **node**, tanpa DOM. Untuk logika murni: perhitungan tier, migrasi index, kuota, matematika piksel filter. Ini mayoritas dan paling cepat.
+  - `*.browser.test.ts` / `*.browser.test.tsx` → suite **browser**, Chromium sungguhan lewat Playwright. Untuk kode yang tugasnya memang bicara ke browser (`imageEditor` — kebenarannya ada di `canvas.toBlob` dan encoder JPEG/PNG) dan untuk komponen React (`vitest-browser-react`; `render()` mengembalikan Promise, jadi wajib `await`).
+  - Jalankan salah satu saja dengan `npm run test:node` / `npm run test:browser`; `npm test` menjalankan keduanya.
+  - **Jangan me-mock canvas untuk menguji kode canvas** — yang terbukti cuma bahwa mock-nya dipanggil. Kalau perlu bukti bahwa sebuah berkas benar-benar JPEG/PNG, periksa byte awalnya (`ff d8 ff` / `89 50 4e 47`), bukan nama atau tipe MIME-nya.
 
 ## 5. Alur Kerja yang Diharapkan
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CropOverlay } from '../components/CropOverlay'
 import { FilterPicker } from '../components/FilterPicker'
-import { pickToChoice, type FilterScope } from '../lib/filterChoice'
+import { activeChip, pickToChoice, type FilterScope } from '../lib/filterChoice'
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -23,7 +23,7 @@ import {
   setPageFilter,
 } from '../lib/documentEditing'
 import { getImageSize, type CropRect } from '../lib/imageEditor'
-import { effectiveFilter, type LocalScanDocument } from '../lib/scanStorage'
+import type { LocalScanDocument } from '../lib/scanStorage'
 
 interface EditorScreenProps {
   document: LocalScanDocument
@@ -205,15 +205,7 @@ export function EditorScreen({
 
       {mode === 'filter' && page && (
         <FilterPicker
-          /*
-            Which filter reads as chosen depends on the scope the chips are
-            about to act on. Always answering with the open page's effective
-            filter lit "Asli" whenever that page carried a 'none' exception —
-            even while the document itself was black-and-white — so the chip
-            claimed the document was unfiltered, and tapping it (an apparent
-            no-op) stripped the filter from every other page.
-          */
-          active={scope === 'document' ? (doc.filter ?? null) : effectiveFilter(doc, page)}
+          active={activeChip(scope, doc, page)}
           scope={scope}
           isBusy={isBusy}
           progress={progress}

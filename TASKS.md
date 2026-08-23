@@ -280,6 +280,23 @@ Temuan keempat (**file filter yatim kalau `applyDocumentFilter` gagal di tengah*
 - **Jebakan PNG-dari-JPEG terbukti nyata:** PNG dari halaman asli 102 KB, PNG dari hasil JPEG 191 KB — 87% lebih berat tanpa satu piksel pun membaik
 - **PNG vs JPEG sangat bergantung isi halaman:** scan kamera ber-noise 11,3× lebih besar; bercahaya rata 13,8× lebih besar; setelah filter Hitam-Putih justru **4× lebih kecil**. Rentang ini yang membuat perkiraan ukuran harus **diukur dari halamannya**, bukan ditebak dengan rumus — dan yang membenarkan teks "pas untuk Hitam-Putih" di lembar Ekspor
 
+### Lingkungan test browser (23 Agustus 2026)
+
+Dipasang atas keputusan Boss Ali sebelum masuk annotate + tanda tangan — potongan itu seluruhnya kanvas dan interaksi sentuh, persis jenis kode yang tidak bisa dijaga test Node.
+
+- [x] Vitest dipecah jadi dua suite (`vitest.config.ts`): **node** untuk logika murni, **browser** untuk Chromium sungguhan lewat Playwright. `npm test` menjalankan keduanya; `npm run test:node` / `npm run test:browser` untuk satu saja
+- [x] `imageEditor.browser.test.ts` — 10 test menjalankan `compressImage`/`rotateImage`/`cropImage` di browser asli: format dibuktikan dari **byte awal berkas** (`ff d8 ff` / `89 50 4e 47`), batas sisi terpanjang, tidak memperbesar gambar kecil, ukuran naik monoton per level, dan jebakan PNG-dari-JPEG
+- [x] `FilterPicker.browser.test.tsx` — 4 test komponen React lewat `vitest-browser-react`. Ini yang menutup temuan "filter per-halaman bisa jalan dobel"
+- [x] `activeChip()` dipindah dari JSX ke `filterChoice.ts` supaya temuan "chip Asli menghapus filter dokumen" punya test regresi di suite node (7 test baru)
+- [x] **Test-nya dibuktikan menggigit, bukan cuma hijau.** Kode sengaja disabotase sementara: `mimeType` diabaikan → test PNG merah; batas piksel dihapus → test perkecilan merah; `isBusy` dilepas dari `FilterPicker` → 2 test komponen merah. Semua dikembalikan setelah itu
+- [x] Test PNG-dari-JPEG diperkuat setelah ketahuan **lolos** saat `mimeType` disabotase (dua-duanya jadi JPEG, perbandingan ukurannya kebetulan tetap benar) — sekarang ikut memeriksa byte awal kedua berkas
+- [x] CI menginstal Chromium (`npx playwright install --with-deps chromium`) sebelum `npm test`
+- [x] Artefak kegagalan test browser (`__screenshots__/`, `.vitest-attachments/`) masuk `.gitignore`
+
+Total test 308 → **329** (295 node + 14 browser).
+
+**Catatan dependency:** `npm audit` melaporkan 2 kerentanan "high" (`brace-expansion`, `nanoid`). Keduanya **bukan** dari paket test yang baru dipasang — `brace-expansion` datang dari `@capacitor/cli` → rimraf → glob → minimatch, `nanoid` dari `vite` → postcss. Dua-duanya devDependency yang hanya jalan saat build dan tidak ikut ke dalam APK. Menutupnya berarti menaikkan Vite/Capacitor, jadi ditinggalkan sebagai keputusan tersendiri.
+
 **Belum diverifikasi di device fisik** (butuh Boss Ali):
 
 - [ ] Geser slider di HP — takiknya terasa jelas dengan jempol, tidak meleset antar level

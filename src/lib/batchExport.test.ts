@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CompressOptions } from './exportLimits'
 import type { LocalScanDocument, ScanPage } from './scanIndexMigration'
+import type { BatchProgress } from './documentExport'
 
 vi.mock('./imageEditor', () => ({
   compressImage: async (blob: Blob, _options: CompressOptions) =>
@@ -114,5 +115,132 @@ describe('summarizeBatchExport', () => {
     const message = summarizeBatchExport({ total: 5, saved: [], failed: [], cancelled: true })
 
     expect(message).toBe('Dihentikan sebelum ada dokumen yang tersimpan.')
+  })
+})
+
+describe('exportDocumentsBatch', () => {
+  it('writes one PDF per document, named after its title', async () => {
+    const result = await exportDocumentsBatch(
+      [doc('a', 'Kwitansi Agustus'), doc('b', 'Kontrak Sewa')],
+      'pro',
+    )
+
+    expect(written).toEqual(['Kwitansi Agustus.pdf', 'Kontrak Sewa.pdf'])
+    expect(result.saved).toEqual(['Kwitansi Agustus.pdf', 'Kontrak Sewa.pdf'])
+    expect(result.failed).toEqual([])
+  })
+
+  /**
+   * The gate lives here rather than only on the button: a hidden control is
+   * not a refused one (same lesson as `resolveCompressionLevel`).
+   */
+  it('refuses Basic outright', async () => {
+    await expect(exportDocumentsBatch([doc('a', 'Nota')], 'basic')).rejects.toThrow(
+      'Ekspor banyak dokumen sekaligus hanya untuk akun Pro.',
+    )
+
+    expect(written).toEqual([])
+  })
+
+  it('refuses an empty selection', async () => {
+    await expect(exportDocumentsBatch([], 'pro')).rejects.toThrow(
+      'Tidak ada dokumen untuk diekspor.',
+    )
+  })
+
+  /** Two documents can share a title; the second must not overwrite the first. */
+  it('numbers a repeated title instead of overwriting it', async () => {
+    const result = await exportDocumentsBatch([doc('a', 'Nota'), doc('b', 'Nota')], 'pro')
+
+    expect(result.saved).toEqual(['Nota.pdf', 'Nota (2).pdf'])
+  })
+
+  it('opens one share sheet at the end, not one per document', async () => {
+    await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B')], 'pro')
+
+    expect(shared).toHaveLength(1)
+    expect(shared[0].uris).toEqual(['file:///Documents/A.pdf', 'file:///Documents/B.pdf'])
+  })
+
+  /** One unreadable document must not keep the rest off the phone. */
+  it('carries on past a failure and reports it', async () => {
+    failWrites.add('B.pdf')
+
+    const result = await exportDocumentsBatch(
+      [doc('a', 'A'), doc('b', 'B'), doc('c', 'C')],
+      'pro',
+    )
+
+    expect(result.saved).toEqual(['A.pdf', 'C.pdf'])
+    expect(result.failed).toEqual([{ title: 'B', message: 'Penyimpanan penuh.' }])
+    expect(result.message).toBe('2 dokumen diekspor, 1 gagal. Coba lagi untuk sisanya.')
+  })
+
+  it('shares only the documents that made it', async () => {
+    failWrites.add('B.pdf')
+
+    await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B')], 'pro')
+
+    expect(shared[0].uris).toEqual(['file:///Documents/A.pdf'])
+  })
+
+  it('skips the share sheet entirely when nothing was written', async () => {
+    failWrites.add('A.pdf')
+
+    await exportDocumentsBatch([doc('a', 'A')], 'pro')
+
+    expect(shared).toHaveLength(0)
+  })
+
+  it('reports progress before each document, not after', async () => {
+    const seen: BatchProgress[] = []
+
+    await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B')], 'pro', 'standard', (progress) =>
+      seen.push(progress),
+    )
+
+    expect(seen).toEqual([
+      { index: 0, total: 2, title: 'A' },
+      { index: 1, total: 2, title: 'B' },
+    ])
+  })
+
+  /**
+   * Stopping is checked between documents, never inside one: aborting midway
+   * through a PDF would leave half a file in the Documents folder.
+   */
+  it('stops between documents once aborted, finishing the one in flight', async () => {
+    const controller = new AbortController()
+
+    const result = await exportDocumentsBatch(
+      [doc('a', 'A'), doc('b', 'B'), doc('c', 'C')],
+      'pro',
+      'standard',
+      (progress) => {
+        if (progress.index === 0) controller.abort()
+      },
+      controller.signal,
+    )
+
+    expect(result.saved).toEqual(['A.pdf'])
+    expect(result.cancelled).toBe(true)
+    expect(result.message).toBe('Dihentikan — 1 dari 3 dokumen tersimpan.')
+  })
+
+  it('still shares what it managed to write before stopping', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    const result = await exportDocumentsBatch(
+      [doc('a', 'A')],
+      'pro',
+      'standard',
+      undefined,
+      controller.signal,
+    )
+
+    expect(result.saved).toEqual([])
+    expect(result.cancelled).toBe(true)
+    expect(shared).toHaveLength(0)
   })
 })

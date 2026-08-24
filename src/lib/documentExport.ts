@@ -2,6 +2,7 @@ import { blobToBytes } from './blobBase64'
 import { loadPageBlob } from './documentEditing'
 import {
   BASIC_COMPRESSION,
+  canBatchExport,
   COMPRESSION_PRESETS,
   DEFAULT_COMPRESSION_LEVEL,
   resolveCompressionLevel,
@@ -10,8 +11,14 @@ import {
   type CompressOptions,
 } from './exportLimits'
 import { compressImage } from './imageEditor'
-import { toSafeFilename } from './exportNames'
-import { deliverExport, type DeliveryResult, type ExportFile } from './exportShare'
+import { toSafeFilename, uniqueExportNames } from './exportNames'
+import {
+  deliverExport,
+  shareFiles,
+  writeExportFiles,
+  type DeliveryResult,
+  type ExportFile,
+} from './exportShare'
 import type { LocalScanDocument } from './scanStorage'
 import type { Tier } from './tier'
 
@@ -170,4 +177,71 @@ export async function exportDocument(
   const files =
     format === 'pdf' ? await exportPdf(doc, tier, options) : await exportImages(doc, options, format)
   return deliverExport(files)
+}
+
+/**
+ * Exports several documents as one PDF each.
+ *
+ * Sequential, and each PDF is written to disk before the next is built. The
+ * same reasoning as `handleRestoreAll`: this is not work that gets faster by
+ * being piled up, and piling it up means holding every PDF in memory at once
+ * — a 20-page document peaks around 16 MB, so five of them together is the
+ * kind of allocation that made the editor stutter on a real phone.
+ *
+ * The share sheet opens once, at the end, with whatever actually landed.
+ */
+export async function exportDocumentsBatch(
+  docs: LocalScanDocument[],
+  tier: Tier,
+  level: CompressionLevel = DEFAULT_COMPRESSION_LEVEL,
+  onProgress?: (progress: BatchProgress) => void,
+  signal?: AbortSignal,
+): Promise<BatchExportResult> {
+  if (!canBatchExport(tier)) {
+    throw new Error('Ekspor banyak dokumen sekaligus hanya untuk akun Pro.')
+  }
+  if (docs.length === 0) {
+    throw new Error('Tidak ada dokumen untuk diekspor.')
+  }
+
+  const options = COMPRESSION_PRESETS[resolveCompressionLevel(tier, level)]
+  // Decided up front, because only this function can see the whole batch:
+  // `exportPdf` names one document at a time and cannot know another document
+  // in the same run reduces to the same filename.
+  const names = uniqueExportNames(docs.map((doc) => `${toSafeFilename(doc.title)}.pdf`))
+
+  const saved: string[] = []
+  const failed: { title: string; message: string }[] = []
+  const uris: string[] = []
+  let cancelled = false
+
+  for (let index = 0; index < docs.length; index++) {
+    // Checked between documents, never inside one: stopping midway through a
+    // PDF would leave a half-written file in the Documents folder.
+    if (signal?.aborted) {
+      cancelled = true
+      break
+    }
+
+    const doc = docs[index]
+    onProgress?.({ index, total: docs.length, title: doc.title })
+
+    try {
+      const [built] = await exportPdf(doc, tier, options)
+      uris.push(...(await writeExportFiles([{ ...built, name: names[index] }])))
+      saved.push(names[index])
+    } catch (error) {
+      // Counted, not thrown: one unreadable document must not keep the rest
+      // off the phone.
+      failed.push({
+        title: doc.title,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  await shareFiles(uris, 'Dokumen ScannApp')
+
+  const outcome = { total: docs.length, saved, failed, cancelled }
+  return { ...outcome, message: summarizeBatchExport(outcome) }
 }

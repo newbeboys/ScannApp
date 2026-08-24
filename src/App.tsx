@@ -406,11 +406,17 @@ function App() {
         await refreshDocuments()
       } catch {
         // The documents are already gone from local storage either way; if
-        // this cleanup step fails, the busy flag and select mode must still
-        // release below rather than getting stuck open on a best-effort step.
+        // this cleanup step fails, the busy flag must still release below
+        // rather than getting stuck open on a best-effort step.
       }
+      // The busy flag always releases so the action bar never gets stuck
+      // disabled, but the selection itself only clears on a clean run —
+      // `removed` was declared above the try block, so it is still in scope
+      // here even though the count is only known once the loop is done.
+      // Same rule as handleBatchExport: a partial failure keeps the
+      // selection so the stragglers can be retried without re-ticking them.
       setIsBatchBusy(false)
-      exitSelect()
+      if (removed === chosen.length) exitSelect()
     }
 
     const failed = chosen.length - removed

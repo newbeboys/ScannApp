@@ -166,7 +166,18 @@ export function DocumentsScreen({
               {selection.count} dipilih · {selection.pageCount} halaman
             </h1>
           </div>
-          <button type="button" className="link-button" onClick={onExitSelect}>
+          {/*
+            Every other action-bar control disables while a batch op runs;
+            this one didn't. Tapping it mid-delete cleared select mode while
+            the delete loop kept going, briefly exposing the normal per-row
+            controls for documents that were still being deleted.
+          */}
+          <button
+            type="button"
+            className="link-button"
+            onClick={onExitSelect}
+            disabled={isBatchBusy}
+          >
             Batal
           </button>
         </header>

@@ -91,9 +91,18 @@ export function BatchExportSheet({
               </span>
             </div>
             <div className="batch-progress__track">
+              {/*
+                Deliberately `index / total`, not `(index + 1) / total` like the
+                text line above. `onProgress` fires *before* each document is
+                written (see exportDocumentsBatch), so `index` is the count of
+                documents already finished, not the one in flight. Using
+                `index + 1` here would read 33% before any file exists on a
+                3-document batch, and sit pegged at 100% for the whole time the
+                last file is still being written.
+              */}
               <span
                 className="batch-progress__fill"
-                style={{ width: `${((progress.index + 1) / progress.total) * 100}%` }}
+                style={{ width: `${(progress.index / progress.total) * 100}%` }}
               />
             </div>
           </div>

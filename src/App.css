@@ -2101,3 +2101,52 @@
   touch-action: none;
   cursor: crosshair;
 }
+
+/* Batch export sheet
+   ------------------------------------------------------------------ */
+
+.batch-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+
+.batch-progress {
+  margin-bottom: 14px;
+}
+
+.batch-progress__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+/* Long titles must not push the counter off the row. */
+.batch-progress__head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-progress__head span {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.batch-progress__track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--chip-border);
+  overflow: hidden;
+}
+
+.batch-progress__fill {
+  display: block;
+  height: 100%;
+  background: var(--acc);
+  transition: width 180ms ease-out;
+}

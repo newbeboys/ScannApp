@@ -116,6 +116,26 @@ describe('entering select mode', () => {
     expect(onEnterSelect).not.toHaveBeenCalled()
     expect(onNotice).toHaveBeenCalledWith('Pulihkan dulu ke HP sebelum bisa dipilih.')
   })
+
+  /**
+   * Switching tabs mid-press unmounts this screen before the timer fires.
+   * Without a cleanup, the pending timeout survives the unmount and calls
+   * `onEnterSelect` afterwards — re-entering select mode after `App.tsx`'s
+   * tab-change effect already exited it.
+   */
+  it('does not enter select mode if the screen unmounts mid-press', async () => {
+    const onEnterSelect = vi.fn()
+    const screen = await renderScreen({ onEnterSelect })
+    const row = screen.getByText('Kwitansi Agustus').element()
+
+    row.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 }),
+    )
+    await screen.unmount()
+    await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 120))
+
+    expect(onEnterSelect).not.toHaveBeenCalled()
+  })
 })
 
 describe('the action bar', () => {

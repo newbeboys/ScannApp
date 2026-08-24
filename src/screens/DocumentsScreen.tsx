@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { CheckIcon, CloudIcon, DownloadIcon, ExportIcon, MergeIcon, ScanIcon, TrashIcon } from '../components/Icons'
 import { PageImage } from '../components/PageImage'
 import type { DocumentEntry } from '../lib/documentEntries'
@@ -90,6 +90,18 @@ export function DocumentsScreen({
     }
     pressOrigin.current = null
   }
+
+  /**
+   * A pending long press must not outlive the row that started it. Without
+   * this, switching tabs mid-press lets the timeout fire after unmount and
+   * silently re-enter select mode — after `App.tsx` has already exited it on
+   * the tab change.
+   */
+  useEffect(() => {
+    return () => {
+      if (pressTimer.current !== null) clearTimeout(pressTimer.current)
+    }
+  }, [])
 
   const startPress = (entry: DocumentEntry) => (event: React.PointerEvent) => {
     // Already selecting: a tap is a toggle, and there is nothing to enter.

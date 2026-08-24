@@ -398,11 +398,17 @@ function App() {
         }
       }
     } finally {
-      // Once at the end, not per document: a signature is shared across
-      // documents, so sweeping it mid-loop could delete a file still
-      // referenced by a document that has not been deleted yet.
-      await pruneUnusedSignatures()
-      await refreshDocuments()
+      try {
+        // Once at the end, not per document: a signature is shared across
+        // documents, so sweeping it mid-loop could delete a file still
+        // referenced by a document that has not been deleted yet.
+        await pruneUnusedSignatures()
+        await refreshDocuments()
+      } catch {
+        // The documents are already gone from local storage either way; if
+        // this cleanup step fails, the busy flag and select mode must still
+        // release below rather than getting stuck open on a best-effort step.
+      }
       setIsBatchBusy(false)
       exitSelect()
     }

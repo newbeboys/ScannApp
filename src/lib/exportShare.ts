@@ -31,7 +31,21 @@ async function ensureStoragePermission(): Promise<void> {
   }
 }
 
-async function deliverNative(files: ExportFile[]): Promise<DeliveryResult> {
+/**
+ * Writes every file to the public Documents folder and returns the URI of
+ * each, so a caller exporting many documents can save them one at a time and
+ * open a single share sheet at the end rather than holding every blob in
+ * memory at once.
+ *
+ * Returns an empty list on the web: a browser download has no URI anything
+ * else could share.
+ */
+export async function writeExportFiles(files: ExportFile[]): Promise<string[]> {
+  if (!Capacitor.isNativePlatform()) {
+    downloadInBrowser(files)
+    return []
+  }
+
   await ensureStoragePermission()
 
   const uris: string[] = []
@@ -49,30 +63,28 @@ async function deliverNative(files: ExportFile[]): Promise<DeliveryResult> {
     uris.push(uri)
   }
 
-  // Saved first, shared second: if the user dismisses the share sheet the
-  // file is still on the device where they can find it.
+  return uris
+}
+
+/**
+ * Hands the saved files to another app. Never throws: by the time this runs
+ * the files are already on disk, so a dismissed sheet is not a failed export.
+ */
+export async function shareFiles(uris: string[], title: string): Promise<void> {
+  if (uris.length === 0) return
+
   try {
     // Sharing hands the user to another app; coming back from it is our doing,
     // not a return from elsewhere, so it must not earn an App Open ad.
     resumeTracker.leaveForOwnFlow()
-    await Share.share({
-      title: files.length === 1 ? files[0].name : 'Dokumen ScannApp',
-      files: uris,
-    })
+    await Share.share({ title, files: uris })
   } catch {
     // Share sheet dismissed or unavailable — the saved files still stand.
-  }
-
-  return {
-    message:
-      files.length === 1
-        ? `Tersimpan di folder Documents: ${files[0].name}`
-        : `${files.length} file tersimpan di folder Documents.`,
   }
 }
 
 /** Browser fallback so the whole export flow can be reviewed via `npm run dev`. */
-function deliverWeb(files: ExportFile[]): DeliveryResult {
+function downloadInBrowser(files: ExportFile[]): void {
   for (const file of files) {
     const url = URL.createObjectURL(file.blob)
     const anchor = document.createElement('a')
@@ -84,13 +96,29 @@ function deliverWeb(files: ExportFile[]): DeliveryResult {
     // Revoking immediately can cancel the download in some browsers.
     setTimeout(() => URL.revokeObjectURL(url), 10_000)
   }
-
-  return {
-    message: files.length === 1 ? `${files[0].name} diunduh.` : `${files.length} file diunduh.`,
-  }
 }
 
+/** Where the files ended up, for the confirmation toast. */
+function describeDelivery(files: ExportFile[], downloaded: boolean): string {
+  if (downloaded) {
+    return files.length === 1 ? `${files[0].name} diunduh.` : `${files.length} file diunduh.`
+  }
+  return files.length === 1
+    ? `Tersimpan di folder Documents: ${files[0].name}`
+    : `${files.length} file tersimpan di folder Documents.`
+}
+
+/**
+ * Saves and shares in one go — the single-document export path, unchanged.
+ *
+ * Saved first, shared second: if the user dismisses the share sheet the file
+ * is still on the device where they can find it.
+ */
 export async function deliverExport(files: ExportFile[]): Promise<DeliveryResult> {
   if (files.length === 0) throw new Error('Tidak ada file untuk diekspor.')
-  return Capacitor.isNativePlatform() ? deliverNative(files) : deliverWeb(files)
+
+  const uris = await writeExportFiles(files)
+  await shareFiles(uris, files.length === 1 ? files[0].name : 'Dokumen ScannApp')
+
+  return { message: describeDelivery(files, uris.length === 0) }
 }

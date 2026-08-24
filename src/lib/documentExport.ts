@@ -17,6 +17,54 @@ import type { Tier } from './tier'
 
 export type ExportFormat = 'pdf' | 'jpg' | 'png'
 
+/** Which document a running batch is on, for the sheet's progress line. */
+export interface BatchProgress {
+  /** 0-based. */
+  index: number
+  total: number
+  title: string
+}
+
+export interface BatchExportResult {
+  /** How many were asked for — not the same as saved + failed once stopped. */
+  total: number
+  /** Filenames actually written, in order. */
+  saved: string[]
+  failed: { title: string; message: string }[]
+  cancelled: boolean
+  /** Ready-to-toast Indonesian summary. */
+  message: string
+}
+
+/**
+ * Turns a finished batch into the one sentence the user sees.
+ *
+ * Split out from the run itself so every wording can be tested without
+ * encoding a single page.
+ */
+export function summarizeBatchExport(result: Omit<BatchExportResult, 'message'>): string {
+  const saved = result.saved.length
+  const failed = result.failed.length
+
+  if (result.cancelled) {
+    return saved === 0
+      ? 'Dihentikan sebelum ada dokumen yang tersimpan.'
+      : `Dihentikan — ${saved} dari ${result.total} dokumen tersimpan.`
+  }
+
+  if (saved === 0) {
+    return failed === 0
+      ? 'Tidak ada dokumen yang diekspor.'
+      : 'Tidak ada dokumen yang berhasil diekspor. Periksa ruang penyimpanan lalu coba lagi.'
+  }
+
+  if (failed > 0) {
+    return `${saved} dokumen diekspor, ${failed} gagal. Coba lagi untuk sisanya.`
+  }
+
+  return `${saved} dokumen diekspor ke folder Documents.`
+}
+
 /** Re-encodes every page at one level. The only place export bytes are produced. */
 async function compressedPages(doc: LocalScanDocument, options: CompressOptions): Promise<Blob[]> {
   const out: Blob[] = []

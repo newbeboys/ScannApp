@@ -861,9 +861,24 @@
 
 /* ---------- editor ---------- */
 
+/*
+  Sized from the page's own aspect ratio, but never taller than `--stage-max`.
+
+  Capping the width rather than the height is what keeps the ratio exact: the
+  crop overlay works in 0..1 coordinates and trusts this box to match the
+  image, so letterboxing inside a mis-shaped frame would put every corner
+  handle in the wrong place. A `max-height` would do exactly that.
+
+  Without the cap a portrait page ran off the bottom of the screen and pushed
+  the toolbar out of reach, while a landscape one sat comfortably — the two
+  looked like different screens (dilaporkan dari HP, 24 Agustus 2026).
+*/
 .editor-stage {
+  --stage-max: 46vh;
   position: relative;
-  width: 100%;
+  align-self: center;
+  width: min(100%, calc(var(--stage-max) * var(--page-aspect, 0.7071)));
+  aspect-ratio: var(--page-aspect, 0.7071);
   border-radius: 18px;
   overflow: hidden;
   background: var(--chip);
@@ -871,11 +886,16 @@
   touch-action: none;
 }
 
+/* Cropping needs the detail, and hides the tool rows that compete for height. */
+.editor-stage--crop {
+  --stage-max: 58vh;
+}
+
 .editor-image {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: fill;
+  object-fit: contain;
 }
 
 .editor-actions {
@@ -1070,10 +1090,16 @@
   }
 }
 
+/*
+  Opaque, unlike the cards. `--surface` is 5% white on the dark themes, which
+  is right for something resting on the page but wrong for a sheet: its own
+  backdrop is translucent too, so the live document read straight through the
+  text (dilaporkan dari HP, 24 Agustus 2026).
+*/
 .sheet {
   width: 100%;
   max-width: 560px;
-  background: var(--surface);
+  background: var(--surface-solid);
   border: 1px solid var(--chip-border);
   border-bottom: none;
   border-radius: 22px 22px 0 0;

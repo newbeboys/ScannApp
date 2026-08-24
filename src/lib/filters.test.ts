@@ -226,3 +226,61 @@ describe('applyFilter — every filter', () => {
     }
   })
 })
+
+/**
+ * The two filters below were rewritten for speed on 24 Agustus 2026 after the
+ * device build turned out to stall for seconds on every filter tap. The tests
+ * above are the behaviour contract; these pin the fidelity of the rewrite
+ * itself, which is the part a behaviour test would not notice.
+ */
+describe('optimised filters keep their results', () => {
+  /**
+   * `ink-saver` now reads its curve from a 256-entry table instead of calling
+   * Math.pow per pixel — 1556ms to 277ms on a 12MP page. The table is indexed
+   * by rounded luminance, so a result may land one level off the exact maths.
+   * Anything more than that would be a different filter, not a faster one.
+   */
+  it('ink-saver stays within one level of the exact power curve', () => {
+    const shades: [number, number, number][] = []
+    for (let level = 0; level < 256; level++) shades.push([level, level, level])
+
+    const data = pixels(...shades)
+    applyFilter('ink-saver', data, shades.length, 1)
+
+    const white = whitePoint(pixels(...shades), 0.9)
+    for (let level = 0; level < 256; level++) {
+      const exact = level >= white ? 255 : Math.min(255, Math.max(0, 255 * (level / white) ** 0.6))
+
+      expect(Math.abs(at(data, level)[0] - exact), `level ${level}`).toBeLessThanOrEqual(1)
+    }
+  })
+
+  /**
+   * `bw` builds its local-mean table at quarter scale on large pages, which
+   * cut the one-off allocation from 92MB to 17MB — enough to matter on a phone
+   * that is already holding a 46MB pixel buffer. Small pages keep the exact
+   * full-resolution table, so every test above still describes real behaviour.
+   */
+  it('bw gives a big page the same verdict at both table scales', () => {
+    // Wide enough to cross into the coarse path, with an ink stroke to find.
+    const width = 1200
+    const height = 40
+    const data = new Uint8ClampedArray(width * height * 4)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const value = x % 100 < 6 ? 40 : 220
+        const i = (y * width + x) * 4
+        data[i] = value
+        data[i + 1] = value
+        data[i + 2] = value
+        data[i + 3] = 255
+      }
+    }
+
+    applyFilter('bw', data, width, height)
+
+    // Ink black, paper white — the verdict must survive the coarser table.
+    expect(at(data, 20 * width + 2)[0]).toBe(0)
+    expect(at(data, 20 * width + 50)[0]).toBe(255)
+  })
+})

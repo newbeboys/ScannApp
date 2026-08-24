@@ -1,6 +1,6 @@
 import { loadPageBlob } from './documentEditing'
 import { COMPRESSION_PRESETS, resolveCompressionLevel, type CompressionLevel } from './exportLimits'
-import { compressImage } from './imageEditor'
+import { compressImagePair } from './imageEditor'
 import type { LocalScanDocument } from './scanIndexMigration'
 import type { Tier } from './tier'
 
@@ -33,16 +33,16 @@ export async function estimateExportSizes(
   const options = COMPRESSION_PRESETS[resolveCompressionLevel(tier, level)]
   const first = await loadPageBlob(doc.pages[0])
 
-  const jpegPage = await compressImage(first, { ...options, mimeType: 'image/jpeg' })
-  const pngPage = await compressImage(first, { ...options, mimeType: 'image/png' })
+  // One decode feeding both encoders — see `compressImagePair`.
+  const { jpeg, png } = await compressImagePair(first, options)
 
   const pages = Math.max(1, doc.pageCount)
 
   return {
     // pdf-lib embeds the JPEG bytes as-is (DCTDecode), so a PDF is its pages
     // plus page objects — not a re-compression of them.
-    pdf: jpegPage.size * pages + PDF_STRUCTURE_BYTES_PER_PAGE * pages,
-    jpg: jpegPage.size * pages,
-    png: pngPage.size * pages,
+    pdf: jpeg.size * pages + PDF_STRUCTURE_BYTES_PER_PAGE * pages,
+    jpg: jpeg.size * pages,
+    png: png.size * pages,
   }
 }

@@ -3,16 +3,15 @@ import { COMPRESSION_PRESETS, type CompressOptions } from './exportLimits'
 import type { LocalScanDocument } from './scanIndexMigration'
 
 /**
- * Stands in for the canvas encode. PNG is made deliberately bulkier than JPEG
- * so a test can tell the two estimates apart by size alone.
+ * Stands in for the canvas work. PNG is made deliberately bulkier than JPEG so
+ * a test can tell the two estimates apart by size alone.
  */
 const asked: CompressOptions[] = []
 
 vi.mock('./imageEditor', () => ({
-  compressImage: async (_blob: Blob, options: CompressOptions) => {
+  compressImagePair: async (_blob: Blob, options: CompressOptions) => {
     asked.push(options)
-    const bytes = options.mimeType === 'image/png' ? 900 : 100
-    return new Blob(['x'.repeat(bytes)])
+    return { jpeg: new Blob(['x'.repeat(100)]), png: new Blob(['x'.repeat(900)]) }
   },
 }))
 
@@ -42,10 +41,16 @@ describe('estimateExportSizes', () => {
    * One page is encoded and multiplied out. Encoding all of them would make
    * every slider nudge on a 30-page document cost seconds.
    */
-  it('encodes only the first page, whatever the document length', async () => {
+  /**
+   * One decode, not one per format. Opening the sheet used to decode the page
+   * twice — once for the JPEG figure and once for the PNG one — which on a
+   * 12MP scan is around 270ms thrown away on a desktop and noticeably more on
+   * a phone (diukur 24 Agustus 2026).
+   */
+  it('decodes the first page once and encodes both formats from it', async () => {
     await estimateExportSizes(doc(30), 'pro', 'standard')
 
-    expect(asked).toHaveLength(2)
+    expect(asked).toHaveLength(1)
   })
 
   it('scales the estimate by the page count', async () => {
@@ -59,7 +64,6 @@ describe('estimateExportSizes', () => {
     const sizes = await estimateExportSizes(doc(1), 'pro', 'standard')
 
     expect(sizes.png).toBeGreaterThan(sizes.jpg)
-    expect(asked.map((options) => options.mimeType).sort()).toEqual(['image/jpeg', 'image/png'])
   })
 
   it('counts a PDF as its JPEG pages plus a little structure', async () => {

@@ -276,6 +276,32 @@ Temuan keempat (**file filter yatim kalau `applyDocumentFilter` gagal di tengah*
 - **Jebakan PNG-dari-JPEG terbukti nyata:** PNG dari halaman asli 102 KB, PNG dari hasil JPEG 191 KB — 87% lebih berat tanpa satu piksel pun membaik
 - **PNG vs JPEG sangat bergantung isi halaman:** scan kamera ber-noise 11,3× lebih besar; bercahaya rata 13,8× lebih besar; setelah filter Hitam-Putih justru **4× lebih kecil**. Rentang ini yang membuat perkiraan ukuran harus **diukur dari halamannya**, bukan ditebak dengan rumus — dan yang membenarkan teks "pas untuk Hitam-Putih" di lembar Ekspor
 
+### Temuan uji device pertama — 24 Agustus 2026
+
+Boss Ali menjalankan seluruh rencana uji A–E di Xiaomi T15. **Semua test fungsional lulus**, termasuk yang paling menentukan: angka perkiraan PNG berbalik jadi lebih kecil dari JPG setelah filter Hitam-Putih diterapkan, yang membuktikan perkiraannya benar-benar diukur dari halamannya. Tiga masalah tampilan & performa dilaporkan, semuanya sudah ditutup sebelum lanjut ke potongan B.
+
+**1. Lembar Ekspor tembus pandang, tulisannya tidak terbaca.** `--surface` sengaja hanya 5% putih di tema gelap — benar untuk kartu yang duduk di atas halaman, salah untuk lembar bawah yang backdrop-nya juga tembus pandang, sehingga dokumen di belakangnya terbaca menembus teks. Token baru `--surface-solid` diambil dari **warna gradien latar milik tema itu sendiri** (stop tengahnya), jadi tidak ada warna baru yang diperkenalkan — sesuai CLAUDE.md 9.2. Hanya `.sheet` yang diubah; kartu lain tetap tembus pandang karena memang disengaja.
+
+**2. Ukuran tampilan dokumen tidak konsisten antara potret & lanskap.** `.editor-stage` dipaksa selebar 100% dengan rasio dari gambar dan **tanpa batas tinggi**, jadi halaman potret jadi lebih tinggi dari layar dan mendorong toolbar keluar jangkauan, sementara lanskap muat pas. Sekarang **lebarnya** yang dibatasi (`min(100%, 46vh × rasio)`), bukan tingginya — membatasi tinggi akan merusak rasio, dan overlay potong bekerja dalam koordinat 0..1 yang mempercayai kotak ini persis seukuran gambar. Mode potong dapat 58vh karena butuh presisi dan tidak berebut ruang dengan baris tombol. Diverifikasi di tiga bentuk halaman: potret A4, lanskap, dan halaman sangat tinggi — ketiganya kini setinggi sama dengan toolbar tetap terlihat.
+
+**3. Editor terasa lambat di HP padahal lancar di localhost.** Diukur di Chromium pada halaman 3000×4200 (ukuran hasil scan HP flagship), lalu diperbaiki:
+
+| | Sebelum | Sesudah |
+|---|---|---|
+| Filter Hemat Tinta | 1556 ms | **287 ms** |
+| Perkiraan ukuran di lembar Ekspor | 2305 ms | **1168 ms** |
+| Alokasi tabel filter Hitam-Putih | 92 MB | **17 MB** |
+| Decode per pratinjau halaman | 2× | **1×** |
+
+- **Hemat Tinta** memanggil `Math.pow` per piksel — 12 juta kali. Diganti tabel 256 entri, hasil piksel meleset paling banyak satu level (dijaga test tersendiri).
+- **Hitam-Putih** mengalokasikan tabel `Float64Array` seukuran satu float per piksel: 92 MB sekali minta, sementara buffer piksel 46 MB sudah terbuka. HP akan tersendat mengumpulkan sampah atau menolak sama sekali. Tabelnya kini dibangun pada skala 1/4 untuk halaman besar — rata-rata lokal itu sinyal frekuensi rendah, jadi **nol piksel berubah** saat diukur. Halaman kecil tetap memakai tabel presisi penuh, jadi test perilaku di atasnya tetap menggambarkan hal yang sebenarnya.
+- **Lembar Ekspor** men-decode halaman dua kali, sekali untuk angka JPEG dan sekali untuk PNG, padahal pikselnya identik. `compressImagePair()` sekarang meng-encode keduanya dari satu decode.
+- **Pratinjau editor** men-decode tiap halaman dua kali: sekali untuk mengukur rasionya, sekali oleh `<img>`. Ukurannya kini dibaca dari `naturalWidth/naturalHeight` saat gambar selesai dimuat.
+
+**Satu optimasi dicoba lalu dibatalkan.** Filter Magic Color juga sempat diberi tabel serupa. Pengukuran A/B pada data yang sama menunjukkan untungnya cuma 390→360 ms, dan **8,1 juta kanal piksel berubah** — sebab `Uint8ClampedArray` membulatkan saat menyimpan, jadi kanal masuk ke tahap saturasi sebagai bilangan bulat, bukan pecahan seperti semula. Tidak sepadan; dibatalkan, dan alasannya ditulis di kodenya supaya tidak dicoba ulang.
+
+**Belum terjawab — butuh keputusan Boss Ali kalau HP masih terasa berat:** halaman disimpan pada resolusi penuh hasil scanner (12 MP). Menurunkannya akan mempercepat **semua** operasi sekaligus, tapi menurunkan pula batas atas mutu level ekspor "Maksimal". Lihat catatan di laporan sesi ini.
+
 ### Lingkungan test browser (23 Agustus 2026)
 
 Dipasang atas keputusan Boss Ali sebelum masuk annotate + tanda tangan — potongan itu seluruhnya kanvas dan interaksi sentuh, persis jenis kode yang tidak bisa dijaga test Node.

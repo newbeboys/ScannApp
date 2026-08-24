@@ -7,6 +7,12 @@ export interface Theme {
   /** Swatch gradient shown in the theme picker. */
   swatch: [string, string]
   background: string
+  /**
+   * Opaque ground for modals, taken from this theme's own background gradient
+   * rather than being a new colour. The middle stop, so a sheet reads as
+   * raised above the darker page behind it.
+   */
+  solid: string
   light: boolean
 }
 
@@ -17,6 +23,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     accent: '#3457e8',
     swatch: ['#ffffff', '#3457e8'],
     background: 'radial-gradient(135% 100% at 50% 0%, #ffffff 0%, #eef2fb 52%, #d8e2f4 100%)',
+    solid: '#ffffff',
     light: true,
   },
   ocean: {
@@ -25,6 +32,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     accent: '#2f6bff',
     swatch: ['#2f6bff', '#38bdf8'],
     background: 'radial-gradient(135% 100% at 50% 0%, #13294a 0%, #0d1a2e 55%, #070d18 100%)',
+    solid: '#0d1a2e',
     light: false,
   },
   sunset: {
@@ -33,6 +41,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     accent: '#ff5a20',
     swatch: ['#ff5a20', '#ffb020'],
     background: 'radial-gradient(135% 100% at 50% 0%, #341c12 0%, #21140d 55%, #120b07 100%)',
+    solid: '#21140d',
     light: false,
   },
   lime: {
@@ -41,6 +50,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     accent: '#5CB270',
     swatch: ['#F4F269', '#5CB270'],
     background: 'radial-gradient(135% 100% at 50% 0%, #223a22 0%, #142314 55%, #0a130b 100%)',
+    solid: '#142314',
     light: false,
   },
 }
@@ -62,6 +72,7 @@ export function themeCssVars(theme: Theme): Record<string, string> {
     '--fg': theme.light ? '#1b2740' : '#eef1f6',
     '--fg-dim': theme.light ? '#5c6a86' : '#79818f',
     '--surface': theme.light ? '#ffffff' : 'rgba(255, 255, 255, 0.05)',
+    '--surface-solid': theme.solid,
     '--chip': theme.light ? 'rgba(20, 34, 70, 0.06)' : 'rgba(255, 255, 255, 0.07)',
     '--chip-border': theme.light ? 'rgba(20, 34, 70, 0.14)' : 'rgba(255, 255, 255, 0.18)',
     '--shadow': theme.light

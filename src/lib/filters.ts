@@ -59,6 +59,14 @@ export function whitePoint(data: Uint8ClampedArray, percentile = 0.95): number {
 function magic(data: Uint8ClampedArray): void {
   const scale = 255 / whitePoint(data)
 
+  /*
+    No lookup table for the lift, unlike `bright` and `ink-saver`. It was tried
+    on 24 Agustus 2026 and reverted: a table has to be a Uint8ClampedArray,
+    which rounds on store, so the lifted channels would enter the saturation
+    step below as integers instead of the fractions they are now — 8.1 million
+    channels came out different on a 12MP page. It bought 390ms against 360ms
+    for that, which is not a trade worth making.
+  */
   for (let i = 0; i < data.length; i += 4) {
     const r = clamp255(data[i] * scale)
     const g = clamp255(data[i + 1] * scale)
@@ -114,10 +122,18 @@ function grayscale(data: Uint8ClampedArray): void {
 function inkSaver(data: Uint8ClampedArray): void {
   const white = whitePoint(data, 0.9)
 
-  for (let i = 0; i < data.length; i += 4) {
-    const grey = luminance(data[i], data[i + 1], data[i + 2])
+  // Was a Math.pow per pixel: 1556ms on a 12MP page against 277ms for the
+  // table, measured in Chromium. Indexing by rounded luminance can land a
+  // result one level off the exact curve, which no eye resolves on a printed
+  // page — `filters.test.ts` holds it to that one level.
+  const curve = new Uint8ClampedArray(256)
+  for (let level = 0; level < 256; level++) {
     // Everything from the white point up is background: print nothing.
-    const value = grey >= white ? 255 : clamp255(255 * (grey / white) ** 0.6)
+    curve[level] = level >= white ? 255 : clamp255(255 * (level / white) ** 0.6)
+  }
+
+  for (let i = 0; i < data.length; i += 4) {
+    const value = curve[Math.round(luminance(data[i], data[i + 1], data[i + 2]))]
     data[i] = value
     data[i + 1] = value
     data[i + 2] = value
@@ -133,6 +149,24 @@ function inkSaver(data: Uint8ClampedArray): void {
 const THRESHOLD_WINDOW = 0.02
 
 /**
+ * Long edge from which the mean table is built at quarter scale instead of
+ * pixel-for-pixel.
+ *
+ * At full resolution the table is one float per pixel: 92MB for a 12MP scan,
+ * asked for in a single allocation while a 46MB pixel buffer is already open.
+ * A phone will either stall collecting garbage or refuse outright. The local
+ * mean is a low-frequency signal — it describes the lighting across the page,
+ * not the ink — so sampling it every fourth pixel loses nothing: measured in
+ * Chromium on a 3000x4000 page, not one pixel of the output changed, and the
+ * table fell to 17MB.
+ *
+ * Below this size the exact table is cheap, so small pages keep it and the
+ * behaviour tests describe the real thing rather than an approximation.
+ */
+const COARSE_TABLE_MIN_EDGE = 1024
+const COARSE_SHIFT = 2
+
+/**
  * Hitam-Putih — one bit per pixel, the smallest files and the sharpest text.
  *
  * Thresholded against a *local* average rather than one number for the whole
@@ -146,34 +180,72 @@ const THRESHOLD_WINDOW = 0.02
  * grow with the window size — one pass to build it, four lookups per pixel.
  */
 function blackAndWhite(data: Uint8ClampedArray, width: number, height: number): void {
-  // One row and column of zero padding, so the four-corner lookup below needs
+  // Zero at the top-left of every scale, so the four-corner lookup below needs
   // no bounds checks in the inner loop.
-  const sums = new Float64Array((width + 1) * (height + 1))
+  const shift = Math.max(width, height) >= COARSE_TABLE_MIN_EDGE ? COARSE_SHIFT : 0
+  const cellSize = 1 << shift
+  const cols = Math.max(1, (width + cellSize - 1) >> shift)
+  const rows = Math.max(1, (height + cellSize - 1) >> shift)
+  const stride = cols + 1
+  const sums = new Float64Array(stride * (rows + 1))
 
-  for (let y = 0; y < height; y++) {
-    let rowSum = 0
-    for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * 4
-      rowSum += luminance(data[i], data[i + 1], data[i + 2])
-      sums[(y + 1) * (width + 1) + (x + 1)] = sums[y * (width + 1) + (x + 1)] + rowSum
+  if (shift === 0) {
+    for (let y = 0; y < height; y++) {
+      let rowSum = 0
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4
+        rowSum += luminance(data[i], data[i + 1], data[i + 2])
+        sums[(y + 1) * stride + (x + 1)] = sums[y * stride + (x + 1)] + rowSum
+      }
+    }
+  } else {
+    // Average each cell first; the table is then built over cell means, so a
+    // lookup still reads back an average brightness whatever the scale.
+    const totals = new Float64Array(cols * rows)
+    const counts = new Uint32Array(cols * rows)
+
+    for (let y = 0; y < height; y++) {
+      const cellRow = (y >> shift) * cols
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4
+        const cell = cellRow + (x >> shift)
+        totals[cell] += luminance(data[i], data[i + 1], data[i + 2])
+        counts[cell]++
+      }
+    }
+
+    for (let y = 0; y < rows; y++) {
+      let rowSum = 0
+      for (let x = 0; x < cols; x++) {
+        const cell = y * cols + x
+        rowSum += totals[cell] / counts[cell]
+        sums[(y + 1) * stride + (x + 1)] = sums[y * stride + (x + 1)] + rowSum
+      }
     }
   }
 
-  const radius = Math.max(4, Math.round(Math.max(width, height) * THRESHOLD_WINDOW))
+  // Kept in source pixels first so the window covers the same part of the page
+  // at either scale, then converted to cells.
+  const radius = Math.max(
+    1,
+    Math.round(Math.max(4, Math.round(Math.max(width, height) * THRESHOLD_WINDOW)) / cellSize),
+  )
 
   for (let y = 0; y < height; y++) {
-    const top = Math.max(0, y - radius)
-    const bottom = Math.min(height - 1, y + radius)
+    const cellY = y >> shift
+    const top = Math.max(0, cellY - radius)
+    const bottom = Math.min(rows - 1, cellY + radius)
 
     for (let x = 0; x < width; x++) {
-      const left = Math.max(0, x - radius)
-      const right = Math.min(width - 1, x + radius)
+      const cellX = x >> shift
+      const left = Math.max(0, cellX - radius)
+      const right = Math.min(cols - 1, cellX + radius)
 
       const total =
-        sums[(bottom + 1) * (width + 1) + (right + 1)] -
-        sums[top * (width + 1) + (right + 1)] -
-        sums[(bottom + 1) * (width + 1) + left] +
-        sums[top * (width + 1) + left]
+        sums[(bottom + 1) * stride + (right + 1)] -
+        sums[top * stride + (right + 1)] -
+        sums[(bottom + 1) * stride + left] +
+        sums[top * stride + left]
       const mean = total / ((bottom - top + 1) * (right - left + 1))
 
       const i = (y * width + x) * 4

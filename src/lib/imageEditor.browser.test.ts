@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { compressImage, cropImage, getImageSize, rotateImage } from './imageEditor'
+import {
+  compressImage,
+  compressImagePair,
+  cropImage,
+  getImageSize,
+  rotateImage,
+} from './imageEditor'
 import { COMPRESSION_PRESETS } from './exportLimits'
 
 /**
@@ -163,5 +169,43 @@ describe('cropImage', () => {
     const size = await getImageSize(out)
     expect(size.width).toBeLessThanOrEqual(200)
     expect(size.height).toBeLessThanOrEqual(200)
+  })
+})
+
+/**
+ * Added 24 Agustus 2026 with the performance pass: the export sheet asks for
+ * both encodings at once so the page is only decoded and redrawn once.
+ */
+describe('compressImagePair', () => {
+  it('returns a real JPEG and a real PNG of the same page', async () => {
+    const page = await scanLike(900, 1200)
+
+    const { jpeg, png } = await compressImagePair(page, COMPRESSION_PRESETS.standard)
+
+    expect(await signature(jpeg)).toMatch(/^ff d8 ff/)
+    expect(await signature(png)).toBe('89 50 4e 47')
+  })
+
+  it('gives the same bytes as two separate compressImage calls would', async () => {
+    const page = await scanLike(900, 1200)
+    const options = COMPRESSION_PRESETS.standard
+
+    const pair = await compressImagePair(page, options)
+    const separately = {
+      jpeg: await compressImage(page, { ...options, mimeType: 'image/jpeg' }),
+      png: await compressImage(page, { ...options, mimeType: 'image/png' }),
+    }
+
+    expect(pair.jpeg.size).toBe(separately.jpeg.size)
+    expect(pair.png.size).toBe(separately.png.size)
+  })
+
+  it('honours the pixel cap, like the single-format path', async () => {
+    const { jpeg } = await compressImagePair(await scanLike(3000, 4200), {
+      quality: 0.75,
+      maxEdgePx: 2400,
+    })
+
+    expect((await getImageSize(jpeg)).height).toBe(2400)
   })
 })

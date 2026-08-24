@@ -45,14 +45,17 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 ## 5. Alur Kerja yang Diharapkan
 
 1. Sebelum coding, baca task terkait di `TASKS.md`.
-2. gunakan skill/plugin yang tersedia atau terpasang agar pekerjaanmu lebih baik gunakan itu jika memeang per
+2. Gunakan skill/plugin yang terpasang **hanya kalau relevan** dengan task yang sedang dikerjakan. Jangan aktifkan skill berat (`superpowers:test-driven-development`, alur brainstorm penuh) untuk perubahan kecil/config/typo — cukup edit langsung. Kalau ragu apakah suatu skill perlu diaktifkan, jalankan versi paling ringan dulu, baru eskalasi kalau memang perlu. Lihat kebijakan lengkap di Bagian 9.
 3. Kerjakan satu task/subsistem per sesi kerja, ikuti urutan di `TASKS.md` (jangan lompat ke fitur Pro sebelum fondasi Basic selesai, kecuali diminta).
-4. Setelah selesai satu task, update status di `TASKS.md`.
+4. Setelah selesai satu task, update status di `TASKS.md`, lalu jalankan `/compact` sebelum lanjut ke task berikutnya dalam sesi yang sama.
 5. Kalau menemukan keputusan yang belum ada di PRD/System Design (mis. angka limit yang belum ditentukan), **berhenti dan tanyakan ke Boss Ali** — jangan menebak angka bisnis sendiri.
-
-6. kamu bisa lihat pada folder atau file yang di ScannApp Design Prototap kemungkinan seperti itu design aplikasiku, kamu bisa membuatnya lebih bagus atau smoot dengan menggunakan skill/plugin yang tersedia tanpa aku perintahkan, tinggal kamu kerjakan jikan selesai tunjukan nanti aku akan membuat keputusannya.
-
-7. gunakan bahasa indonesia disetiap laporan yang kamu buat dan kegiatan/tugas apa yang kamu sedeng kerjan pastikan kmau menggunakan bahasa indonesia agar aku memahami mu.
+6. Untuk polish desain dari **ScannApp Design Prototype**: boleh dikerjakan tanpa diminta ulang tiap kali, TAPI dengan batas:
+   - Maksimal 1 subagent aktif untuk eksplorasi desain per sesi, kecuali Boss Ali minta lebih.
+   - Kerjakan satu komponen/layar per sesi, jangan seluruh app sekaligus.
+   - Sebelum mulai, sebutkan singkat rencana & estimasi cakupan (berapa file/komponen yang akan disentuh).
+   - Tunjukkan hasilnya untuk Boss Ali putuskan sebelum lanjut ke komponen berikutnya — jangan lanjut berantai tanpa checkpoint.
+7. Gunakan Bahasa Indonesia di setiap laporan yang dibuat dan setiap penjelasan kegiatan/tugas yang sedang dikerjakan, supaya Boss Ali bisa mengikuti.
+8. Kalau pindah ke task atau subsistem yang tidak berhubungan dengan yang baru selesai, jalankan `/clear` — jangan bawa context lama yang sudah tidak relevan.
 
 ## 6. Angka Final yang Wajib Dipakai (bukan lagi open decision — lihat PRD v2 Bagian 7)
 
@@ -98,13 +101,15 @@ Angka-angka di atas dipakai langsung sebagai konstanta/env var (lihat `.env.exam
 
 Boss Ali ingin Claude Code berperan besar dalam implementasi — ambil inisiatif teknis, buat keputusan detail implementasi sendiri. **Yang wajib dieskalasi ke Boss Ali hanya:** keputusan bisnis/angka baru yang belum ada di dokumen (lihat Bagian 6 & PRD Bagian 7), perubahan arsitektur besar (mis. ganti provider, ganti framework), atau pilihan yang punya trade-off signifikan tanpa jawaban jelas dari dokumen yang ada. Keputusan implementasi teknis kecil (struktur komponen, nama variabel, cara menulis query) tidak perlu ditanyakan — langsung kerjakan sesuai konvensi di Bagian 4.
 
+Inisiatif teknis ini **tetap tunduk pada kebijakan model & subagent di Bagian 9.5** — "ambil inisiatif" bukan berarti bebas dari batas cakupan, jumlah subagent, atau pilihan model.
+
 ## 9. Konvensi Plugin & Skill Claude Code
 
 Plugin berikut sudah terpasang di scope user/project — **tidak perlu diinstall ulang atau ditanyakan lagi**, langsung dipakai sesuai konteks. Sebagian bersifat otomatis (model-invoked), sebagian butuh aturan tambahan supaya hasilnya konsisten dengan proyek ini.
 
 ### 9.1 Plugin otomatis (tidak butuh perintah manual)
 
-- **security-guidance** — scan otomatis tiap ada perubahan kode untuk pola injection, XSS, secret ter-expose, IDOR. Kalau ada temuan, laporkan sebelum lanjut, jangan diamkan.
+- **security-guidance** — jalankan sebelum commit (bukan tiap penyimpanan file per-edit), untuk pola injection, XSS, secret ter-expose, IDOR. Kalau ada temuan, laporkan sebelum lanjut, jangan diamkan.
 - **typescript-lsp** — diagnostik TypeScript real-time (type errors, jump-to-definition). Berjalan di background, tidak perlu dipanggil.
 - **frontend-design** — aktif otomatis saat mengerjakan UI/frontend. **Lihat aturan wajib di 9.2 sebelum skill ini dipakai.**
 
@@ -118,7 +123,7 @@ Skill ini cenderung mendorong pemilihan font/warna/aksen baru yang "distinctive"
 
 ### 9.3 Superpowers (alur brainstorm → plan → execute)
 
-- **Task baru/besar** (subsistem baru, fitur belum ada sebelumnya): ikuti alur penuh — brainstorm dulu, baru write-plan, baru execute-plan.
+- **Task baru/besar** (subsistem baru, fitur belum ada sebelumnya): ikuti alur penuh — brainstorm dulu, baru write-plan, baru execute-plan. Sebelum mulai alur penuh ini, sebutkan dulu perkiraan skill/subagent apa saja yang akan terpakai (lihat Bagian 9.5).
 - **Fix kecil / perubahan config / typo**: boleh skip langsung ke eksekusi kalau Boss Ali eksplisit bilang "langsung kerjakan" atau semacamnya — jangan paksakan proses penuh untuk perubahan trivial.
 - Proses ini **tidak menggantikan** Aturan Keras di Bagian 3 & alur kerja Bagian 5 — kalau brainstorm/plan mengarah ke keputusan bisnis/angka yang belum ada di PRD/System Design, tetap berhenti dan tanya (bukan diputuskan sendiri oleh proses Superpowers).
 
@@ -126,3 +131,12 @@ Skill ini cenderung mendorong pemilihan font/warna/aksen baru yang "distinctive"
 
 - **code-review**: jalankan sebelum commit untuk perubahan yang menyentuh lebih dari satu file atau logic non-trivial. Untuk perubahan satu baris/config, boleh dilewati.
 - **commit-commands**: pakai untuk format commit message, ikuti conventional commits — tidak perlu approval manual per commit message kecuali isinya menyangkut perubahan yang juga butuh review kode.
+
+### 9.5 Kebijakan Model & Subagent (mengikat)
+
+- Task ringan (baca file, cek error, edit satu-dua baris, cari string, fix typo) → **Sonnet**, bukan Opus.
+- Opus dipakai hanya untuk: desain arsitektur, debugging kompleks lintas file, keputusan struktural besar.
+- Jangan spawn lebih dari **2 subagent paralel** tanpa konfirmasi eksplisit ke Boss Ali dulu — termasuk subagent yang dibawa oleh plugin (bukan cuma yang didefinisikan sendiri di project). Proyek ini tidak punya subagent custom sendiri; semua subagent yang muncul kemungkinan besar dari plugin (mis. `superpowers`) — batas yang sama tetap berlaku.
+- Sebelum menjalankan alur Superpowers penuh (brainstorm → plan → execute) untuk task besar, sebutkan dulu perkiraan skill/subagent apa saja yang akan terpakai, supaya Boss Ali bisa menilai cakupannya sebelum tereksekusi.
+- Gunakan `/compact` setiap selesai satu fase kerja (mis. selesai satu task di `TASKS.md`). Gunakan `/clear` saat pindah ke task/subsistem yang tidak berhubungan.
+- `CLAUDE_CODE_SUBAGENT_MODEL` sudah diset ke Sonnet lewat `.claude/settings.json` (env). Jangan override subagent ke Opus kecuali task itu memang butuh reasoning berat — kalau override diperlukan, beri tahu Boss Ali beserta alasannya sebelum dijalankan.

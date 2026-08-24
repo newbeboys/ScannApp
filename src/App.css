@@ -474,8 +474,10 @@
 
 /* ---------- review flow ---------- */
 
+/* Sebuah <button>: mengetuknya membuka pratinjau layar penuh. */
 .review-stage {
   flex: 1 1 auto;
+  width: 100%;
   min-height: 260px;
   display: grid;
   place-items: center;
@@ -483,6 +485,13 @@
   border-radius: 20px;
   background: var(--chip);
   border: 1px solid var(--chip-border);
+  font: inherit;
+  color: inherit;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.review-stage:active {
+  transform: scale(0.99);
 }
 
 .review-stage .page-image {
@@ -1669,4 +1678,291 @@
   font-size: 12px;
   color: var(--fg-dim);
   text-align: center;
+}
+
+/* ---------- pratinjau dokumen (layar penuh) ---------- */
+
+/*
+  Latar tinta pekat, bukan gradien milik tema.
+
+  Halaman hasil pindai hampir selalu kertas putih: di atas latar terang,
+  tepinya lenyap dan mata tidak punya pegangan sama sekali. Nilainya diambil
+  dari tinta yang sudah dipakai `.sheet-backdrop`, jadi tidak ada warna baru
+  yang masuk ke palet (CLAUDE.md 9.2) — dan sengaja tidak ikut berganti antar
+  tema, karena yang sedang ditonton adalah dokumennya, bukan aplikasinya.
+*/
+/*
+  z-index sengaja di BAWAH toast (20) dan lembar bawah (30).
+
+  Pratinjau memang menutupi seluruh layar, tapi ia tidak pernah tampil
+  bersamaan dengan bottom nav (10) — sedangkan lembar Ekspor dan toast justru
+  dibuka DARI dalamnya. Dengan 40, menekan "Ekspor" di bilah bawah pratinjau
+  terlihat seolah tidak terjadi apa-apa: lembarnya benar-benar terbuka, hanya
+  saja tergambar di belakang latar tinta yang solid.
+*/
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  background: #080a12;
+  color: #f2f5fb;
+  overscroll-behavior: contain;
+  animation: fade-in 200ms ease;
+}
+
+.viewer__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition:
+    opacity 220ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.viewer__bar--top {
+  top: 0;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 20px;
+  background: linear-gradient(to bottom, rgba(8, 10, 18, 0.92), rgba(8, 10, 18, 0));
+}
+
+.viewer__bar--bottom {
+  bottom: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 26px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgba(8, 10, 18, 0.94), rgba(8, 10, 18, 0));
+}
+
+/* Ketuk sekali untuk menyingkirkan seluruh perkakas dari pandangan. */
+.viewer--immersive .viewer__bar,
+.viewer--immersive .viewer__step {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.viewer--immersive .viewer__bar--top {
+  transform: translateY(-10px);
+}
+
+.viewer--immersive .viewer__bar--bottom {
+  transform: translateY(10px);
+}
+
+.viewer__icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2f5fb;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.viewer__icon:active {
+  transform: scale(0.94);
+}
+
+.viewer__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer__count {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.66);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+  `touch-action: none` bukan kehati-hatian: seluruh gestur di sini —geser antar
+  halaman, cubit, geser saat diperbesar— digerakkan sendiri lewat pointer
+  event. Kalau WebView masih boleh menggulir atau memperbesar sendiri, ia akan
+  merebut jari di tengah gestur dan halamannya berhenti mengikuti.
+*/
+.viewer__stage {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.viewer__track {
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+
+/* Mengikuti jari saat digeser; meluncur sendiri setelah dilepas. */
+.viewer__track:not(.viewer__track--dragging) {
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+  Ruang tetap untuk kedua bilah, juga saat bilahnya disembunyikan. Kalau
+  padding-nya ikut berubah, tiap ketukan memaksa tata letak ulang gambar 12 MP
+  — dan halamannya melompat-lompat besar-kecil hanya karena perkakasnya lewat.
+*/
+.viewer__slide {
+  flex: 0 0 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: calc(62px + env(safe-area-inset-top, 0px)) 12px
+    calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+.viewer__image {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 5px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* Hanya saat tidak ada jari di layar — lihat catatan `isTouching`. */
+.viewer__image--settling {
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.viewer__placeholder {
+  width: 62%;
+  aspect-ratio: 1 / 1.4142;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  animation: viewer-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes viewer-pulse {
+  50% {
+    background: rgba(255, 255, 255, 0.11);
+  }
+}
+
+.viewer__step {
+  position: absolute;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 10, 18, 0.55);
+  backdrop-filter: blur(6px);
+  color: #f2f5fb;
+  transition: opacity 220ms ease;
+}
+
+.viewer__step--prev {
+  left: 10px;
+}
+
+.viewer__step--next {
+  right: 10px;
+}
+
+.viewer__step:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.viewer__pages {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 2px;
+  scrollbar-width: none;
+}
+
+.viewer__pages::-webkit-scrollbar {
+  display: none;
+}
+
+.viewer__page-dot {
+  flex: 0 0 auto;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.viewer__page-dot--active {
+  border-color: transparent;
+  background: var(--acc);
+  color: #fff;
+}
+
+.viewer__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.viewer__actions .button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 13px 10px;
+  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2f5fb;
+}
+
+.viewer__actions .button--primary {
+  border-color: transparent;
+  background: var(--acc);
+  color: #fff;
+}
+
+.viewer__hint {
+  text-align: center;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/*
+  Kartu halaman di layar detail sekarang tombol menuju pratinjau, bukan lagi
+  <div> mati. Elemennya berganti, tampilannya tidak boleh ikut berganti —
+  browser memberi <button> border, latar, dan teks rata tengah bawaan.
+*/
+.doc-tile--page {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }

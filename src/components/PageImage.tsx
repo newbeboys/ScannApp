@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { getScanPageDisplayUri } from '../lib/scanStorage'
+import { usePageDisplayUri } from '../lib/usePageDisplayUri'
 
 interface PageImageProps {
   /** Stored page path (Directory.Data-relative), or a scanner URI from scanDocument(). */
@@ -15,22 +14,22 @@ interface PageImageProps {
 }
 
 export function PageImage({ source, raw = false, className, alt = '' }: PageImageProps) {
-  const [src, setSrc] = useState<string | null>(raw ? source : null)
-
-  useEffect(() => {
-    if (raw) {
-      setSrc(source)
-      return
-    }
-    let cancelled = false
-    getScanPageDisplayUri(source).then((uri) => {
-      if (!cancelled) setSrc(uri)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [source, raw])
+  const src = usePageDisplayUri(source, raw)
 
   if (!src) return <div className={`page-image page-image--loading ${className ?? ''}`} />
-  return <img className={`page-image ${className ?? ''}`} src={src} alt={alt} />
+  return (
+    <img
+      className={`page-image ${className ?? ''}`}
+      src={src}
+      alt={alt}
+      /*
+        Scanned pages are 12 MP JPEGs shown here at thumbnail size, and the
+        document detail screen renders one per page — a 30-page document would
+        decode 360 MP before the user has reached the second row. Both
+        attributes keep that work off the first paint.
+      */
+      loading="lazy"
+      decoding="async"
+    />
+  )
 }

@@ -4,6 +4,7 @@ import {
   ChevronLeftIcon,
   CropIcon,
   ExportIcon,
+  EyeIcon,
   PencilIcon,
   TrashIcon,
 } from '../components/Icons'
@@ -18,6 +19,8 @@ interface DocumentDetailScreenProps {
   isRenaming?: boolean
   onBack: () => void
   onEdit: () => void
+  /** Opens the full-screen preview at the page the user tapped. */
+  onPreview: (pageIndex: number) => void
   onExport: () => void
   onDelete: () => void
   onBackup: () => void
@@ -40,6 +43,7 @@ export function DocumentDetailScreen({
   isRenaming = false,
   onBack,
   onEdit,
+  onPreview,
   onExport,
   onDelete,
   onBackup,
@@ -130,6 +134,10 @@ export function DocumentDetailScreen({
       )}
 
       <div className="editor-actions">
+        <button type="button" className="button" onClick={() => onPreview(0)}>
+          <EyeIcon size={17} />
+          <span>Lihat</span>
+        </button>
         <button type="button" className="button" onClick={onEdit}>
           <CropIcon size={17} />
           <span>Edit</span>
@@ -149,12 +157,19 @@ export function DocumentDetailScreen({
 
       <div className="doc-grid">
         {doc.pages.map((page, index) => (
-          <div key={page.original} className="doc-tile">
+          <button
+            key={page.original}
+            type="button"
+            className="doc-tile doc-tile--page"
+            onClick={() => onPreview(index)}
+            aria-label={`Lihat halaman ${index + 1}`}
+          >
             <div className="doc-tile__preview">
-              <PageImage source={resolvePage(page)} alt={`Halaman ${index + 1}`} />
+              {/* Named by the button around it; a second label would read the page twice. */}
+              <PageImage source={resolvePage(page)} alt="" />
             </div>
             <p>Halaman {index + 1}</p>
-          </div>
+          </button>
         ))}
       </div>
     </div>

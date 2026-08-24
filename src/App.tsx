@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { useAuth } from './auth/useAuth'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { ExportSheet } from './components/ExportSheet'
+import { CropIcon, ExportIcon } from './components/Icons'
 import { resetScanStreak } from './lib/ads/adFrequency'
 import { maybeShowInterstitial } from './lib/ads/adsService'
 import { useAdBanner } from './lib/ads/useAdBanner'
@@ -29,6 +30,7 @@ import {
   deleteScanDocument,
   listScanDocuments,
   renameScanDocument,
+  resolvePage,
   saveScanDocument,
   type LocalScanDocument,
 } from './lib/scanStorage'
@@ -41,6 +43,7 @@ import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
 import { HomeScreen } from './screens/HomeScreen'
 import { LandingScreen } from './screens/LandingScreen'
 import { MergeScreen } from './screens/MergeScreen'
+import { PageViewerScreen } from './screens/PageViewerScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { SplashScreen } from './screens/SplashScreen'
@@ -51,6 +54,7 @@ type View =
   | { kind: 'tabs' }
   | { kind: 'detail'; id: string }
   | { kind: 'editor'; id: string }
+  | { kind: 'viewer'; id: string; pageIndex: number }
   | { kind: 'merge' }
   | { kind: 'backups' }
   | { kind: 'upgrade' }
@@ -66,6 +70,8 @@ function App() {
   const [documents, setDocuments] = useState<LocalScanDocument[]>([])
   const [pendingPages, setPendingPages] = useState<string[] | null>(null)
   const [currentPage, setCurrentPage] = useState(0)
+  /** Which freshly-scanned page is open full-screen, if any. */
+  const [reviewPreview, setReviewPreview] = useState<number | null>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -205,6 +211,8 @@ function App() {
     if (!pages) return
     setPendingPages(pages)
     setCurrentPage(0)
+    // A preview left open from the previous scan would reopen over the new one.
+    setReviewPreview(null)
   }
 
   const handleAddPages = async () => {
@@ -526,6 +534,25 @@ function App() {
   }
 
   if (pendingPages) {
+    // Full-screen look at a page that has not been saved yet. The pages are
+    // still scanner URIs at this point, hence `raw`.
+    if (reviewPreview !== null && reviewPreview < pendingPages.length) {
+      return (
+        <div className="app">
+          <PageViewerScreen
+            title="Hasil Pindai"
+            sources={pendingPages}
+            raw
+            initialIndex={reviewPreview}
+            // Paging inside the preview moves the review screen behind it too,
+            // so closing does not throw away where the user got to.
+            onPageChange={setCurrentPage}
+            onClose={() => setReviewPreview(null)}
+          />
+        </div>
+      )
+    }
+
     return (
       <div className="app">
         <ReviewScreen
@@ -533,6 +560,7 @@ function App() {
           currentIndex={currentPage}
           isBusy={isSaving || isScanning}
           onSelectPage={setCurrentPage}
+          onPreview={setReviewPreview}
           onRemovePage={handleRemovePage}
           onAddPages={handleAddPages}
           onCancel={() => setPendingPages(null)}
@@ -594,6 +622,47 @@ function App() {
     )
   }
 
+  if (activeDocument && view.kind === 'viewer') {
+    const openPage = view.pageIndex
+    return (
+      <div className="app">
+        <PageViewerScreen
+          title={activeDocument.title}
+          // The same resolution the exporter and the cloud backup use, so the
+          // preview shows the filtered, cropped page rather than the raw scan.
+          sources={activeDocument.pages.map(resolvePage)}
+          initialIndex={openPage}
+          onClose={() => setView({ kind: 'detail', id: activeDocument.id })}
+          actions={
+            <>
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  setEditedInSession(false)
+                  setView({ kind: 'editor', id: activeDocument.id })
+                }}
+              >
+                <CropIcon size={17} />
+                <span>Edit</span>
+              </button>
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={() => setExportTarget(activeDocument.id)}
+              >
+                <ExportIcon size={17} />
+                <span>Ekspor</span>
+              </button>
+            </>
+          }
+        />
+        {exportSheet}
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
   if (activeDocument && view.kind === 'editor') {
     return (
       <div className="app">
@@ -634,6 +703,9 @@ function App() {
           isRenaming={renamingId === activeDocument.id}
           onRename={(title) => handleRename(activeDocument.id, title)}
           onBack={() => setView({ kind: 'tabs' })}
+          onPreview={(pageIndex) =>
+            setView({ kind: 'viewer', id: activeDocument.id, pageIndex })
+          }
           onEdit={() => {
             // Fresh session: an edit made an hour ago must not make merely
             // opening the editor now count as editing.

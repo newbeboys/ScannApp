@@ -302,6 +302,38 @@ Boss Ali menjalankan seluruh rencana uji A–E di Xiaomi T15. **Semua test fungs
 
 **Belum terjawab — butuh keputusan Boss Ali kalau HP masih terasa berat:** halaman disimpan pada resolusi penuh hasil scanner (12 MP). Menurunkannya akan mempercepat **semua** operasi sekaligus, tapi menurunkan pula batas atas mutu level ekspor "Maksimal". Lihat catatan di laporan sesi ini.
 
+### Pratinjau Dokumen (layar penuh) — 24 Agustus 2026
+
+Diminta Boss Ali setelah uji device: aplikasi scanner selalu punya cara melihat hasil pindai, dan yang ada di sini cuma petak kecil di layar detail yang tidak bisa diketuk. **Semua tier** — melihat dokumen sendiri itu kebutuhan dasar, bukan nilai jual (alasan yang sama dengan ubah nama & filter).
+
+- [x] `PageViewerScreen` — layar penuh, geser antar halaman, cubit untuk memperbesar (1×–4×), ketuk dua kali untuk zoom ke titik yang disentuh, ketuk sekali untuk menyingkirkan bilah atas/bawah
+- [x] Dibuka dari **tiga** tempat: tombol "Lihat" di layar detail, ketukan pada petak halaman mana pun di layar itu, dan ketukan pada halaman besar di layar Tinjau Hasil Pindai — yang terakhir penting karena di situlah user memutuskan sebuah pindaian layak disimpan atau tidak, dan teks buram tidak terlihat pada 46vh
+- [x] Sumber halaman lewat `resolvePage()`, jadi yang tampil adalah halaman **setelah** crop/putar/filter — sama persis dengan yang diekspor dan yang dicadangkan
+- [x] **Hanya 3 halaman yang ada di DOM** (`isPageMounted`): halaman yang dilihat plus dua tetangganya. Halaman hasil pindai itu JPEG 12 MP; dokumen 40 halaman dengan semuanya di DOM adalah gigabyte bitmap terdekode. Dengan ini biaya memori pratinjau tidak lagi ditentukan jumlah halaman dokumen
+- [x] `PageImage` dapat `loading="lazy"` + `decoding="async"` — layar detail merender satu gambar per halaman, jadi dokumen 30 halaman sebelumnya mendekode 360 MP sebelum user sempat menggulir ke baris kedua
+- [x] Seluruh gestur digerakkan sendiri lewat pointer event, bukan scroll-snap. Wadah gulir asli memang memberi momentum gratis, tapi ia juga **memiliki** sentuhannya — halaman yang diperbesar harus merebut kembali geseran satu jari darinya, dan keduanya berebut tiap gestur. Konsekuensi bagusnya: seluruh matematikanya (`lib/pageViewer.ts`) jadi fungsi murni yang bisa diuji di suite node — batas zoom, titik fokus cubit, batas geser, ambang & kecepatan geseran, rubber band di halaman pertama/terakhir
+- [x] Latar tinta pekat `#080a12`, bukan gradien tema. Halaman pindai hampir selalu kertas putih: di atas latar terang tepinya lenyap. Nilainya diambil dari tinta yang sudah dipakai `.sheet-backdrop`, jadi **tidak ada warna baru** yang masuk ke palet (CLAUDE.md 9.2)
+- [x] Test bertambah 50 (total 379 — 354 node + 25 browser)
+
+**Tiga temuan code-review ditutup sebelum commit:**
+
+- [x] **Tombol Ekspor di dalam pratinjau seolah tidak berfungsi.** `.viewer` semula `z-index: 40`, di atas lembar bawah (30) dan toast (20) yang justru dibuka **dari** dalamnya — lembarnya benar-benar terbuka, hanya tergambar di belakang latar tinta yang solid. Turun ke 15: tetap di atas bottom nav (10), yang memang tidak pernah tampil bersamaan dengannya
+- [x] **Ketuk dua kali tidak bekerja saat halaman diperbesar.** `endPointer` keluar lebih awal untuk gestur `pan`, dan halaman yang diperbesar **selalu** memulai gestur `pan` — jadi cabang "zoom keluar" di `handleTap` tidak pernah tercapai. Kombinasi terburuknya: sembunyikan bilah lalu perbesar, dan tombol Tutup hilang tanpa cara mengembalikannya. Sekarang jari yang tidak berpindah dihitung sebagai ketukan, apa pun gestur asalnya
+- [x] **Cubit sebelum gambar selesai dimuat malah menggeser halaman.** Kalau `measure()` gagal (belum ada kotak untuk diukur), fungsi keluar tanpa mengganti gestur — gestur geser satu jari tetap hidup dengan dua pointer terlacak, `dx` melompat antar jari, dan saat dilepas `swipeTarget` berpindah halaman padahal user cuma mencubit
+
+**Satu bug ditemukan oleh test-nya sendiri, bukan oleh review:** tombol panah kiri/kanan di dalam panggung tidak pernah berfungsi. `setPointerCapture` di panggung mengalihkan `pointerup`, jadi `click` tidak pernah sampai ke tombolnya — dan tekanan itu malah terbaca sebagai ketukan yang menyembunyikan tombol yang baru saja ditekan. Sekarang gestur tidak dimulai kalau pointer mendarat di atas `<button>`; ada test regresinya.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Geser antar halaman terasa mengikuti jempol, bukan tersendat — termasuk pada dokumen 20+ halaman
+- [ ] Cubit untuk memperbesar: titik yang dicubit tetap di bawah jari, tidak melayang
+- [ ] Ketuk dua kali memperbesar ke titik yang disentuh; ketuk dua kali lagi kembali pas ke layar
+- [ ] Halaman yang diperbesar tidak bisa digeser sampai memperlihatkan latar di balik tepinya
+- [ ] Ketuk sekali menyembunyikan bilah, ketuk lagi memunculkannya — **dan tombol Tutup selalu bisa dikembalikan**
+- [ ] Buka pratinjau dokumen 30+ halaman, geser cepat sampai halaman terakhir — HP tidak kehabisan memori dan tidak ada halaman kosong
+- [ ] Tombol "Ekspor" di dalam pratinjau membuka lembar Ekspor yang bisa dipakai (bukti perbaikan z-index)
+- [ ] Ketuk halaman besar di layar Tinjau Hasil Pindai — pratinjau terbuka pada halaman itu, dan geser di dalamnya ikut memindahkan halaman terpilih di layar tinjau
+
 ### Lingkungan test browser (23 Agustus 2026)
 
 Dipasang atas keputusan Boss Ali sebelum masuk annotate + tanda tangan — potongan itu seluruhnya kanvas dan interaksi sentuh, persis jenis kode yang tidak bisa dijaga test Node.

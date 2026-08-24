@@ -72,6 +72,17 @@ export function canChooseCompression(tier: Tier): boolean {
 }
 
 /**
+ * Exporting several documents in one go is Pro (PRD Bagian 3).
+ *
+ * Unlike `resolveCompressionLevel`, which quietly hands Basic a lower level,
+ * there is no lesser version of "export five documents" to fall back to — so
+ * the batch path refuses outright rather than degrading.
+ */
+export function canBatchExport(tier: Tier): boolean {
+  return tier === 'pro'
+}
+
+/**
  * The single place that decides which level an export really runs at.
  *
  * Lives in the library rather than the sheet on purpose: hiding a control in

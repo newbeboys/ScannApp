@@ -1,8 +1,10 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { normalizeDocumentTitle } from '../../supabase/functions/_shared/documentTitle'
+import type { Mark } from './annotations'
 import { base64ToBlob, blobToBase64 } from './blobBase64'
 import {
+  annotationSource,
   effectiveFilter,
   filterSource,
   migrateScanIndex,
@@ -17,6 +19,8 @@ export {
   hasEdits,
   effectiveFilter,
   filterSource,
+  annotationSource,
+  markCount,
   DOCUMENT_FILTERS,
 } from './scanIndexMigration'
 export type { LocalScanDocument, ScanPage, DocumentFilter, PageFilter } from './scanIndexMigration'
@@ -84,7 +88,7 @@ async function readIndex(): Promise<LocalScanDocument[]> {
 
   const docs = migrateScanIndex(parsed)
   const needsRewrite =
-    Array.isArray(parsed) && parsed.some((doc) => (doc as LocalScanDocument)?.schemaVersion !== 3)
+    Array.isArray(parsed) && parsed.some((doc) => (doc as LocalScanDocument)?.schemaVersion !== 4)
   if (needsRewrite) {
     await writeIndex(docs)
   }
@@ -150,7 +154,7 @@ export async function saveScanDocument(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id,
     title: title ?? `Scan ${new Date().toLocaleString('id-ID')}`,
     createdAt: new Date().toISOString(),
@@ -224,7 +228,7 @@ export async function restoreDocumentFromJpegs(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: cloud.id,
     title: cloud.title,
     // The day it was scanned, not the day it came back.
@@ -363,8 +367,22 @@ export async function readPageBlob(pagePath: string): Promise<Blob> {
  * the other's. `original` is assigned once, at creation, and never changes,
  * so it stays a safe, unique key for the document's lifetime.
  */
-function derivedPath(original: string, suffix: 'edited' | 'filtered'): string {
+function derivedPath(original: string, suffix: 'edited' | 'filtered' | 'annotated'): string {
   return original.replace(/\.jpg$/i, `-${suffix}.jpg`)
+}
+
+/**
+ * Forgets a derived file: drops its cached display URL, then removes it.
+ *
+ * A missing file is not an error here. The index is what decides what is
+ * displayed, and by the time this is called the entry is already on its way
+ * out — a delete that fails because the file was never written leaves nothing
+ * behind to clean up.
+ */
+async function discard(path: string | undefined): Promise<void> {
+  if (!path) return
+  invalidateDisplayUri(path)
+  await Filesystem.deleteFile({ path, directory: Directory.Data }).catch(() => {})
 }
 
 /**
@@ -390,16 +408,15 @@ export async function savePageEdit(
     data: await blobToBase64(edited),
   })
 
-  // The filter render was made from the *old* geometry, so it is now wrong —
-  // it would show the page at its pre-crop shape. Dropped here; the caller
-  // re-renders it from the new edit (see documentEditing.editPage).
-  const { filtered, ...rest } = page
-  if (filtered) {
-    invalidateDisplayUri(filtered)
-    await Filesystem.deleteFile({ path: filtered, directory: Directory.Data }).catch(() => {
-      // Already gone; the index no longer points at it either way.
-    })
-  }
+  // Both derived files were made from the *old* geometry, so both are now
+  // wrong — they would show the page at its pre-crop shape. Dropped here; the
+  // caller re-renders them from the new edit (see documentEditing.editPage).
+  //
+  // The marks themselves survive: they are coordinates, and the caller remaps
+  // them onto the new geometry rather than asking the user to draw again.
+  const { filtered, annotated, ...rest } = page
+  await discard(filtered)
+  await discard(annotated)
 
   doc.pages[pageIndex] = { ...rest, edited: editedPath }
   await writeIndex(docs)
@@ -423,23 +440,23 @@ export async function resetPageEdit(
   // that needs a canvas, which this module deliberately has no access to.
   // documentEditing.revertPage does that step right after calling this, using
   // the page this function returns.
-  for (const path of [page.edited, page.filtered]) {
-    if (!path) continue
-    invalidateDisplayUri(path)
-    try {
-      await Filesystem.deleteFile({ path, directory: Directory.Data })
-    } catch {
-      // file already gone; clearing the index entry below is what matters
-    }
+  for (const path of [page.edited, page.filtered, page.annotated]) {
+    await discard(path)
   }
 
   // The page's own filter *choice* survives — reverting a crop is not the
   // same thing as changing the user's mind about this page's filter. Losing
   // it here would silently pull the page back onto the document's filter, or
   // strip a deliberate 'none' exception, neither of which "Asli" ever asked for.
+  //
+  // The marks survive for the same reason: "Asli" undoes a crop, and undoing a
+  // crop is not a request to tear up a signature. They cannot be mapped back
+  // through the crop that is being thrown away, so they keep the coordinates
+  // they have and are re-rendered onto the restored page by the caller.
   doc.pages[pageIndex] = {
     original: page.original,
     ...(page.filter ? { filter: page.filter } : {}),
+    ...(page.marks && page.marks.length > 0 ? { marks: page.marks } : {}),
   }
   await writeIndex(docs)
   return doc
@@ -454,12 +471,7 @@ async function renderPageFilter(
   const path = derivedPath(page.original, 'filtered')
 
   if (filter === null) {
-    if (page.filtered) {
-      invalidateDisplayUri(page.filtered)
-      await Filesystem.deleteFile({ path: page.filtered, directory: Directory.Data }).catch(() => {
-        // Already gone. The index entry is what decides what gets displayed.
-      })
-    }
+    await discard(page.filtered)
     const { filtered: _dropped, ...rest } = page
     return rest
   }
@@ -479,13 +491,61 @@ async function renderPageFilter(
 }
 
 /**
- * Renders a filter, supplied by the caller rather than imported.
+ * Renders one page's ink on top of whatever the page currently shows, or
+ * clears it, and returns the new page entry.
+ *
+ * Always drawn onto `annotationSource` — the filter render, else the crop,
+ * else the scan — never onto the previous annotated file. Reading that back
+ * would lay every stroke over itself a second time, and removing a stroke
+ * would never actually remove anything.
+ */
+async function renderPageMarks(page: ScanPage, render: MarkRenderer): Promise<ScanPage> {
+  const marks = page.marks ?? []
+
+  if (marks.length === 0) {
+    await discard(page.annotated)
+    const { annotated: _dropped, marks: _none, ...rest } = page
+    return rest
+  }
+
+  const path = derivedPath(page.original, 'annotated')
+  const rendered = await render(await readPageBlob(annotationSource(page)), marks)
+  await Filesystem.writeFile({
+    path,
+    directory: Directory.Data,
+    data: await blobToBase64(rendered),
+  })
+  invalidateDisplayUri(path)
+
+  return { ...page, marks, annotated: path }
+}
+
+/**
+ * Both derived files for one page, in the order they depend on each other.
+ *
+ * The ink is drawn onto the filter render, so the filter has to be settled
+ * first. Keeping the pair in one function is what lets `applyDocumentFilter`
+ * re-render a whole annotated document inside its existing single pass, rather
+ * than walking the pages a second time.
+ */
+async function renderPageDerived(
+  page: ScanPage,
+  filter: DocumentFilter | null,
+  renderFilter: FilterRenderer,
+  renderMarks: MarkRenderer,
+): Promise<ScanPage> {
+  return renderPageMarks(await renderPageFilter(page, filter, renderFilter), renderMarks)
+}
+
+/**
+ * Renders supplied by the caller rather than imported.
  *
  * Storage has no business touching a canvas — keeping the rendering out here
  * is what lets this module stay free of the DOM, and lets these functions be
  * tested without one.
  */
 export type FilterRenderer = (source: Blob, filter: DocumentFilter) => Promise<Blob>
+export type MarkRenderer = (source: Blob, marks: Mark[]) => Promise<Blob>
 
 /**
  * Sets the filter for the whole document and re-renders every page that is
@@ -510,6 +570,7 @@ export async function applyDocumentFilter(
   docId: string,
   filter: DocumentFilter | null,
   render: FilterRenderer,
+  renderMarks: MarkRenderer,
   onProgress?: (done: number, total: number) => void,
 ): Promise<LocalScanDocument> {
   const docs = await readIndex()
@@ -521,7 +582,7 @@ export async function applyDocumentFilter(
 
   const pages: ScanPage[] = []
   for (const [index, page] of doc.pages.entries()) {
-    pages.push(await renderPageFilter(page, effectiveFilter(next, page), render))
+    pages.push(await renderPageDerived(page, effectiveFilter(next, page), render, renderMarks))
     onProgress?.(index + 1, doc.pages.length)
   }
 
@@ -542,6 +603,7 @@ export async function applyPageFilter(
   pageIndex: number,
   choice: PageFilter | null,
   render: FilterRenderer,
+  renderMarks: MarkRenderer,
 ): Promise<LocalScanDocument> {
   const docs = await readIndex()
   const doc = docs.find((entry) => entry.id === docId)
@@ -554,14 +616,135 @@ export async function applyPageFilter(
   if (choice === null) delete withChoice.filter
   else withChoice.filter = choice
 
-  doc.pages[pageIndex] = await renderPageFilter(
+  doc.pages[pageIndex] = await renderPageDerived(
     withChoice,
     effectiveFilter(doc, withChoice),
     render,
+    renderMarks,
   )
 
   await writeIndex(docs)
   return doc
+}
+
+/**
+ * Replaces what is drawn on one page and re-renders it.
+ *
+ * Passing an empty list is how ink is cleared: the annotated file goes, and
+ * `resolvePage` falls back to the filter render underneath it.
+ */
+export async function savePageMarks(
+  docId: string,
+  pageIndex: number,
+  marks: Mark[],
+  render: MarkRenderer,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const page = doc.pages[pageIndex]
+  if (!page) throw new Error('Halaman tidak ditemukan.')
+
+  doc.pages[pageIndex] = await renderPageMarks({ ...page, marks }, render)
+
+  await writeIndex(docs)
+  return doc
+}
+
+/**
+ * Writes a page's marks and re-renders both derived files in one pass.
+ *
+ * For the moment straight after a crop or a rotate, when three things are true
+ * at once: the marks have moved with the geometry, the filter render is gone,
+ * and the ink render is gone. Doing it as "re-render the filter, then re-render
+ * the ink" instead renders the ink twice — once at the old coordinates, from
+ * inside the filter pass, and again over the top — which costs a whole extra
+ * pass over a 12 MP page and leaves the ink stored in the wrong place if the
+ * second one fails.
+ */
+export async function applyPageDerived(
+  docId: string,
+  pageIndex: number,
+  marks: Mark[],
+  render: FilterRenderer,
+  renderMarks: MarkRenderer,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const page = doc.pages[pageIndex]
+  if (!page) throw new Error('Halaman tidak ditemukan.')
+
+  const withMarks: ScanPage = { ...page, marks }
+  doc.pages[pageIndex] = await renderPageDerived(
+    withMarks,
+    effectiveFilter(doc, withMarks),
+    render,
+    renderMarks,
+  )
+
+  await writeIndex(docs)
+  return doc
+}
+
+/**
+ * Deletes signature files no document refers to any more.
+ *
+ * A signature is written the moment it is drawn, because the overlay has to
+ * show it while it is being positioned — so backing out of the annotate screen
+ * without saving leaves one behind, as does deleting the last document that
+ * used it. They are only a few KB each, but nothing else would ever remove
+ * them, and "a few KB, forever, per attempt" adds up on a phone.
+ *
+ * Only ever called when no annotate draft is open: a draft's signature is not
+ * in the index yet, and would be swept away from under it.
+ */
+export async function pruneUnusedSignatures(): Promise<void> {
+  let entries: { name: string }[]
+  try {
+    entries = (await Filesystem.readdir({ path: SCANS_DIR, directory: Directory.Data })).files
+  } catch {
+    return
+  }
+
+  const docs = await readIndex()
+  const inUse = new Set(
+    docs.flatMap((doc) =>
+      doc.pages.flatMap((page) =>
+        (page.marks ?? []).flatMap((mark) => (mark.kind === 'signature' ? [mark.source] : [])),
+      ),
+    ),
+  )
+
+  for (const entry of entries) {
+    if (!/^signature-\d+\.png$/.test(entry.name)) continue
+    const path = `${SCANS_DIR}/${entry.name}`
+    if (inUse.has(path)) continue
+    await discard(path)
+  }
+}
+
+/**
+ * Stores a drawn signature and hands back the path a mark should point at.
+ *
+ * The filename carries a timestamp rather than being fixed. A signature is
+ * drawn once and stamped on many pages over many months; if redrawing it
+ * overwrote the old file, every document already signed would silently take on
+ * the new signature — including ones already backed up under the old one.
+ */
+export async function saveSignatureImage(png: Blob): Promise<string> {
+  await ensureScansDir()
+  const path = `${SCANS_DIR}/signature-${Date.now()}.png`
+
+  await Filesystem.writeFile({
+    path,
+    directory: Directory.Data,
+    data: await blobToBase64(png),
+  })
+
+  return path
 }
 
 /**
@@ -620,7 +803,7 @@ export async function createDocumentFromPages(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id,
     title,
     createdAt: new Date().toISOString(),

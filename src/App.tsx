@@ -29,6 +29,7 @@ import {
   deleteAllScanDocuments,
   deleteScanDocument,
   listScanDocuments,
+  pruneUnusedSignatures,
   renameScanDocument,
   resolvePage,
   saveScanDocument,
@@ -252,6 +253,10 @@ function App() {
   const handleDelete = async (id: string) => {
     const hadBackup = id in backedUp
     await deleteScanDocument(id)
+    // Signature files live outside any one document because the same signature
+    // is stamped across many. Deleting a document can therefore leave the last
+    // reference to one behind — nothing else would ever collect it.
+    await pruneUnusedSignatures()
     await refreshDocuments()
     setView({ kind: 'tabs' })
     // The cloud copy is deliberately kept — surviving a local delete is the
@@ -263,6 +268,7 @@ function App() {
     if (!confirm('Hapus semua dokumen tersimpan? Tindakan ini tidak bisa dibatalkan.')) return
     const hadBackups = backups.length > 0
     await deleteAllScanDocuments()
+    await pruneUnusedSignatures()
     await refreshDocuments()
     // Same reasoning as handleDelete: the cloud copies survive on purpose, and
     // they are about to reappear in the list as restorable — say so first.
@@ -668,12 +674,19 @@ function App() {
       <div className="app">
         <EditorScreen
           document={activeDocument}
+          tier={tier}
+          onUpgrade={() => setView({ kind: 'upgrade' })}
           onDocumentChange={(updated) => {
             setEditedInSession(true)
             applyDocumentChange(updated)
           }}
           onClose={() => {
             setView({ kind: 'detail', id: activeDocument.id })
+            // Safe only here, once the editor is gone: a signature that is
+            // still in an unsaved annotate draft is not in the index yet, and
+            // pruning while the draft is open would delete it out from under
+            // the overlay showing it.
+            void pruneUnusedSignatures()
             if (!editedInSession) return
             setEditedInSession(false)
             // After the editor has closed, so the document is on screen behind

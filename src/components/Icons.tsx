@@ -246,3 +246,13 @@ export function ImageStackIcon({ size = 24, className }: IconProps) {
     </svg>
   )
 }
+
+/** A signature: a flowing line over the rule it is signed on. */
+export function SignatureIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M3.5 15c2.5 0 3-8 5-8s1.5 8 3.5 8 2-4 3.5-4 1.2 2.5 2.6 2.5" />
+      <path d="M4 19.5h16" />
+    </svg>
+  )
+}

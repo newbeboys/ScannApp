@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { AnnotateOverlay, type AnnotateTool } from '../components/AnnotateOverlay'
+import { AnnotateToolbar } from '../components/AnnotateToolbar'
 import { CropOverlay } from '../components/CropOverlay'
 import { FilterPicker } from '../components/FilterPicker'
+import { SignaturePad } from '../components/SignaturePad'
 import { activeChip, pickToChoice, type FilterScope } from '../lib/filterChoice'
 import {
   CheckIcon,
@@ -10,45 +13,64 @@ import {
   ImageIcon,
   MergeIcon,
   RotateIcon,
+  SignatureIcon,
   UndoIcon,
 } from '../components/Icons'
 import { PageReorder } from '../components/PageReorder'
 import {
+  defaultSignatureBox,
+  INK_COLORS,
+  INK_WIDTHS,
+  type InkColorId,
+  type InkWidth,
+  type Mark,
+} from '../lib/annotations'
+import {
   cropPage,
+  loadAnnotationBase,
   loadPageBlob,
   movePage,
   revertPage,
   rotatePage,
   setDocumentFilter,
   setPageFilter,
+  setPageMarks,
 } from '../lib/documentEditing'
 import type { CropRect } from '../lib/imageEditor'
-import type { LocalScanDocument } from '../lib/scanStorage'
+import { markCount, saveSignatureImage, type LocalScanDocument } from '../lib/scanStorage'
+import type { Tier } from '../lib/tier'
+import { useSignatureUris } from '../lib/useSignatureUris'
 
 interface EditorScreenProps {
   document: LocalScanDocument
+  tier: Tier
   onDocumentChange: (doc: LocalScanDocument) => void
   onClose: () => void
   onError: (message: string) => void
+  /** Opens the paywall when a Basic account reaches for annotate/signature. */
+  onUpgrade: () => void
 }
 
 const FULL_CROP: CropRect = { x: 0.05, y: 0.05, width: 0.9, height: 0.9 }
 
 /** Which tool is open. Only one at a time — they all want the whole screen. */
-type Mode = 'none' | 'crop' | 'filter' | 'reorder'
+type Mode = 'none' | 'crop' | 'filter' | 'reorder' | 'annotate'
 
 const TITLES: Record<Mode, string> = {
   none: 'Edit Halaman',
   crop: 'Potong Halaman',
   filter: 'Filter Dokumen',
   reorder: 'Urutkan Halaman',
+  annotate: 'Anotasi & Tanda Tangan',
 }
 
 export function EditorScreen({
   document: doc,
+  tier,
   onDocumentChange,
   onClose,
   onError,
+  onUpgrade,
 }: EditorScreenProps) {
   const [pageIndex, setPageIndex] = useState(0)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -59,7 +81,28 @@ export function EditorScreen({
   const [scope, setScope] = useState<FilterScope>('document')
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
 
+  /**
+   * The ink being worked on, held in memory until the user saves.
+   *
+   * Not written per stroke on purpose: every save re-encodes the whole page,
+   * which is a 12 MP JPEG. Drawing has to stay at the speed of a finger.
+   */
+  const [draftMarks, setDraftMarks] = useState<Mark[] | null>(null)
+  const [tool, setTool] = useState<AnnotateTool>('pen')
+  const [inkColor, setInkColor] = useState<InkColorId>('blue')
+  const [inkWidth, setInkWidth] = useState<InkWidth>('medium')
+  const [selectedMark, setSelectedMark] = useState<number | null>(null)
+  const [isSigning, setIsSigning] = useState(false)
+
   const page = doc.pages[pageIndex]
+  const marks = draftMarks ?? page?.marks ?? []
+  const signatureUris = useSignatureUris(marks)
+
+  /** True once the draft differs from what is stored, which is what Simpan needs. */
+  const hasMarkChanges = useMemo(
+    () => draftMarks !== null && JSON.stringify(draftMarks) !== JSON.stringify(page?.marks ?? []),
+    [draftMarks, page],
+  )
 
   // Re-read the page whenever it changes so edits — including a filter, which
   // changes which file the page resolves to — show up immediately. Every
@@ -72,7 +115,12 @@ export function EditorScreen({
     let objectUrl: string | null = null
     let cancelled = false
 
-    loadPageBlob(page)
+    // In annotate mode the overlay draws every mark itself, so the picture
+    // behind it has to be the bare page — showing the annotated render there
+    // would put each stroke on screen twice.
+    const load = mode === 'annotate' ? loadAnnotationBase(page) : loadPageBlob(page)
+
+    load
       .then((blob) => {
         if (cancelled) return
         objectUrl = URL.createObjectURL(blob)
@@ -88,7 +136,7 @@ export function EditorScreen({
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [page, onError])
+  }, [page, mode, onError])
 
   /** Reports whether the change went through — the error itself is already shown. */
   const run = useCallback(
@@ -146,6 +194,79 @@ export function EditorScreen({
     }
   }
 
+  /**
+   * Opens the annotate tools, or the paywall.
+   *
+   * The library refuses a Basic account outright (`setPageMarks`), so this is
+   * only about not walking someone into a screen that will reject them at the
+   * last step.
+   */
+  const startAnnotate = () => {
+    if (tier !== 'pro') {
+      onUpgrade()
+      return
+    }
+    setDraftMarks(page?.marks ?? [])
+    setSelectedMark(null)
+    setTool('pen')
+    setMode('annotate')
+  }
+
+  /**
+   * Leaves the annotate tools, asking first if anything would be thrown away.
+   *
+   * Ink lives in a draft until it is saved, so backing out silently is the one
+   * way to lose work in this editor — everything else is written the moment it
+   * is applied.
+   */
+  const closeAnnotate = ({ confirmLoss = false } = {}) => {
+    if (confirmLoss && hasMarkChanges && !confirm('Buang anotasi yang belum disimpan?')) return
+    setDraftMarks(null)
+    setSelectedMark(null)
+    setMode('none')
+  }
+
+  const handleSaveMarks = async () => {
+    if (draftMarks === null) return
+    setIsBusy(true)
+    try {
+      onDocumentChange(await setPageMarks(doc, pageIndex, draftMarks, tier))
+      closeAnnotate()
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Gagal menyimpan anotasi.')
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  /**
+   * Stores the drawn signature, then drops it on the page.
+   *
+   * The file is written straight away rather than with the rest of the draft:
+   * the overlay has to be able to show the stamp while it is being positioned,
+   * and it shows it by loading that file.
+   */
+  const handleSignature = async (png: Blob, aspectRatio: number) => {
+    setIsBusy(true)
+    try {
+      const source = await saveSignatureImage(png)
+      const box = defaultSignatureBox(aspectRatio, aspect)
+      const next: Mark[] = [...marks, { kind: 'signature', source, ...box }]
+
+      setDraftMarks(next)
+      // Selected and ready to drag: a signature is almost never wanted exactly
+      // where it lands. Set outside the state updater, which has to stay pure —
+      // React may call it more than once for a single update.
+      setSelectedMark(next.length - 1)
+      setTool('move')
+      setIsSigning(false)
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Gagal menyimpan tanda tangan.')
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
   const handleMove = async (direction: -1 | 1) => {
     const target = pageIndex + direction
     // Follow the page that moved, not the slot it left behind — but only once
@@ -161,7 +282,11 @@ export function EditorScreen({
         <button
           type="button"
           className="icon-button"
-          onClick={() => (mode === 'none' ? onClose() : setMode('none'))}
+          onClick={() => {
+            if (mode === 'none') onClose()
+            else if (mode === 'annotate') closeAnnotate({ confirmLoss: true })
+            else setMode('none')
+          }}
           aria-label="Kembali"
           disabled={isBusy}
         >
@@ -175,7 +300,13 @@ export function EditorScreen({
               : `Halaman ${pageIndex + 1} dari ${doc.pageCount}`}
           </p>
         </div>
-        {page?.edited && mode === 'none' && <span className="app-header__tier">Diedit</span>}
+        {/* One badge, and ink wins: it is the more recent and more visible change. */}
+        {mode === 'none' && page && markCount(page) > 0 && (
+          <span className="app-header__tier">Dianotasi</span>
+        )}
+        {mode === 'none' && page && markCount(page) === 0 && page.edited && (
+          <span className="app-header__tier">Diedit</span>
+        )}
       </header>
 
       {mode !== 'reorder' && (
@@ -194,6 +325,23 @@ export function EditorScreen({
             />
           )}
           {mode === 'crop' && <CropOverlay rect={rect} onChange={setRect} />}
+          {mode === 'annotate' && (
+            <AnnotateOverlay
+              marks={marks}
+              tool={tool}
+              color={INK_COLORS.find((entry) => entry.id === inkColor)!.value}
+              width={INK_WIDTHS[inkWidth]}
+              signatureUris={signatureUris}
+              selected={selectedMark}
+              onSelect={setSelectedMark}
+              onAddStroke={(stroke) => setDraftMarks((current) => [...(current ?? []), stroke])}
+              onChangeMark={(index, mark) =>
+                setDraftMarks((current) =>
+                  (current ?? []).map((entry, i) => (i === index ? mark : entry)),
+                )
+              }
+            />
+          )}
         </div>
       )}
 
@@ -224,6 +372,41 @@ export function EditorScreen({
           pageNumber={pageIndex + 1}
           onScopeChange={setScope}
           onPick={handlePick}
+        />
+      )}
+
+      {mode === 'annotate' && (
+        <AnnotateToolbar
+          tool={tool}
+          color={inkColor}
+          width={inkWidth}
+          markCount={marks.length}
+          isBusy={isBusy}
+          hasChanges={hasMarkChanges}
+          onToolChange={(next) => {
+            setTool(next)
+            if (next !== 'move') setSelectedMark(null)
+          }}
+          onColorChange={setInkColor}
+          onWidthChange={setInkWidth}
+          onSignature={() => setIsSigning(true)}
+          onUndo={() => {
+            setDraftMarks((current) => (current ?? []).slice(0, -1))
+            setSelectedMark(null)
+          }}
+          onClear={() => {
+            setDraftMarks([])
+            setSelectedMark(null)
+          }}
+          onSave={handleSaveMarks}
+        />
+      )}
+
+      {isSigning && (
+        <SignaturePad
+          isBusy={isBusy}
+          onCancel={() => setIsSigning(false)}
+          onSave={handleSignature}
         />
       )}
 
@@ -279,6 +462,20 @@ export function EditorScreen({
             >
               <MergeIcon size={17} />
               <span>Urutkan</span>
+            </button>
+          </div>
+
+          {/* Pro only — the one row in this editor that is (PRD Bagian 3). */}
+          <div className="editor-actions">
+            <button
+              type="button"
+              className="button button--pro"
+              onClick={startAnnotate}
+              disabled={isBusy}
+            >
+              <SignatureIcon size={17} />
+              <span>Anotasi & Tanda Tangan</span>
+              {tier !== 'pro' && <span className="pro-badge">Pro</span>}
             </button>
           </div>
 

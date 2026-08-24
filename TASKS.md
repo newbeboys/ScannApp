@@ -217,8 +217,8 @@ Empat temuan code-review ditutup sebelum commit, semuanya di kode iklan baru:
 Desain: `docs/superpowers/specs/2026-08-23-fase6-reorder-filter-design.md`
 
 - [ ] Integrasi OCR (searchable PDF)
-- [ ] Annotate (coret/tulis di atas dokumen)
-- [ ] Tanda tangan digital
+- [x] Annotate (coret/tulis di atas dokumen) — **Pro**, lihat bagian 3 di bawah
+- [x] Tanda tangan digital — **Pro**, lihat bagian 3 di bawah
 - [x] Reorder halaman — tombol geser kiri/kanan (bukan seret-lepas, lihat spec Bagian 2.6). **Semua tier**
 - [x] Filter lanjutan — **5 filter** (Boss Ali menaikkan dari 2 di PRD Bagian 3): Magic Color, Cerah, Abu-abu, Hitam-Putih (ambang adaptif lokal), Hemat Tinta. Berlaku untuk seluruh dokumen, bisa dikecualikan per halaman. **Semua tier**
 - [x] Export tambahan: **PNG** — **semua tier** (lihat catatan di bawah). DOCX belum: tanpa OCR isinya cuma gambar tertempel, jadi dipindah ke potongan yang sama dengan OCR
@@ -275,6 +275,48 @@ Temuan keempat (**file filter yatim kalau `applyDocumentFilter` gagal di tengah*
 - Ukuran menurun monoton menurut level: 200 KB (Kecil) → 395 KB (Standar) → 956 KB (Maksimal)
 - **Jebakan PNG-dari-JPEG terbukti nyata:** PNG dari halaman asli 102 KB, PNG dari hasil JPEG 191 KB — 87% lebih berat tanpa satu piksel pun membaik
 - **PNG vs JPEG sangat bergantung isi halaman:** scan kamera ber-noise 11,3× lebih besar; bercahaya rata 13,8× lebih besar; setelah filter Hitam-Putih justru **4× lebih kecil**. Rentang ini yang membuat perkiraan ukuran harus **diukur dari halamannya**, bukan ditebak dengan rumus — dan yang membenarkan teks "pas untuk Hitam-Putih" di lembar Ekspor
+
+### Fase 6 bagian 3 — Anotasi & Tanda Tangan (Pro) — 24 Agustus 2026
+
+Potongan **B** dari empat sisa Fase 6. Tetap **Pro-exclusive** — dua baris ini tidak ikut dipindahkan Boss Ali ke "semua tier" seperti reorder/filter/PNG.
+
+Desain: `docs/superpowers/specs/2026-08-24-fase6-annotate-tandatangan-design.md`
+
+- [x] **Goresan disimpan sebagai data, bukan dibakar ke `edited`.** Halaman naik ke `schemaVersion: 4` dengan `marks` (vektor, koordinat 0..1) dan `annotated` (hasil render). Membakar tinta ke `edited` akan membuat filter Hitam-Putih ikut menghitamkan tanda tangan biru, dan mengganti filter berarti kehilangan seluruh anotasi
+- [x] `resolvePage()` jadi `annotated ?? filtered ?? edited ?? original` — **ekspor, merge, cadangan cloud, dan pratinjau layar penuh tidak disentuh sama sekali**, persis seperti waktu filter ditambahkan
+- [x] **Crop & putar memetakan ulang goresan**, tidak membuangnya (`remapMarksForCrop`, `remapMarksForRotation`). Koordinat normalisasi mengambang relatif terhadap isi halaman, jadi crop akan menggeser tinta terhadap kertasnya. Goresan yang seluruhnya jatuh di luar area crop dibuang; ketebalan ikut diskalakan supaya garis tidak menipis saat halaman diperbesar oleh crop
+- [x] **Alat:** Pena, Stabilo (`multiply`, bukan alpha biasa — teks di bawahnya harus tetap hitam dan terbaca), Tanda tangan, Urungkan, Hapus semua. **Sengaja tidak masuk:** kotak teks & bentuk — teks butuh papan ketik melayang, ukuran huruf yang ikut skala halaman, dan pengeditan setelah dibuat; itu subsistem tersendiri
+- [x] **4 warna tinta, semuanya sudah ada di kode**: `#1b2740` (`--fg` terang), `#2563eb` (primary), `#e5484d` (danger), `#f5c443` (`--pro-gold`). Tidak ada warna baru (CLAUDE.md 9.2), dan ada test yang menjaganya
+- [x] **Tanda tangan digambar di kotak selebar layar**, bukan langsung di halaman. Menandatangani di kotak kecil di sudut halaman menghasilkan coretan besar dan gemetar; hasilnya dipangkas ke kotak tinta-nya sendiri (`trimToInk`) supaya stempelnya bukan sebagian besar ruang kosong
+- [x] Berkas tanda tangan bernama `signature-<cap waktu>.png`, bukan nama tetap: menggambar ulang tidak boleh diam-diam mengganti tanda tangan di dokumen yang **sudah** ditandatangani, termasuk yang sudah dicadangkan
+- [x] **Gerbang Pro ditegakkan di library** (`setPageMarks`), bukan cuma menyembunyikan tombol — pelajaran yang sama dengan `resolveCompressionLevel`
+- [x] Goresan hidup di draft memori sampai ditekan Simpan. Menulis per goresan berarti meng-encode ulang JPEG 12 MP tiap kali jari diangkat
+- [x] Test bertambah 74 (total 453 — 418 node + 35 browser), termasuk 10 test `renderMarks` di **Chromium sungguhan**: tinta mendarat di piksel yang dituju, mata pena ikut skala halaman, stabilo membiarkan teks di bawahnya tetap hitam, stempel tanda tangan pas di kotaknya, dan merender goresan yang sama dua kali **tidak** menebalkannya
+- [x] **Test-nya dibuktikan menggigit:** `multiply` dilepas → test stabilo merah; faktor lebar stabilo dilepas → test lebar merah; sumber render tinta diubah jadi berkas hasilnya sendiri → 2 test penumpukan merah. Semua dikembalikan setelah itu
+
+**Delapan temuan code-review ditutup sebelum commit:**
+
+- [x] **Tanda tangan bergerak setengah kecepatan jari.** Drag membaca stempel dari `marks` hasil render terakhir sambil memajukan `lastX` tiap pointermove — dua gerakan dalam satu frame keduanya membaca kotak pra-drag, tapi hanya satu deltanya terpakai. Sekarang drag menyimpan stempel awalnya dan tiap gerakan dihitung dari situ
+- [x] **Crop/putar merender tinta dua kali.** `reapplyFilter` sudah ikut merender tinta (di koordinat pra-crop), lalu ditimpa pass kedua — satu siklus render 12 MP terbuang, dan kalau pass kedua gagal, tinta tersimpan permanen di posisi salah. `applyPageDerived` sekarang membangun keduanya dalam satu pass. `reapplyFilter`/`reapplyMarks` hilang sama sekali
+- [x] **`revertPage` juga merender tinta dua kali** — hilang dengan perbaikan yang sama
+- [x] **`resizeSignature` merusak rasio secara permanen.** Tinggi dibatasi di tepi bawah halaman, lalu resize berikutnya membaca kotak yang sudah gepeng itu sebagai rasio aslinya — stempel yang digeser ke kaki halaman jadi penyet selamanya. Tinggi tidak lagi dibatasi; lebar minimum juga tidak lagi bisa ditembus di tepi kanan
+- [x] **Berkas tanda tangan jadi sampah permanen.** PNG ditulis begitu digambar (overlay butuh berkasnya untuk menampilkan stempel saat digeser), tapi tidak ada yang pernah menghapusnya — batal lewat tombol kembali, atau menghapus dokumen terakhir yang memakainya. `pruneUnusedSignatures()` menyapu yang tak lagi dirujuk, dipanggil saat hapus dokumen dan **setelah editor ditutup** (bukan saat draft masih terbuka — tanda tangan draft belum ada di index)
+- [x] **Tombol kembali di mode anotasi membuang coretan tanpa bertanya** dan meninggalkan `draftMarks` basi. Sekarang lewat `closeAnnotate()` dengan konfirmasi kalau ada yang belum disimpan
+- [x] **`setSelectedMark` dipanggil di dalam updater `setDraftMarks`** — updater harus murni; React boleh memanggilnya lebih dari sekali
+- [x] **Pratinjau: pointer di tombol panah bisa mengakhiri gestur jari lain.** Pointer itu sengaja tidak masuk `pointers`, tapi `pointerup`-nya tetap menutup geseran yang sedang jalan memakai **koordinat tombol** — halaman bisa melompat. Sekarang `endPointer` mengabaikan pointer yang tidak pernah memulai gestur
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Menggambar dengan jempol terasa mengikuti, tidak tertinggal — termasuk di halaman 12 MP
+- [ ] Stabilo di atas teks: teksnya **tetap terbaca**, tidak tertutup blok kuning
+- [ ] Tanda tangan: gambar di kotak lebar, tempel, geser, ubah ukuran — geserannya sepadan dengan jari dan bentuknya tidak pernah gepeng
+- [ ] Simpan anotasi pada dokumen 12 MP — berapa lama? Kalau terasa lama, ini kandidat pertama untuk indikator progres
+- [ ] **Potong halaman yang sudah dianotasi** — tinta harus ikut pindah, bukan melayang ke tempat lain
+- [ ] **Putar halaman yang sudah dianotasi** — tinta ikut berputar
+- [ ] **Ganti filter dokumen setelah menandatangani** — tanda tangan biru harus tetap biru, tidak ikut jadi hitam pekat, dan tidak menghilang
+- [ ] Ekspor PDF & cadangkan ke cloud — tinta ikut ke dua-duanya
+- [ ] Akun **Basic**: tombol "Anotasi & Tanda Tangan" berlencana Pro dan membuka paywall, bukan editornya
+- [ ] Tekan tombol kembali dengan coretan belum disimpan — muncul konfirmasi, bukan hilang diam-diam
 
 ### Temuan uji device pertama — 24 Agustus 2026
 

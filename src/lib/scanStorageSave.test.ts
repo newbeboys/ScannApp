@@ -38,7 +38,7 @@ function seedIndex(title: string) {
   fs.readFile.mockResolvedValue({
     data: JSON.stringify([
       {
-        schemaVersion: 3,
+        schemaVersion: 4,
         id: 'doc-1',
         title,
         createdAt: '2026-08-23T00:00:00.000Z',
@@ -245,7 +245,7 @@ describe('restoreDocumentFromJpegs', () => {
     fs.readFile.mockResolvedValue({
       data: JSON.stringify([
         {
-          schemaVersion: 3,
+          schemaVersion: 4,
           id: cloudDoc.id,
           title: 'Dok agent',
           createdAt: cloudDoc.createdAt,
@@ -289,7 +289,7 @@ describe('restoreDocumentFromJpegs', () => {
    */
   it('keeps a document saved while the download was still running', async () => {
     const scannedMeanwhile = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       id: 'dipindai-saat-memulihkan',
       title: 'Scan baru',
       createdAt: '2026-08-23T01:00:00.000Z',

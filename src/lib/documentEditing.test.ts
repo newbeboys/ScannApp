@@ -15,7 +15,9 @@ vi.mock('./imageEditor', () => imageEditor)
  */
 const scanStorage = {
   applyDocumentFilter: vi.fn(),
+  applyPageDerived: vi.fn(),
   applyPageFilter: vi.fn(),
+  savePageMarks: vi.fn(),
   resetPageEdit: vi.fn(),
   savePageEdit: vi.fn(),
   invalidateDisplayUri: vi.fn(),
@@ -37,6 +39,14 @@ const { cropPage, movePage, revertPage, rotatePage, setDocumentFilter, setPageFi
 
 const RECT = { x: 0, y: 0, width: 1, height: 1 }
 
+const INK = {
+  kind: 'ink',
+  tool: 'pen',
+  color: '#1b2740',
+  width: 0.004,
+  points: [0.5, 0.5, 1, 1],
+}
+
 beforeEach(() => {
   for (const fn of Object.values(imageEditor)) fn.mockClear()
   for (const fn of Object.values(scanStorage)) {
@@ -44,53 +54,83 @@ beforeEach(() => {
   }
 })
 
-describe('cropPage / rotatePage — re-rendering the filter after a geometry edit', () => {
-  it('re-renders the document filter after cropping', async () => {
+describe('cropPage / rotatePage — rebuilding the derived files after a geometry edit', () => {
+  /**
+   * The bug this guards against: `savePageEdit` deletes both derived files —
+   * they were made from geometry that has just been thrown away — but has no
+   * canvas to rebuild them with. Without this step `effectiveFilter()` would
+   * keep saying the page is filtered while `resolvePage()` quietly started
+   * showing the plain scan again.
+   */
+  it('rebuilds the derived files after cropping', async () => {
     const doc = { id: 'd', filter: 'bw', pages: [{ original: 'a.jpg' }] }
     scanStorage.savePageEdit.mockResolvedValue({
       ...doc,
       pages: [{ original: 'a.jpg', edited: 'a-edited.jpg' }],
     })
-    scanStorage.applyPageFilter.mockResolvedValue({
-      ...doc,
-      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', filtered: 'a-filtered.jpg' }],
-    })
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
 
     await cropPage(doc, 0, RECT)
 
-    expect(scanStorage.applyPageFilter).toHaveBeenCalledWith('d', 0, null, imageEditor.filterImage)
-  })
-
-  /** A page's own exception must survive a crop, and win over the document filter. */
-  it("re-renders a page's own filter exception, not the document filter", async () => {
-    const doc = { id: 'd', filter: 'bw', pages: [{ original: 'a.jpg', filter: 'magic' }] }
-    scanStorage.savePageEdit.mockResolvedValue({
-      ...doc,
-      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', filter: 'magic' }],
-    })
-    scanStorage.applyPageFilter.mockResolvedValue(doc)
-
-    await rotatePage(doc, 0)
-
-    expect(scanStorage.applyPageFilter).toHaveBeenCalledWith(
+    expect(scanStorage.applyPageDerived).toHaveBeenCalledWith(
       'd',
       0,
-      'magic',
+      [],
       imageEditor.filterImage,
+      expect.any(Function),
     )
   })
 
-  it('skips the re-render entirely when no filter is active', async () => {
-    const doc = { id: 'd', pages: [{ original: 'a.jpg' }] }
+  /**
+   * One call, not "re-render the filter, then re-render the ink". The filter
+   * pass renders the ink as well, so splitting it draws every stroke twice —
+   * the first time at the coordinates the crop has just invalidated.
+   */
+  it('rebuilds both derived files in a single pass', async () => {
+    const doc = { id: 'd', filter: 'bw', pages: [{ original: 'a.jpg', marks: [INK] }] }
     scanStorage.savePageEdit.mockResolvedValue({
       ...doc,
-      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg' }],
+      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', marks: [INK] }],
     })
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
 
-    const result = await cropPage(doc, 0, RECT)
+    await cropPage(doc, 0, RECT)
 
+    expect(scanStorage.applyPageDerived).toHaveBeenCalledTimes(1)
     expect(scanStorage.applyPageFilter).not.toHaveBeenCalled()
-    expect(result.pages[0].edited).toBe('a-edited.jpg')
+    expect(scanStorage.savePageMarks).not.toHaveBeenCalled()
+  })
+
+  /** Ink is stored relative to the page's content, so a crop has to carry it along. */
+  it('moves the ink onto the cropped geometry', async () => {
+    const doc = { id: 'd', pages: [{ original: 'a.jpg', marks: [INK] }] }
+    scanStorage.savePageEdit.mockResolvedValue({
+      ...doc,
+      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', marks: [INK] }],
+    })
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
+
+    // Crop to the bottom-right quarter: the page's centre becomes its corner.
+    await cropPage(doc, 0, { x: 0.5, y: 0.5, width: 0.5, height: 0.5 })
+
+    const marks = scanStorage.applyPageDerived.mock.calls[0][2]
+    expect(marks[0].points).toEqual([0, 0, 1, 1])
+  })
+
+  it('turns the ink with the page when it is rotated', async () => {
+    const doc = { id: 'd', pages: [{ original: 'a.jpg', marks: [INK] }] }
+    scanStorage.savePageEdit.mockResolvedValue({
+      ...doc,
+      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', marks: [INK] }],
+    })
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
+
+    await rotatePage(doc, 0)
+
+    const marks = scanStorage.applyPageDerived.mock.calls[0][2]
+    // A quarter turn clockwise sends the page's centre back to its centre.
+    expect(marks[0].points[0]).toBeCloseTo(0.5, 10)
+    expect(marks[0].points[1]).toBeCloseTo(0.5, 10)
   })
 
   it('reads from the geometry chain, not from a filtered render, so a filter never gets baked in', async () => {
@@ -100,7 +140,7 @@ describe('cropPage / rotatePage — re-rendering the filter after a geometry edi
       pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', filtered: 'a-filtered.jpg' }],
     }
     scanStorage.savePageEdit.mockResolvedValue(doc)
-    scanStorage.applyPageFilter.mockResolvedValue(doc)
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
 
     await cropPage(doc, 0, RECT)
 
@@ -109,55 +149,33 @@ describe('cropPage / rotatePage — re-rendering the filter after a geometry edi
 })
 
 describe('revertPage', () => {
-  /**
-   * The bug this guards against: resetPageEdit deletes the filter render
-   * (it was made from the geometry that just got thrown away) but has no
-   * canvas to re-render one with. Without documentEditing re-rendering it,
-   * effectiveFilter() would keep saying the page is filtered while
-   * resolvePage() quietly started showing the plain scan again.
-   */
-  it('re-renders the document filter after undoing a crop', async () => {
+  it('rebuilds the derived files after undoing a crop', async () => {
     const doc = { id: 'd', filter: 'bw', pages: [{ original: 'a.jpg', edited: 'a-edited.jpg' }] }
     scanStorage.resetPageEdit.mockResolvedValue({ ...doc, pages: [{ original: 'a.jpg' }] })
-    scanStorage.applyPageFilter.mockResolvedValue(doc)
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
 
     await revertPage(doc, 0)
 
     expect(scanStorage.resetPageEdit).toHaveBeenCalledWith('d', 0)
-    expect(scanStorage.applyPageFilter).toHaveBeenCalledWith('d', 0, null, imageEditor.filterImage)
+    expect(scanStorage.applyPageDerived).toHaveBeenCalledTimes(1)
   })
 
-  /** "Asli" undoes geometry, not the user's mind about colour — the exception must survive. */
-  it("keeps a page's own filter exception across a revert", async () => {
-    const doc = {
-      id: 'd',
-      filter: 'bw',
-      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', filter: 'magic' }],
-    }
+  /**
+   * "Asli" undoes a crop. It is not a request to tear up a signature, and the
+   * marks cannot be mapped back through geometry that no longer exists — so
+   * they are carried across exactly as they are.
+   */
+  it('carries the ink across unchanged', async () => {
+    const doc = { id: 'd', pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', marks: [INK] }] }
     scanStorage.resetPageEdit.mockResolvedValue({
       ...doc,
-      pages: [{ original: 'a.jpg', filter: 'magic' }],
+      pages: [{ original: 'a.jpg', marks: [INK] }],
     })
-    scanStorage.applyPageFilter.mockResolvedValue(doc)
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
 
     await revertPage(doc, 0)
 
-    expect(scanStorage.applyPageFilter).toHaveBeenCalledWith(
-      'd',
-      0,
-      'magic',
-      imageEditor.filterImage,
-    )
-  })
-
-  it('does not re-render when no filter is active at all', async () => {
-    const doc = { id: 'd', pages: [{ original: 'a.jpg', edited: 'a-edited.jpg' }] }
-    scanStorage.resetPageEdit.mockResolvedValue({ ...doc, pages: [{ original: 'a.jpg' }] })
-
-    const result = await revertPage(doc, 0)
-
-    expect(scanStorage.applyPageFilter).not.toHaveBeenCalled()
-    expect(result.pages[0]).toEqual({ original: 'a.jpg' })
+    expect(scanStorage.applyPageDerived.mock.calls[0][2]).toEqual([INK])
   })
 
   it('does nothing when the page was never edited', async () => {
@@ -166,7 +184,7 @@ describe('revertPage', () => {
     const result = await revertPage(doc, 0)
 
     expect(scanStorage.resetPageEdit).not.toHaveBeenCalled()
-    expect(scanStorage.applyPageFilter).not.toHaveBeenCalled()
+    expect(scanStorage.applyPageDerived).not.toHaveBeenCalled()
     expect(result).toBe(doc)
   })
 })

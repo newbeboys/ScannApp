@@ -1,3 +1,4 @@
+import { HIGHLIGHTER_ALPHA, strokeWidth, type Mark } from './annotations'
 import { applyFilter } from './filters'
 import type { DocumentFilter } from './scanIndexMigration'
 import { BASIC_COMPRESSION, type CompressOptions } from './exportLimits'
@@ -144,6 +145,74 @@ export async function filterImage(blob: Blob, filter: DocumentFilter): Promise<B
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
   applyFilter(filter, image.data, canvas.width, canvas.height)
   ctx.putImageData(image, 0, 0)
+
+  return toBlob(canvas, 0.95)
+}
+
+/**
+ * Draws the user's ink and signatures onto a page.
+ *
+ * Marks are stored as data, not baked into the page (design doc Bagian 2.1),
+ * so this runs again from scratch every time the page underneath is re-derived
+ * — after a crop, after a filter change. Nothing here reads the previous
+ * render, which is what keeps ink from compounding.
+ *
+ * Signature bitmaps are handed in already decoded, keyed by the path the mark
+ * refers to: the same signature is usually stamped on several pages, and this
+ * module has no way to read a file.
+ *
+ * Encoded at the same quality as `filterImage`, and for the same reason: this
+ * file is what the export and the cloud backup are built from.
+ */
+export async function renderMarks(
+  blob: Blob,
+  marks: Mark[],
+  signatures: Map<string, ImageBitmap>,
+): Promise<Blob> {
+  const bitmap = await decode(blob)
+  const [canvas, ctx] = draw(bitmap.width, bitmap.height)
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close()
+
+  // Widths are fractions of the long edge, so a stroke keeps its weight
+  // whether the page is portrait or landscape.
+  const longEdge = Math.max(canvas.width, canvas.height)
+
+  for (const mark of marks) {
+    if (mark.kind === 'signature') {
+      const signature = signatures.get(mark.source)
+      if (!signature) continue
+      ctx.drawImage(
+        signature,
+        mark.x * canvas.width,
+        mark.y * canvas.height,
+        mark.width * canvas.width,
+        mark.height * canvas.height,
+      )
+      continue
+    }
+
+    ctx.save()
+    ctx.strokeStyle = mark.color
+    ctx.lineWidth = Math.max(1, strokeWidth(mark) * longEdge)
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    if (mark.tool === 'highlighter') {
+      // `multiply` rather than plain alpha: overlapping passes of a real
+      // highlighter darken the ink, they do not paint over it, and text under
+      // a plain translucent layer washes out instead of showing through.
+      ctx.globalAlpha = HIGHLIGHTER_ALPHA
+      ctx.globalCompositeOperation = 'multiply'
+    }
+
+    ctx.beginPath()
+    ctx.moveTo(mark.points[0] * canvas.width, mark.points[1] * canvas.height)
+    for (let i = 2; i < mark.points.length; i += 2) {
+      ctx.lineTo(mark.points[i] * canvas.width, mark.points[i + 1] * canvas.height)
+    }
+    ctx.stroke()
+    ctx.restore()
+  }
 
   return toBlob(canvas, 0.95)
 }

@@ -1966,3 +1966,138 @@
   font: inherit;
   color: inherit;
 }
+
+/* ---------- anotasi & tanda tangan (Pro) ---------- */
+
+/*
+  Satu-satunya baris Pro di editor, jadi ia memakai warna Pro/upgrade —
+  coral, bukan biru primary. Token yang sama dengan seluruh elemen Pro lain
+  (CLAUDE.md 9.2); tidak ada warna baru.
+*/
+.editor-actions .button--pro {
+  border-color: var(--upgrade);
+  background: var(--upgrade-soft);
+  color: var(--upgrade);
+}
+
+.editor-actions .button--pro .pro-badge {
+  align-self: center;
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
+/*
+  Permukaan gambar. `touch-action: none` wajib: seluruh gestur di sini
+  digerakkan sendiri lewat pointer event, dan WebView yang masih boleh
+  menggulir akan merebut jari di tengah goresan.
+
+  Sengaja TIDAK diberi z-index. z-index pada elemen berposisi membuat stacking
+  context baru, dan itu mengisolasi `mix-blend-mode` stabilo dari gambar
+  halaman di belakangnya — stabilonya jadi menimpa teks, bukan menembusnya,
+  persis kebalikan dari yang dilakukan hasil render sungguhan.
+*/
+.annotate {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.annotate__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Kotak seleksi tanda tangan: garis putus-putus supaya jelas ia bukan tinta. */
+.annotate__selection {
+  fill: none;
+  stroke: var(--acc);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.annotate__handle {
+  fill: var(--acc);
+  stroke: #fff;
+  stroke-width: 2.5;
+}
+
+.annotate-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.annotate-tools__ink {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.filter-chip--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/*
+  Titik seukuran mata pena yang sebenarnya. Label "Tipis/Sedang/Tebal" saja
+  memaksa user mencoba ketiganya untuk tahu artinya.
+*/
+.filter-chip--nib {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-chip__nib {
+  width: var(--nib, 4px);
+  height: var(--nib, 4px);
+  min-width: 3px;
+  min-height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.ink-colors {
+  display: flex;
+  gap: 10px;
+}
+
+.ink-color {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--chip-border);
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ink-color--active {
+  border-color: var(--surface);
+  box-shadow: 0 0 0 2px var(--acc);
+  transform: scale(1.08);
+}
+
+.ink-color:disabled {
+  opacity: 0.5;
+}
+
+/*
+  Kotak tanda tangan sengaja jauh lebih lebar daripada tinggi, dan bukan di
+  atas halamannya. Menandatangani di kotak kecil di sudut halaman menghasilkan
+  coretan besar dan gemetar yang langsung terbaca sebagai "ditandatangani di
+  HP"; kotak selebar layar ditulis pada ukuran yang nyaman lalu dikecilkan.
+*/
+.signature-pad {
+  width: 100%;
+  aspect-ratio: 5 / 2;
+  border-radius: 16px;
+  border: 1px dashed var(--chip-border);
+  background: var(--chip);
+  touch-action: none;
+  cursor: crosshair;
+}

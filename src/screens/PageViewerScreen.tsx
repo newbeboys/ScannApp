@@ -322,6 +322,14 @@ export function PageViewerScreen({
 
   const endPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     const stage = stageRef.current
+
+    // A pointer that never started a gesture — one that landed on a paging
+    // arrow — must not end someone else's. Without this, pressing an arrow
+    // with one hand while the other is mid-swipe finishes that swipe using the
+    // *button's* coordinates, and the document jumps to whichever page the
+    // arithmetic happens to land on.
+    if (!pointers.current.has(event.pointerId)) return
+
     pointers.current.delete(event.pointerId)
     if (stage?.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId)
     if (pointers.current.size === 0) setIsTouching(false)

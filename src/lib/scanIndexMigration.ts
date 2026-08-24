@@ -1,3 +1,5 @@
+import { sanitizeMarks, type Mark } from './annotations'
+
 /**
  * The five document filters (keputusan Boss Ali 23 Agustus 2026, menaikkan
  * daftar dua filter di PRD Bagian 3).
@@ -38,10 +40,17 @@ export interface ScanPage {
   filter?: PageFilter
   /** The rendered filter result, derived from `edited ?? original`. */
   filtered?: string
+  /**
+   * What the user has drawn on this page (Pro). Vectors, not pixels — see the
+   * annotate design doc, Bagian 2.1.
+   */
+  marks?: Mark[]
+  /** The rendered composite of `filtered ?? edited ?? original` plus `marks`. */
+  annotated?: string
 }
 
 export interface LocalScanDocument {
-  schemaVersion: 3
+  schemaVersion: 4
   id: string
   title: string
   createdAt: string
@@ -70,6 +79,8 @@ function isV1(doc: UnknownDocument): boolean {
 
 /** Keeps only the fields a page is allowed to carry, dropping anything malformed. */
 function migratePage(page: ScanPage): ScanPage {
+  const marks = sanitizeMarks(page.marks)
+
   return {
     original: page.original,
     ...(typeof page.edited === 'string' ? { edited: page.edited } : {}),
@@ -77,20 +88,32 @@ function migratePage(page: ScanPage): ScanPage {
     // we recognise is treated as having none rather than crashing the list.
     ...(page.filter === 'none' || isDocumentFilter(page.filter) ? { filter: page.filter } : {}),
     ...(typeof page.filtered === 'string' ? { filtered: page.filtered } : {}),
+    ...(marks.length > 0 ? { marks } : {}),
+    /*
+      The annotated render is only kept while the marks that produced it
+      survive. Without that pairing, a page whose marks were dropped as
+      malformed would keep displaying and exporting ink that nothing left in
+      the index can explain, undo, or re-render — the file would outlive every
+      trace of what put it there.
+    */
+    ...(marks.length > 0 && typeof page.annotated === 'string'
+      ? { annotated: page.annotated }
+      : {}),
   }
 }
 
 /**
- * Brings any stored index entry up to the v3 shape.
+ * Brings any stored index entry up to the v4 shape.
  *
  * Documents scanned during Fase 1 were written as `{ pagePaths: string[] }`
- * with no schemaVersion, and Fase 2 documents as v2 with no filters. Both must
- * keep working untouched after this upgrade, so every read runs through here
- * and the result is written back. Malformed entries are dropped rather than
- * crashing the whole list.
+ * with no schemaVersion, Fase 2 documents as v2 with no filters, and v3
+ * documents with no annotations. All three must keep working untouched after
+ * this upgrade, so every read runs through here and the result is written
+ * back. Malformed entries are dropped rather than crashing the whole list.
  *
- * A v2 document arrives with no filter at all, so it looks exactly as it did
- * before — the upgrade is invisible until the user picks one.
+ * Each older shape arrives simply missing the newer fields, so it looks
+ * exactly as it did before — every upgrade is invisible until the user uses
+ * the feature that added it.
  */
 export function migrateScanIndex(raw: unknown): LocalScanDocument[] {
   if (!Array.isArray(raw)) return []
@@ -114,7 +137,7 @@ export function migrateScanIndex(raw: unknown): LocalScanDocument[] {
     if (pages.length === 0) continue
 
     migrated.push({
-      schemaVersion: 3,
+      schemaVersion: 4,
       id: entry.id,
       title: entry.title ?? 'Dokumen tanpa judul',
       createdAt: entry.createdAt ?? new Date(0).toISOString(),
@@ -149,7 +172,7 @@ export function effectiveFilter(
  * them.
  */
 export function resolvePage(page: ScanPage): string {
-  return page.filtered ?? page.edited ?? page.original
+  return page.annotated ?? page.filtered ?? page.edited ?? page.original
 }
 
 /** What a filter render must start from: geometry only, never another filter. */
@@ -157,7 +180,21 @@ export function filterSource(page: ScanPage): string {
   return page.edited ?? page.original
 }
 
+/**
+ * What an annotation render must start from: the paper, without the previous
+ * render of the ink. Reading the annotated file back would draw every stroke a
+ * second time on top of itself, and undo would never remove anything.
+ */
+export function annotationSource(page: ScanPage): string {
+  return page.filtered ?? page.edited ?? page.original
+}
+
 /** True when at least one page carries an edit that can be reverted. */
 export function hasEdits(doc: LocalScanDocument): boolean {
   return doc.pages.some((page) => page.edited !== undefined)
+}
+
+/** How many marks a page is carrying — 0 when it has never been annotated. */
+export function markCount(page: ScanPage): number {
+  return page.marks?.length ?? 0
 }

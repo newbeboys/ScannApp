@@ -14,15 +14,6 @@ export interface DeliveryResult {
   message: string
 }
 
-/** Strips characters Android/Windows reject in filenames. */
-export function toSafeFilename(title: string): string {
-  const cleaned = title
-    .replace(/[\\/:*?"<>|]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return cleaned.length > 0 ? cleaned.slice(0, 60) : 'Dokumen'
-}
-
 /**
  * Public Documents needs WRITE_EXTERNAL_STORAGE only on Android 10 and
  * below; Android 11+ grants it implicitly. Failing to get it is not fatal

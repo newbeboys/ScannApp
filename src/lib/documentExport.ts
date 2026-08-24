@@ -10,7 +10,8 @@ import {
   type CompressOptions,
 } from './exportLimits'
 import { compressImage } from './imageEditor'
-import { deliverExport, toSafeFilename, type DeliveryResult, type ExportFile } from './exportShare'
+import { toSafeFilename } from './exportNames'
+import { deliverExport, type DeliveryResult, type ExportFile } from './exportShare'
 import type { LocalScanDocument } from './scanStorage'
 import type { Tier } from './tier'
 

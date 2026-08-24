@@ -24,7 +24,6 @@ vi.mock('./exportShare', () => ({
     delivered.push(files.map((file) => ({ name: file.name })))
     return { message: `${files.length} file` }
   },
-  toSafeFilename: (title: string) => title,
 }))
 
 vi.mock('./pdfExport', () => ({

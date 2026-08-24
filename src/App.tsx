@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core'
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useAuth } from './auth/useAuth'
+import { BatchExportSheet } from './components/BatchExportSheet'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { ExportSheet } from './components/ExportSheet'
 import { CropIcon, ExportIcon } from './components/Icons'
@@ -19,7 +20,8 @@ import {
 import { restoreBackup } from './lib/cloudRestore'
 import { mergeDocumentEntries } from './lib/documentEntries'
 import { quotaBytesFor } from './lib/storageQuota'
-import { exportDocument, type ExportFormat } from './lib/documentExport'
+import { exportDocument, exportDocumentsBatch, type BatchProgress, type ExportFormat } from './lib/documentExport'
+import { summarizeSelection, toggleSelection } from './lib/documentSelection'
 import { estimateExportSizes, type ExportSizeEstimate } from './lib/exportEstimate'
 import { readExportLevel, writeExportLevel } from './lib/exportPreference'
 import type { CompressionLevel } from './lib/exportLimits'
@@ -97,6 +99,14 @@ function App() {
    */
   const [editedInSession, setEditedInSession] = useState(false)
   const [usedBytes, setUsedBytes] = useState(0)
+  /** Documents tab is in select mode, and what is ticked in it right now. */
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  /** Open when the batch export sheet is showing. */
+  const [batchOpen, setBatchOpen] = useState(false)
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null)
+  const [isBatchBusy, setIsBatchBusy] = useState(false)
+  const batchAbort = useRef<AbortController | null>(null)
   const isNative = Capacitor.isNativePlatform()
   const quotaBytes = quotaBytesFor(profile)
 
@@ -325,6 +335,93 @@ function App() {
     }
   }
 
+  const exitSelect = () => {
+    setSelectMode(false)
+    setSelectedIds([])
+  }
+
+  const handleEnterSelect = (id: string) => {
+    setSelectMode(true)
+    // The header's "Pilih" button enters without ticking anything; a long
+    // press ticks the row it was held on.
+    if (id) setSelectedIds([id])
+  }
+
+  const handleBatchExport = async () => {
+    const chosen = summarizeSelection(entries, selectedIds).documents
+    if (chosen.length === 0) return
+
+    const controller = new AbortController()
+    batchAbort.current = controller
+    setIsBatchBusy(true)
+    try {
+      const result = await exportDocumentsBatch(
+        chosen,
+        tier,
+        exportLevel,
+        setBatchProgress,
+        controller.signal,
+      )
+      setToast(result.message)
+      // The selection survives a partial failure or a stop, so the rest can be
+      // retried without re-ticking everything from scratch.
+      if (result.failed.length === 0 && !result.cancelled) exitSelect()
+      setBatchOpen(false)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal mengekspor dokumen.')
+    } finally {
+      batchAbort.current = null
+      setBatchProgress(null)
+      setIsBatchBusy(false)
+    }
+  }
+
+  const handleBatchDelete = async () => {
+    const chosen = summarizeSelection(entries, selectedIds).documents
+    if (chosen.length === 0) return
+    if (
+      !confirm(`Hapus ${chosen.length} dokumen dari HP? Cadangan di cloud tidak ikut terhapus.`)
+    ) {
+      return
+    }
+
+    setIsBatchBusy(true)
+    let removed = 0
+    try {
+      for (const doc of chosen) {
+        try {
+          await deleteScanDocument(doc.id)
+          removed++
+        } catch {
+          // Counted by the gap between chosen.length and removed below; one
+          // document refusing to delete must not hold up the rest.
+        }
+      }
+    } finally {
+      // Once at the end, not per document: a signature is shared across
+      // documents, so sweeping it mid-loop could delete a file still
+      // referenced by a document that has not been deleted yet.
+      await pruneUnusedSignatures()
+      await refreshDocuments()
+      setIsBatchBusy(false)
+      exitSelect()
+    }
+
+    const failed = chosen.length - removed
+    setToast(
+      failed > 0
+        ? `${removed} dokumen dihapus, ${failed} gagal.`
+        : `${removed} dokumen dihapus dari HP.`,
+    )
+  }
+
+  // Select mode belongs to the Documents tab. Leaving for Home and coming
+  // back to find the action bar still hanging around would be unexplainable.
+  useEffect(() => {
+    if (tab !== 'documents') exitSelect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
+
   /** Keeps the open detail/editor screen pointed at fresh data after an edit. */
   const activeDocument =
     view.kind === 'tabs' ||
@@ -504,6 +601,25 @@ function App() {
         setView({ kind: 'upgrade' })
       }}
       onClose={() => setExportTarget(null)}
+    />
+  )
+
+  const batchSelection = summarizeSelection(entries, selectedIds)
+  const batchSheet = batchOpen && (
+    <BatchExportSheet
+      count={batchSelection.count}
+      pageCount={batchSelection.pageCount}
+      tier={tier}
+      level={exportLevel}
+      progress={batchProgress}
+      isBusy={isBatchBusy}
+      onLevelChange={(next) => {
+        setExportLevel(next)
+        writeExportLevel(next)
+      }}
+      onExport={handleBatchExport}
+      onStop={() => batchAbort.current?.abort()}
+      onClose={() => setBatchOpen(false)}
     />
   )
 
@@ -757,13 +873,24 @@ function App() {
         {tab === 'documents' && (
           <DocumentsScreen
             entries={entries}
+            tier={tier}
             restoringId={restoringId}
             isRestoringAll={isRestoringAll}
+            selectMode={selectMode}
+            selectedIds={selectedIds}
+            isBatchBusy={isBatchBusy}
             onDelete={handleDelete}
             onOpen={(id) => setView({ kind: 'detail', id })}
             onRestore={handleRestore}
             onRestoreAll={handleRestoreAll}
             onMerge={() => setView({ kind: 'merge' })}
+            onEnterSelect={handleEnterSelect}
+            onToggleSelect={(id) => setSelectedIds((current) => toggleSelection(current, id))}
+            onExitSelect={exitSelect}
+            onBatchExport={() => setBatchOpen(true)}
+            onBatchDelete={handleBatchDelete}
+            onUpgrade={() => setView({ kind: 'upgrade' })}
+            onNotice={setToast}
           />
         )}
         {tab === 'settings' && (
@@ -793,6 +920,7 @@ function App() {
       )}
 
       {exportSheet}
+      {batchSheet}
 
       {toast && <p className="toast">{toast}</p>}
 

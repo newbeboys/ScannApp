@@ -223,7 +223,7 @@ Desain: `docs/superpowers/specs/2026-08-23-fase6-reorder-filter-design.md`
 - [x] Filter lanjutan — **5 filter** (Boss Ali menaikkan dari 2 di PRD Bagian 3): Magic Color, Cerah, Abu-abu, Hitam-Putih (ambang adaptif lokal), Hemat Tinta. Berlaku untuk seluruh dokumen, bisa dikecualikan per halaman. **Semua tier**
 - [x] Export tambahan: **PNG** — **semua tier** (lihat catatan di bawah). DOCX belum: tanpa OCR isinya cuma gambar tertempel, jadi dipindah ke potongan yang sama dengan OCR
 - [x] Kontrol level kompresi manual (slider kualitas vs ukuran) — **4 takik**, tetap Pro
-- [ ] Batch scan/export
+- [~] Batch scan/export — C1 selesai, C2 (pisah sesi pindai) menyusul
 
 **Diubah 23 Agustus 2026 (keputusan Boss Ali):** reorder halaman & filter dokumen semula Pro-exclusive, sekarang **tersedia untuk Basic maupun Pro** — bukan cuma akun Pro. Menggantikan baris di PRD Bagian 3 dan CLAUDE.md Bagian 6; lihat catatan di kedua file itu. Annotate dan tanda tangan digital di daftar di atas tetap Pro-exclusive (belum dikerjakan).
 
@@ -404,6 +404,41 @@ Total test 308 → **329** (295 node + 14 browser).
 - [ ] Bandingkan ukuran berkas sungguhan dengan angka perkiraan; kalau melenceng jauh, `PDF_STRUCTURE_BYTES_PER_PAGE` perlu disetel ulang
 - [ ] Akun Basic: slider terkunci di Standar & baris "Pro" membuka paywall
 - [ ] Cadangkan dokumen setelah memilih level Maksimal — ukuran di layar Cadangan **tidak boleh** ikut membengkak (bukti cadangan tetap Standar)
+
+### Fase 6 bagian 4 — Mode Pilih & Batch Export (C1) — 25 Agustus 2026
+
+Potongan **C** dari empat sisa Fase 6 (yang pertama dari dua: **C1** mode pilih + batch export atas dokumen yang sudah ada, **C2** pisah satu sesi pindai jadi banyak dokumen — menyusul).
+
+Desain: `docs/superpowers/specs/2026-08-25-fase6-batch-scan-export-design.md`
+
+- [x] **Mode pilih di tab Dokumen** — tekan lama sebuah dokumen untuk masuk, atau tombol "Pilih" di header untuk masuk tanpa mencentang apa pun. Baris cloud tidak bisa dipilih (belum ada berkasnya di HP) dan menampilkan toast alih-alih diam saja
+- [x] **Tekan lama + penelan klik.** `click` asli yang menyusul tekan lama dari jari yang sama ditelan (`swallowClick`), supaya memilih dokumen tidak sekaligus membukanya. Jari yang bergeser lebih dari `LONG_PRESS_MOVE_PX` membatalkan tekanan (dianggap menggulir, bukan menahan)
+- [x] **Ekspor banyak dokumen sebagai PDF — Pro.** Satu dokumen jadi satu berkas PDF, berurutan (bukan paralel — lihat catatan memori di potongan sebelumnya soal beban RAM), lembar berbagi terbuka sekali di akhir dengan apa pun yang berhasil ditulis
+- [x] **Hapus banyak dokumen — semua tier.** Tidak ada gerbang tier: merapikan dokumen sendiri bukan sesuatu yang harus dibeli
+- [x] **Tabrakan nama berkas** dalam satu batch ditangani lebih dulu (`uniqueExportNames`) — dokumen kedua berjudul sama persis jadi `… (2)`, tidak menimpa yang pertama
+- [x] **Gerbang Pro ditegakkan di `exportDocumentsBatch()` (library)**, bukan cuma di bilah aksi — pelajaran yang sama dengan `resolveCompressionLevel` dan `setPageMarks`. Diverifikasi ulang setelah pemasangan: akun Basic yang menekan "Ekspor PDF" di bilah aksi diarahkan ke `onUpgrade()` dan tidak pernah memanggil `onBatchExport()`, dan `exportDocumentsBatch()` sendiri melempar kalau tetap dipanggil untuk Basic
+- [x] **Tombol Hentikan** di tengah batch — berhenti setelah dokumen yang sedang berjalan selesai (tidak pernah di tengah penulisan satu PDF), toast melaporkan berapa yang sempat tersimpan
+- [x] **Kegagalan sebagian tidak menggagalkan semuanya.** Satu dokumen yang gagal diekspor/dihapus dihitung lewat selisih, sisanya tetap jalan. Seleksi **dipertahankan** kalau ekspor berhenti atau ada yang gagal (supaya sisanya bisa dicoba lagi tanpa mencentang ulang dari nol), dan **dikosongkan** hanya kalau semuanya berhasil tanpa dihentikan
+- [x] `pruneUnusedSignatures()` dipanggil **sekali** di akhir hapus massal, bukan per dokumen — sama seperti alasannya di potongan anotasi: tanda tangan dipakai lintas dokumen, menyapunya di tengah loop bisa menghapus berkas yang masih dirujuk dokumen yang belum sempat dihapus
+- [x] Mode pilih otomatis keluar kalau tab Dokumen ditinggalkan — bilah aksi yang masih menggantung di tab lain adalah keadaan yang tidak bisa dijelaskan
+- [x] Test bertambah 11 (total 508 → **519** — 466 node + 53 browser), termasuk `DocumentsScreen.browser.test.tsx` di **Chromium sungguhan**: tekan lama masuk mode pilih, klik yang menyusulnya ditelan, tap biasa tetap membuka dokumen, baris cloud melapor lewat toast, bilah aksi menghitung dengan benar, Basic diarahkan ke paywall bukan mengekspor, Basic tetap bisa menghapus, Batal keluar dari mode pilih
+- [x] **Test-nya dibuktikan menggigit:** blok penelan klik dilepas → test "swallows the click" merah; gerbang Pro di bilah aksi diganti pemanggilan langsung → test "sends Basic to the paywall" merah; cabang `isSelectable` di pewaktu tekan lama dihapus → test baris cloud merah. Semua dikembalikan setelah itu
+
+**Catatan token & lencana tier:**
+
+- [x] Baris tier di header tab Dokumen tadinya **dipatok** ke teks "Basic" apa pun tier akunnya — sudah tersentuh karena `tier` baru masuk sebagai prop di potongan ini, jadi diperbaiki sekalian: sekarang mengikuti `tier` sungguhan (Pro/Basic)
+- [x] Token CSS di rencana kerja awal ternyata tidak semuanya ada di `App.css` (`--primary`, `--border`, `--bottom-nav-height`, `.button--ghost`) — dipetakan ke token yang sudah ada (`--acc`, `--chip-border`, `--nav-height`, `.link-button`). `.button--danger` baru ditambahkan, memakai warna `#e5484d` yang sudah dipakai `.icon-button--danger` — tidak ada warna atau token baru (CLAUDE.md 9.2)
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali — walkthrough browser juga belum sempat dijalankan sesi ini karena app mensyaratkan login Supabase dan tidak ada akun uji/dev bypass; kebenarannya sejauh ini hanya dari 519 test otomatis, termasuk 11 test `DocumentsScreen` di Chromium sungguhan):
+
+- [ ] Tekan lama sebuah dokumen — masuk mode pilih, dan dokumennya tidak ikut terbuka
+- [ ] Tekan lama baris dokumen cloud — muncul toast, bukan diam saja
+- [ ] Pilih 3 dokumen → Ekspor PDF → 3 berkas di folder Documents, nama sesuai judulnya
+- [ ] Dua dokumen berjudul sama persis → berkas kedua jadi `… (2)`, tidak menimpa yang pertama
+- [ ] Ekspor 10+ dokumen — share sheet Android sanggup atau tidak
+- [ ] Tekan Hentikan di tengah — berhenti setelah dokumen yang sedang jalan, jumlahnya sesuai toast
+- [ ] Hapus 3 dokumen sekaligus — konfirmasi muncul, cadangan cloud tetap ada
+- [ ] Akun Basic: tombol Ekspor berlencana Pro dan membuka paywall; Hapus tetap bisa dipakai
 
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 

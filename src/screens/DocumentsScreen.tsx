@@ -3,12 +3,12 @@ import { CheckIcon, CloudIcon, DownloadIcon, ExportIcon, MergeIcon, ScanIcon, Tr
 import { PageImage } from '../components/PageImage'
 import type { DocumentEntry } from '../lib/documentEntries'
 import {
+  isAllSelected,
   isSelectable,
   LONG_PRESS_MOVE_PX,
   LONG_PRESS_MS,
   summarizeSelection,
 } from '../lib/documentSelection'
-import { canBatchExport } from '../lib/exportLimits'
 import { formatBytes } from '../lib/formatBytes'
 import { resolvePage } from '../lib/scanStorage'
 import type { Tier } from '../lib/tier'
@@ -37,10 +37,11 @@ interface DocumentsScreenProps {
    */
   onEnterSelect: (id: string) => void
   onToggleSelect: (id: string) => void
+  /** Ticks every local document, or clears the lot — see `toggleSelectAll`. */
+  onToggleSelectAll: () => void
   onExitSelect: () => void
   onBatchExport: () => void
   onBatchDelete: () => void
-  onUpgrade: () => void
   onNotice: (message: string) => void
 }
 
@@ -65,10 +66,10 @@ export function DocumentsScreen({
   onMerge,
   onEnterSelect,
   onToggleSelect,
+  onToggleSelectAll,
   onExitSelect,
   onBatchExport,
   onBatchDelete,
-  onUpgrade,
   onNotice,
 }: DocumentsScreenProps) {
   const localCount = entries.filter((entry) => entry.kind === 'local').length
@@ -149,6 +150,9 @@ export function DocumentsScreen({
   }
 
   const selection = summarizeSelection(entries, selectedIds)
+  const allSelected = isAllSelected(entries, selectedIds)
+  /* Same condition as the bar itself below, so the two cannot drift apart. */
+  const showSelectBar = selectMode && selection.count > 0
   const pressHandlers = (entry: DocumentEntry) => ({
     onPointerDown: startPress(entry),
     onPointerMove: trackPress,
@@ -158,7 +162,7 @@ export function DocumentsScreen({
   })
 
   return (
-    <div className="screen">
+    <div className={`screen${showSelectBar ? ' screen--select-bar' : ''}`}>
       {selectMode ? (
         <header className="app-header app-header--select">
           <div className="app-header__titles">
@@ -166,6 +170,22 @@ export function DocumentsScreen({
               {selection.count} dipilih · {selection.pageCount} halaman
             </h1>
           </div>
+          {/*
+            Ticking ten documents one at a time is ten taps, which is what
+            this replaces (diminta Boss Ali 25 Agustus 2026). One button, not
+            two: the label follows the state, so there is never a dead
+            "Semua" sitting next to a full selection.
+          */}
+          {entries.some(isSelectable) && (
+            <button
+              type="button"
+              className="link-button"
+              onClick={onToggleSelectAll}
+              disabled={isBatchBusy}
+            >
+              {allSelected ? 'Kosongkan' : 'Semua'}
+            </button>
+          )}
           {/*
             Every other action-bar control disables while a batch op runs;
             this one didn't. Tapping it mid-delete cleared select mode while
@@ -323,17 +343,17 @@ export function DocumentsScreen({
         </ul>
       )}
 
-      {selectMode && selection.count > 0 && (
+      {showSelectBar && (
         <div className="select-bar">
+          {/* Semua tier — lihat catatan gerbang tier di `documentExport`. */}
           <button
             type="button"
             className="button button--primary"
             disabled={isBatchBusy}
-            onClick={() => (canBatchExport(tier) ? onBatchExport() : onUpgrade())}
+            onClick={onBatchExport}
           >
             <ExportIcon size={17} />
             <span>Ekspor PDF</span>
-            {!canBatchExport(tier) && <span className="pro-badge">Pro</span>}
           </button>
           <button
             type="button"

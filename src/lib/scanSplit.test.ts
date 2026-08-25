@@ -22,7 +22,6 @@ vi.mock('./scanStorage', () => ({
 
 const {
   boundaryCuts,
-  canSplitScan,
   everyNCuts,
   planSplit,
   saveSplitScan,
@@ -141,27 +140,11 @@ describe('splitTitles', () => {
   })
 })
 
-describe('canSplitScan', () => {
-  it('lets Pro split into several documents', () => {
-    expect(canSplitScan('pro', 6)).toBe(true)
-  })
-
-  it('refuses Basic more than one document', () => {
-    expect(canSplitScan('basic', 2)).toBe(false)
-  })
-
-  it('lets Basic through when it is really just an ordinary save', () => {
-    // Splitting into one document is what the Simpan button next door already
-    // does for free. Refusing it would be a bug wearing the clothes of a rule.
-    expect(canSplitScan('basic', 1)).toBe(true)
-  })
-})
-
 describe('saveSplitScan', () => {
   const pages = ['uri-1', 'uri-2', 'uri-3']
 
   it('saves one document per group, in order, with the numbered names', async () => {
-    const result = await saveSplitScan([[pages[0], pages[1]], [pages[2]]], 'Kwitansi', 'pro')
+    const result = await saveSplitScan([[pages[0], pages[1]], [pages[2]]], 'Kwitansi')
 
     expect(savedCalls).toEqual([
       { uris: ['uri-1', 'uri-2'], title: 'Kwitansi (1)' },
@@ -175,7 +158,7 @@ describe('saveSplitScan', () => {
   it('leaves the groups that failed on screen and reports them', async () => {
     failTitles.add('Kwitansi (2)')
 
-    const result = await saveSplitScan([[pages[0]], [pages[1]], [pages[2]]], 'Kwitansi', 'pro')
+    const result = await saveSplitScan([[pages[0]], [pages[1]], [pages[2]]], 'Kwitansi')
 
     expect(result.saved).toHaveLength(2)
     // The pages of a scan that failed cannot be recovered from anywhere, so
@@ -190,7 +173,7 @@ describe('saveSplitScan', () => {
     failTitles.add('Kwitansi (1)')
     failTitles.add('Kwitansi (2)')
 
-    const result = await saveSplitScan([[pages[0]], [pages[1]]], 'Kwitansi', 'pro')
+    const result = await saveSplitScan([[pages[0]], [pages[1]]], 'Kwitansi')
 
     expect(result.saved).toEqual([])
     expect(result.remaining).toEqual([['uri-1'], ['uri-2']])
@@ -200,46 +183,47 @@ describe('saveSplitScan', () => {
   })
 
   it('continues the numbering when a retry follows a partial save', async () => {
-    await saveSplitScan([[pages[0]]], 'Kwitansi', 'pro', 5)
+    await saveSplitScan([[pages[0]]], 'Kwitansi', 5)
 
     expect(savedCalls[0].title).toBe('Kwitansi (6)')
   })
 
   it('leaves the title undefined when no name was typed', async () => {
-    await saveSplitScan([[pages[0]], [pages[1]]], '  ', 'pro')
+    await saveSplitScan([[pages[0]], [pages[1]]], '  ')
 
     expect(savedCalls.map((call) => call.title)).toEqual([undefined, undefined])
   })
 
-  it('refuses Basic more than one document, before writing anything', async () => {
-    await expect(saveSplitScan([[pages[0]], [pages[1]]], 'Kwitansi', 'basic')).rejects.toThrow(
-      'akun Pro',
-    )
-    expect(savedCalls).toEqual([])
-  })
+  /**
+   * The Pro gate here was lifted by Boss Ali on 25 Agustus 2026. Kept as a test
+   * rather than deleted: splitting into several documents is exactly what used
+   * to be refused for this tier.
+   */
+  it('splits into several documents for Basic too', async () => {
+    const result = await saveSplitScan([[pages[0]], [pages[1]]], 'Kwitansi')
 
-  it('lets Basic save a single group — that is an ordinary save', async () => {
-    const result = await saveSplitScan([[pages[0], pages[1]]], 'Kwitansi', 'basic')
-
-    expect(result.saved).toHaveLength(1)
-    expect(savedCalls).toEqual([{ uris: ['uri-1', 'uri-2'], title: 'Kwitansi' }])
+    expect(result.saved).toHaveLength(2)
+    expect(savedCalls).toEqual([
+      { uris: ['uri-1'], title: 'Kwitansi (1)' },
+      { uris: ['uri-2'], title: 'Kwitansi (2)' },
+    ])
   })
 
   it('drops empty groups rather than saving a document with no pages', async () => {
-    const result = await saveSplitScan([[pages[0]], []], 'Kwitansi', 'basic')
+    const result = await saveSplitScan([[pages[0]], []], 'Kwitansi')
 
     expect(savedCalls).toHaveLength(1)
     expect(result.saved).toHaveLength(1)
   })
 
   it('refuses when there is nothing to save at all', async () => {
-    await expect(saveSplitScan([], 'Kwitansi', 'pro')).rejects.toThrow('Tidak ada halaman')
+    await expect(saveSplitScan([], 'Kwitansi')).rejects.toThrow('Tidak ada halaman')
   })
 
   it('reports progress from zero through to done', async () => {
     const seen: string[] = []
 
-    await saveSplitScan([[pages[0]], [pages[1]]], 'Kwitansi', 'pro', 0, (done, total) =>
+    await saveSplitScan([[pages[0]], [pages[1]]], 'Kwitansi', 0, (done, total) =>
       seen.push(`${done}/${total}`),
     )
 

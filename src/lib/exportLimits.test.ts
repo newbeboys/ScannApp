@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canBatchExport,
   canChooseCompression,
   checkMergeAllowed,
   COMPRESSION_LABELS,
@@ -125,16 +124,5 @@ describe('canChooseCompression', () => {
   it('is a Pro control (PRD Bagian 3)', () => {
     expect(canChooseCompression('pro')).toBe(true)
     expect(canChooseCompression('basic')).toBe(false)
-  })
-})
-
-describe('canBatchExport', () => {
-  it('lets Pro export several documents at once', () => {
-    expect(canBatchExport('pro')).toBe(true)
-  })
-
-  /** PRD Bagian 3 — batch stayed Pro when reorder, filter and PNG moved out. */
-  it('keeps it out of Basic', () => {
-    expect(canBatchExport('basic')).toBe(false)
   })
 })

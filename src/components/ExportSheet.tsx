@@ -5,6 +5,7 @@ import type { ExportSizeEstimate } from '../lib/exportEstimate'
 import type { Tier } from '../lib/tier'
 import { shouldWatermark, type CompressionLevel } from '../lib/exportLimits'
 import { formatBytes } from '../lib/formatBytes'
+import { useScrollLock } from '../lib/useScrollLock'
 
 interface ExportSheetProps {
   pageCount: number
@@ -30,6 +31,7 @@ export function ExportSheet({
   onUpgrade,
   onClose,
 }: ExportSheetProps) {
+  useScrollLock()
   const watermarked = shouldWatermark(tier)
 
   /** "≈ 2,4 MB", or nothing at all rather than a number we have not measured. */

@@ -21,7 +21,8 @@ import { restoreBackup } from './lib/cloudRestore'
 import { mergeDocumentEntries } from './lib/documentEntries'
 import { quotaBytesFor } from './lib/storageQuota'
 import { exportDocument, exportDocumentsBatch, type BatchProgress, type ExportFormat } from './lib/documentExport'
-import { summarizeSelection, toggleSelection } from './lib/documentSelection'
+import { summarizeSelection, toggleSelectAll, toggleSelection } from './lib/documentSelection'
+import { splitDocument } from './lib/documentSplit'
 import { estimateExportSizes, type ExportSizeEstimate } from './lib/exportEstimate'
 import { readExportLevel, writeExportLevel } from './lib/exportPreference'
 import type { CompressionLevel } from './lib/exportLimits'
@@ -59,6 +60,7 @@ type View =
   | { kind: 'tabs' }
   | { kind: 'detail'; id: string }
   | { kind: 'editor'; id: string }
+  | { kind: 'split'; id: string }
   | { kind: 'viewer'; id: string; pageIndex: number }
   | { kind: 'merge' }
   | { kind: 'backups' }
@@ -89,6 +91,19 @@ function App() {
    */
   const [splitSaved, setSplitSaved] = useState(0)
   const [splitProgress, setSplitProgress] = useState<{ done: number; total: number } | null>(null)
+  /**
+   * The split screen for a document that is *already saved* — the inverse of
+   * Gabungkan Dokumen. Kept apart from the scan-split state above because the
+   * two flows can be entered from opposite ends of the app and neither should
+   * be able to inherit the other's half-finished cuts or typed name.
+   */
+  const [docSplitCuts, setDocSplitCuts] = useState<number[]>([])
+  const [docSplitName, setDocSplitName] = useState('')
+  const [docSplitDeleteOriginal, setDocSplitDeleteOriginal] = useState(false)
+  const [isSplittingDoc, setIsSplittingDoc] = useState(false)
+  const [docSplitProgress, setDocSplitProgress] = useState<
+    { done: number; total: number } | null
+  >(null)
   const [isScanning, setIsScanning] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -303,7 +318,7 @@ function App() {
   const handleSplitSave = async (groups: string[][]) => {
     setIsSaving(true)
     try {
-      const result = await saveSplitScan(groups, splitName, tier, splitSaved, (done, total) =>
+      const result = await saveSplitScan(groups, splitName, splitSaved, (done, total) =>
         setSplitProgress({ done, total }),
       )
       await refreshDocuments()
@@ -406,6 +421,64 @@ function App() {
       setToast(error instanceof Error ? error.message : 'Gagal menggabungkan dokumen.')
     } finally {
       setIsMerging(false)
+    }
+  }
+
+  /**
+   * Opens the split screen on a document that is already saved.
+   *
+   * Starts on "one document per page", which is the case it exists for: a
+   * merge done by mistake, or a stack of receipts scanned as one document.
+   * Every separator can still be moved by hand from there.
+   */
+  const handleOpenDocumentSplit = (doc: LocalScanDocument) => {
+    setDocSplitCuts(everyNCuts(doc.pageCount, 1))
+    setDocSplitName(doc.title)
+    // Off every time this opens. Deleting the source is the one irreversible
+    // thing on that screen, so it must never arrive already ticked from a
+    // previous document.
+    setDocSplitDeleteOriginal(false)
+    setView({ kind: 'split', id: doc.id })
+  }
+
+  const handleDocumentSplit = async (doc: LocalScanDocument, groups: number[][]) => {
+    // Read before the split runs: the delete below takes the row out of the
+    // index, and `refreshDocuments` would leave nothing to ask afterwards.
+    const hadBackup = doc.id in backedUp
+
+    setIsSplittingDoc(true)
+    try {
+      const result = await splitDocument(
+        doc,
+        groups,
+        docSplitName,
+        { deleteOriginal: docSplitDeleteOriginal },
+        (done, total) => setDocSplitProgress({ done, total }),
+      )
+      await refreshDocuments()
+      // The cloud copy survives a local delete on purpose — that is what a
+      // backup is for — but saying nothing here makes the original look like
+      // it came back from the dead as a "Di cloud" row a moment later. Same
+      // reasoning as `handleDelete`.
+      setToast(
+        result.originalRemoved && hadBackup
+          ? `${result.message} Cadangan di cloud tetap ada.`
+          : result.message,
+      )
+
+      // Anything that landed is worth showing. Only a run that produced
+      // nothing at all leaves the user on the split screen to try again —
+      // after a partial run the source still holds every page, so pressing
+      // Pisah a second time would duplicate the groups that succeeded.
+      if (result.saved.length > 0) {
+        setTab('documents')
+        setView({ kind: 'tabs' })
+      }
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal memisah dokumen.')
+    } finally {
+      setIsSplittingDoc(false)
+      setDocSplitProgress(null)
     }
   }
 
@@ -705,6 +778,10 @@ function App() {
       }}
       onExport={handleBatchExport}
       onStop={() => batchAbort.current?.abort()}
+      onUpgrade={() => {
+        setBatchOpen(false)
+        setView({ kind: 'upgrade' })
+      }}
       onClose={() => setBatchOpen(false)}
     />
   )
@@ -742,11 +819,13 @@ function App() {
   }
 
   /*
-    Checked before `pendingPages` on purpose. The review screen returns from
-    inside that block, so a paywall opened from it — the Pro badge on "Pisah
-    jadi Beberapa Dokumen" — would never get a chance to render, and the button
-    would look dead to a Basic account. Closing the paywall leaves
-    `pendingPages` untouched, so the scan is still waiting underneath.
+    Checked before `pendingPages` on purpose: the review screen returns from
+    inside that block, so anything opened over the top of it has to be handled
+    ahead of it or it never gets a chance to render. Nothing in the review flow
+    opens the paywall any more — splitting stopped being Pro on 25 Agustus 2026
+    — but the ordering still holds for whatever opens it next, and closing the
+    paywall leaves `pendingPages` untouched, so the scan is still waiting
+    underneath.
   */
   if (view.kind === 'upgrade') {
     return (
@@ -780,7 +859,10 @@ function App() {
             onCutsChange={setSplitCuts}
             onNameChange={setSplitName}
             onBack={() => setSplitting(false)}
-            onSave={handleSplitSave}
+            /* The screen deals in page indices; the scanner URIs live here. */
+            onSave={(groups) =>
+              handleSplitSave(groups.map((group) => group.map((index) => pendingPages[index])))
+            }
           />
           {toast && <p className="toast">{toast}</p>}
         </div>
@@ -811,7 +893,6 @@ function App() {
         <ReviewScreen
           pages={pendingPages}
           currentIndex={currentPage}
-          tier={tier}
           isBusy={isSaving || isScanning}
           onSelectPage={setCurrentPage}
           onPreview={setReviewPreview}
@@ -823,7 +904,6 @@ function App() {
           }}
           onSave={handleSaveDocument}
           onSplit={handleStartSplit}
-          onUpgrade={() => setView({ kind: 'upgrade' })}
         />
         {toast && <p className="toast">{toast}</p>}
       </div>
@@ -904,13 +984,48 @@ function App() {
     )
   }
 
+  if (activeDocument && view.kind === 'split') {
+    const splitDoc = activeDocument
+    return (
+      <div className="app">
+        <SplitScanScreen
+          pages={splitDoc.pages.map(resolvePage)}
+          /* Stored paths, not scanner URIs — these still need resolving. */
+          raw={false}
+          cuts={docSplitCuts}
+          name={docSplitName}
+          startAt={0}
+          isBusy={isSplittingDoc}
+          progress={docSplitProgress}
+          heading="Pisah Dokumen"
+          saveLabel={(count) => `Pisah jadi ${count} Dokumen`}
+          busyLabel="Memisah…"
+          options={
+            <label className="split-option">
+              <input
+                type="checkbox"
+                checked={docSplitDeleteOriginal}
+                onChange={(event) => setDocSplitDeleteOriginal(event.target.checked)}
+                disabled={isSplittingDoc}
+              />
+              <span>Hapus dokumen asli setelah dipisah</span>
+            </label>
+          }
+          onCutsChange={setDocSplitCuts}
+          onNameChange={setDocSplitName}
+          onBack={() => setView({ kind: 'detail', id: splitDoc.id })}
+          onSave={(groups) => handleDocumentSplit(splitDoc, groups)}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
   if (activeDocument && view.kind === 'editor') {
     return (
       <div className="app">
         <EditorScreen
           document={activeDocument}
-          tier={tier}
-          onUpgrade={() => setView({ kind: 'upgrade' })}
           onDocumentChange={(updated) => {
             setEditedInSession(true)
             applyDocumentChange(updated)
@@ -961,6 +1076,7 @@ function App() {
             setView({ kind: 'editor', id: activeDocument.id })
           }}
           onExport={() => setExportTarget(activeDocument.id)}
+          onSplit={() => handleOpenDocumentSplit(activeDocument)}
           onDelete={() => handleDelete(activeDocument.id)}
           onBackup={() => handleBackup(activeDocument)}
           onRemoveBackup={() => handleRemoveBackup(activeDocument.id)}
@@ -1005,10 +1121,12 @@ function App() {
             onMerge={() => setView({ kind: 'merge' })}
             onEnterSelect={handleEnterSelect}
             onToggleSelect={(id) => setSelectedIds((current) => toggleSelection(current, id))}
+            onToggleSelectAll={() =>
+              setSelectedIds((current) => toggleSelectAll(entries, current))
+            }
             onExitSelect={exitSelect}
             onBatchExport={() => setBatchOpen(true)}
             onBatchDelete={handleBatchDelete}
-            onUpgrade={() => setView({ kind: 'upgrade' })}
             onNotice={setToast}
           />
         )}

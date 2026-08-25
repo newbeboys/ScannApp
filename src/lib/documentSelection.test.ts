@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { DocumentEntry } from './documentEntries'
-import { isSelectable, summarizeSelection, toggleSelection } from './documentSelection'
+import {
+  isAllSelected,
+  isSelectable,
+  selectableIds,
+  summarizeSelection,
+  toggleSelectAll,
+  toggleSelection,
+} from './documentSelection'
 import type { LocalScanDocument } from './scanIndexMigration'
 
 function local(id: string, pageCount: number): DocumentEntry {
@@ -92,5 +99,44 @@ describe('summarizeSelection', () => {
     const summary = summarizeSelection([local('a', 3)], [])
 
     expect(summary).toEqual({ count: 0, pageCount: 0, documents: [] })
+  })
+})
+
+describe('selectableIds', () => {
+  it('lists the local rows in list order and leaves cloud rows out', () => {
+    expect(selectableIds([local('a', 1), cloud('b'), local('c', 1)])).toEqual(['a', 'c'])
+  })
+})
+
+describe('isAllSelected', () => {
+  /**
+   * A cloud row can never be ticked, so counting it would leave "Semua" saying
+   * there is more to select when every selectable row already is.
+   */
+  it('ignores the cloud rows it could never tick', () => {
+    expect(isAllSelected([local('a', 1), cloud('b')], ['a'])).toBe(true)
+  })
+
+  it('is false while something selectable is still untouched', () => {
+    expect(isAllSelected([local('a', 1), local('b', 1)], ['a'])).toBe(false)
+  })
+
+  /** A list with nothing to tick is not "all ticked" — there is no Kosongkan to offer. */
+  it('is false when there is nothing selectable at all', () => {
+    expect(isAllSelected([cloud('b')], [])).toBe(false)
+  })
+})
+
+describe('toggleSelectAll', () => {
+  it('ticks every local document from an empty selection', () => {
+    expect(toggleSelectAll([local('a', 1), cloud('b'), local('c', 1)], [])).toEqual(['a', 'c'])
+  })
+
+  it('completes a partial selection rather than clearing it', () => {
+    expect(toggleSelectAll([local('a', 1), local('b', 1)], ['a'])).toEqual(['a', 'b'])
+  })
+
+  it('clears once everything selectable is already ticked', () => {
+    expect(toggleSelectAll([local('a', 1), cloud('c')], ['a'])).toEqual([])
   })
 })

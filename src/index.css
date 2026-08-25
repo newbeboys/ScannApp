@@ -19,6 +19,8 @@
   --shadow: 0 10px 30px rgba(20, 34, 70, 0.1);
 
   --nav-height: 68px;
+  /* Tinggi `.select-bar`: padding 12+12 + tombol 53 + garis 1. */
+  --select-bar-height: 78px;
   /* Diisi App.tsx saat banner AdMob tampil; 0 untuk Pro & di web. */
   --ad-banner-height: 0px;
 

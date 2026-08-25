@@ -3,6 +3,7 @@ import { CompressionField } from './CompressionField'
 import type { BatchProgress } from '../lib/documentExport'
 import type { CompressionLevel } from '../lib/exportLimits'
 import type { Tier } from '../lib/tier'
+import { useScrollLock } from '../lib/useScrollLock'
 
 interface BatchExportSheetProps {
   count: number
@@ -15,6 +16,8 @@ interface BatchExportSheetProps {
   onLevelChange: (level: CompressionLevel) => void
   onExport: () => void
   onStop: () => void
+  /** Opens the paywall from the locked quality row — Basic reaches this sheet now. */
+  onUpgrade: () => void
   onClose: () => void
 }
 
@@ -36,8 +39,11 @@ export function BatchExportSheet({
   onLevelChange,
   onExport,
   onStop,
+  onUpgrade,
   onClose,
 }: BatchExportSheetProps) {
+  useScrollLock()
+
   return (
     <div className="sheet-backdrop" onClick={isBusy ? undefined : onClose}>
       <div
@@ -64,18 +70,19 @@ export function BatchExportSheet({
           </button>
         </div>
 
+        {/*
+          The lock row leads to the paywall, like the single-document sheet's
+          does. It used to close the sheet instead, on the grounds that the
+          button opening it was Pro-only so no Basic account could ever get
+          here — which stopped being true on 25 Agustus 2026 when batch export
+          moved to every tier. The quality control itself is still Pro.
+        */}
         <CompressionField
           tier={tier}
           level={level}
           isBusy={isBusy}
           onLevelChange={onLevelChange}
-          /*
-            Nothing to upgrade to from here: the button that opened this sheet
-            is already Pro-only, so a Basic account cannot reach it. The lock
-            row still renders for the tier check's own sake, and closing is the
-            honest thing for it to do.
-          */
-          onUpgrade={onClose}
+          onUpgrade={onUpgrade}
         />
 
         <p className="batch-note">

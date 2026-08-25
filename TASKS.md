@@ -217,15 +217,16 @@ Empat temuan code-review ditutup sebelum commit, semuanya di kode iklan baru:
 Desain: `docs/superpowers/specs/2026-08-23-fase6-reorder-filter-design.md`
 
 - [ ] Integrasi OCR (searchable PDF)
-- [x] Annotate (coret/tulis di atas dokumen) — **Pro**, lihat bagian 3 di bawah
-- [x] Tanda tangan digital — **Pro**, lihat bagian 3 di bawah
+- [x] Annotate (coret/tulis di atas dokumen) — ~~**Pro**~~ **semua tier sejak 25 Agustus 2026**, lihat bagian 3 & bagian 6 di bawah
+- [x] Tanda tangan digital — ~~**Pro**~~ **semua tier sejak 25 Agustus 2026**, lihat bagian 3 & bagian 6 di bawah
 - [x] Reorder halaman — tombol geser kiri/kanan (bukan seret-lepas, lihat spec Bagian 2.6). **Semua tier**
 - [x] Filter lanjutan — **5 filter** (Boss Ali menaikkan dari 2 di PRD Bagian 3): Magic Color, Cerah, Abu-abu, Hitam-Putih (ambang adaptif lokal), Hemat Tinta. Berlaku untuk seluruh dokumen, bisa dikecualikan per halaman. **Semua tier**
 - [x] Export tambahan: **PNG** — **semua tier** (lihat catatan di bawah). DOCX belum: tanpa OCR isinya cuma gambar tertempel, jadi dipindah ke potongan yang sama dengan OCR
 - [x] Kontrol level kompresi manual (slider kualitas vs ukuran) — **4 takik**, tetap Pro
-- [x] Batch scan/export — C1 & C2 selesai (lihat bagian 4 & 5 di bawah)
+- [x] Batch scan/export — C1 & C2 selesai (lihat bagian 4 & 5 di bawah). ~~Ekspor banyak dokumen Pro~~ → **semua tier sejak 25 Agustus 2026**, lihat bagian 6
+- [x] Pisah dokumen yang **sudah tersimpan** (kebalikan merge) — di luar daftar asli, diminta Boss Ali 25 Agustus 2026, lihat bagian 6
 
-**Diubah 23 Agustus 2026 (keputusan Boss Ali):** reorder halaman & filter dokumen semula Pro-exclusive, sekarang **tersedia untuk Basic maupun Pro** — bukan cuma akun Pro. Menggantikan baris di PRD Bagian 3 dan CLAUDE.md Bagian 6; lihat catatan di kedua file itu. Annotate dan tanda tangan digital di daftar di atas tetap Pro-exclusive (belum dikerjakan).
+**Diubah 23 Agustus 2026 (keputusan Boss Ali):** reorder halaman & filter dokumen semula Pro-exclusive, sekarang **tersedia untuk Basic maupun Pro** — bukan cuma akun Pro. Menggantikan baris di PRD Bagian 3 dan CLAUDE.md Bagian 6; lihat catatan di kedua file itu. ~~Annotate dan tanda tangan digital di daftar di atas tetap Pro-exclusive (belum dikerjakan).~~ — **dibatalkan 25 Agustus 2026**, keduanya ikut pindah ke semua tier (bagian 6).
 
 Catatan tambahan di luar daftar asli (lihat spec Bagian 2 & 3):
 
@@ -276,9 +277,9 @@ Temuan keempat (**file filter yatim kalau `applyDocumentFilter` gagal di tengah*
 - **Jebakan PNG-dari-JPEG terbukti nyata:** PNG dari halaman asli 102 KB, PNG dari hasil JPEG 191 KB — 87% lebih berat tanpa satu piksel pun membaik
 - **PNG vs JPEG sangat bergantung isi halaman:** scan kamera ber-noise 11,3× lebih besar; bercahaya rata 13,8× lebih besar; setelah filter Hitam-Putih justru **4× lebih kecil**. Rentang ini yang membuat perkiraan ukuran harus **diukur dari halamannya**, bukan ditebak dengan rumus — dan yang membenarkan teks "pas untuk Hitam-Putih" di lembar Ekspor
 
-### Fase 6 bagian 3 — Anotasi & Tanda Tangan (Pro) — 24 Agustus 2026
+### Fase 6 bagian 3 — Anotasi & Tanda Tangan — 24 Agustus 2026
 
-Potongan **B** dari empat sisa Fase 6. Tetap **Pro-exclusive** — dua baris ini tidak ikut dipindahkan Boss Ali ke "semua tier" seperti reorder/filter/PNG.
+Potongan **B** dari empat sisa Fase 6. ~~Tetap **Pro-exclusive** — dua baris ini tidak ikut dipindahkan Boss Ali ke "semua tier" seperti reorder/filter/PNG.~~ — **dibatalkan 25 Agustus 2026**: keduanya menyusul ke semua tier, lihat bagian 6.
 
 Desain: `docs/superpowers/specs/2026-08-24-fase6-annotate-tandatangan-design.md`
 
@@ -289,7 +290,7 @@ Desain: `docs/superpowers/specs/2026-08-24-fase6-annotate-tandatangan-design.md`
 - [x] **4 warna tinta, semuanya sudah ada di kode**: `#1b2740` (`--fg` terang), `#2563eb` (primary), `#e5484d` (danger), `#f5c443` (`--pro-gold`). Tidak ada warna baru (CLAUDE.md 9.2), dan ada test yang menjaganya
 - [x] **Tanda tangan digambar di kotak selebar layar**, bukan langsung di halaman. Menandatangani di kotak kecil di sudut halaman menghasilkan coretan besar dan gemetar; hasilnya dipangkas ke kotak tinta-nya sendiri (`trimToInk`) supaya stempelnya bukan sebagian besar ruang kosong
 - [x] Berkas tanda tangan bernama `signature-<cap waktu>.png`, bukan nama tetap: menggambar ulang tidak boleh diam-diam mengganti tanda tangan di dokumen yang **sudah** ditandatangani, termasuk yang sudah dicadangkan
-- [x] **Gerbang Pro ditegakkan di library** (`setPageMarks`), bukan cuma menyembunyikan tombol — pelajaran yang sama dengan `resolveCompressionLevel`
+- [x] ~~**Gerbang Pro ditegakkan di library** (`setPageMarks`)~~ — **dicabut 25 Agustus 2026** (bagian 6). Waktu masih ada, ia ditegakkan di library, bukan cuma menyembunyikan tombol — pelajaran yang sama dengan `resolveCompressionLevel`
 - [x] Goresan hidup di draft memori sampai ditekan Simpan. Menulis per goresan berarti meng-encode ulang JPEG 12 MP tiap kali jari diangkat
 - [x] Test bertambah 74 (total 453 — 418 node + 35 browser), termasuk 10 test `renderMarks` di **Chromium sungguhan**: tinta mendarat di piksel yang dituju, mata pena ikut skala halaman, stabilo membiarkan teks di bawahnya tetap hitam, stempel tanda tangan pas di kotaknya, dan merender goresan yang sama dua kali **tidak** menebalkannya
 - [x] **Test-nya dibuktikan menggigit:** `multiply` dilepas → test stabilo merah; faktor lebar stabilo dilepas → test lebar merah; sumber render tinta diubah jadi berkas hasilnya sendiri → 2 test penumpukan merah. Semua dikembalikan setelah itu
@@ -315,7 +316,7 @@ Desain: `docs/superpowers/specs/2026-08-24-fase6-annotate-tandatangan-design.md`
 - [ ] **Putar halaman yang sudah dianotasi** — tinta ikut berputar
 - [ ] **Ganti filter dokumen setelah menandatangani** — tanda tangan biru harus tetap biru, tidak ikut jadi hitam pekat, dan tidak menghilang
 - [ ] Ekspor PDF & cadangkan ke cloud — tinta ikut ke dua-duanya
-- [ ] Akun **Basic**: tombol "Anotasi & Tanda Tangan" berlencana Pro dan membuka paywall, bukan editornya
+- [x] ~~Akun **Basic**: tombol "Anotasi & Tanda Tangan" berlencana Pro dan membuka paywall~~ — **tidak berlaku lagi** sejak 25 Agustus 2026, anotasi & tanda tangan jadi semua tier (bagian 6)
 - [ ] Tekan tombol kembali dengan coretan belum disimpan — muncul konfirmasi, bukan hilang diam-diam
 
 ### Temuan uji device pertama — 24 Agustus 2026
@@ -413,10 +414,10 @@ Desain: `docs/superpowers/specs/2026-08-25-fase6-batch-scan-export-design.md`
 
 - [x] **Mode pilih di tab Dokumen** — tekan lama sebuah dokumen untuk masuk, atau tombol "Pilih" di header untuk masuk tanpa mencentang apa pun. Baris cloud tidak bisa dipilih (belum ada berkasnya di HP) dan menampilkan toast alih-alih diam saja
 - [x] **Tekan lama + penelan klik.** `click` asli yang menyusul tekan lama dari jari yang sama ditelan (`swallowClick`), supaya memilih dokumen tidak sekaligus membukanya. Jari yang bergeser lebih dari `LONG_PRESS_MOVE_PX` membatalkan tekanan (dianggap menggulir, bukan menahan)
-- [x] **Ekspor banyak dokumen sebagai PDF — Pro.** Satu dokumen jadi satu berkas PDF, berurutan (bukan paralel — lihat catatan memori di potongan sebelumnya soal beban RAM), lembar berbagi terbuka sekali di akhir dengan apa pun yang berhasil ditulis
+- [x] **Ekspor banyak dokumen sebagai PDF** — ~~Pro~~ **semua tier sejak 25 Agustus 2026** (bagian 6). Satu dokumen jadi satu berkas PDF, berurutan (bukan paralel — lihat catatan memori di potongan sebelumnya soal beban RAM), lembar berbagi terbuka sekali di akhir dengan apa pun yang berhasil ditulis
 - [x] **Hapus banyak dokumen — semua tier.** Tidak ada gerbang tier: merapikan dokumen sendiri bukan sesuatu yang harus dibeli
 - [x] **Tabrakan nama berkas** dalam satu batch ditangani lebih dulu (`uniqueExportNames`) — dokumen kedua berjudul sama persis jadi `… (2)`, tidak menimpa yang pertama
-- [x] **Gerbang Pro ditegakkan di `exportDocumentsBatch()` (library)**, bukan cuma di bilah aksi — pelajaran yang sama dengan `resolveCompressionLevel` dan `setPageMarks`. Diverifikasi ulang setelah pemasangan: akun Basic yang menekan "Ekspor PDF" di bilah aksi diarahkan ke `onUpgrade()` dan tidak pernah memanggil `onBatchExport()`, dan `exportDocumentsBatch()` sendiri melempar kalau tetap dipanggil untuk Basic
+- [x] ~~**Gerbang Pro ditegakkan di `exportDocumentsBatch()` (library)**~~ — **dicabut 25 Agustus 2026** (bagian 6). Waktu masih ada, ia ditegakkan di library, bukan cuma di bilah aksi — pelajaran yang sama dengan `resolveCompressionLevel` dan `setPageMarks`. Diverifikasi ulang setelah pemasangan: akun Basic yang menekan "Ekspor PDF" di bilah aksi diarahkan ke `onUpgrade()` dan tidak pernah memanggil `onBatchExport()`, dan `exportDocumentsBatch()` sendiri melempar kalau tetap dipanggil untuk Basic
 - [x] **Tombol Hentikan** di tengah batch — berhenti setelah dokumen yang sedang berjalan selesai (tidak pernah di tengah penulisan satu PDF), toast melaporkan berapa yang sempat tersimpan
 - [x] **Kegagalan sebagian tidak menggagalkan semuanya.** Satu dokumen yang gagal diekspor/dihapus dihitung lewat selisih, sisanya tetap jalan. Seleksi **dipertahankan** kalau ekspor berhenti atau ada yang gagal (supaya sisanya bisa dicoba lagi tanpa mencentang ulang dari nol), dan **dikosongkan** hanya kalau semuanya berhasil tanpa dihentikan
 - [x] `pruneUnusedSignatures()` dipanggil **sekali** di akhir hapus massal, bukan per dokumen — sama seperti alasannya di potongan anotasi: tanda tangan dipakai lintas dokumen, menyapunya di tengah loop bisa menghapus berkas yang masih dirujuk dokumen yang belum sempat dihapus
@@ -456,7 +457,7 @@ Rencana kerja: `docs/superpowers/plans/2026-08-25-fase6-c2-pisah-hasil-pindai.md
 - [x] **Layar tersendiri, bukan penanda di strip thumbnail layar Tinjau.** Strip itu horizontal dan sudah penuh untuk lima halaman; tiga puluh halaman dengan pemisah di antaranya jadi lorong panjang yang harus digeser jauh cuma untuk melihat sudah terbagi berapa
 - [x] **Pola siap pakai + gunting manual, bukan dua mode terpisah.** "Tiap 1 halaman" (setumpuk kwitansi/KTP — kasus utamanya), "Tiap 2 halaman" (bolak-balik), "Bersihkan pemisah". Pola cuma mengisi guntingnya; setelah itu tiap pemisah tetap bisa diketuk satu-satu. Pemisahnya tombol setinggi jempol, bukan garis rambut
 - [x] **Satu kolom Nama untuk seluruh batch** → `Nama (1)`, `Nama (2)`, … Dikosongkan pun aman: jatuh ke nama bawaan `Scan <tanggal>` seperti menyimpan biasa. Tanpa kolom ini, memindai tiga puluh kwitansi berarti tiga puluh dokumen yang identik kecuali detiknya, lalu tiga puluh kali ubah nama
-- [x] **Gerbang Pro ditegakkan di `saveSplitScan()` (library), dan syaratnya "lebih dari satu dokumen butuh Pro"** — bukan "fitur ini Pro". Memisah jadi 1 dokumen identik dengan tombol Simpan di sebelahnya yang sudah gratis untuk semua tier; menolaknya berarti menolak sesuatu yang sudah gratis lewat pintu sebelah. Akun Basic yang menekan tombolnya dapat paywall, bukan layar mati
+- [x] ~~**Gerbang Pro ditegakkan di `saveSplitScan()` (library), dan syaratnya "lebih dari satu dokumen butuh Pro"**~~ — **dicabut 25 Agustus 2026** (bagian 6). Waktu masih ada, syaratnya — bukan "fitur ini Pro". Memisah jadi 1 dokumen identik dengan tombol Simpan di sebelahnya yang sudah gratis untuk semua tier; menolaknya berarti menolak sesuatu yang sudah gratis lewat pintu sebelah. Akun Basic yang menekan tombolnya dapat paywall, bukan layar mati
 - [x] **Kalau menyimpan gagal di tengah, halamannya tidak hilang.** Kelompok yang berhasil pergi, kelompok yang gagal tetap tinggal di layar dengan guntingnya disusun ulang (`boundaryCuts()`), dan toast-nya berkata berapa yang tersimpan. Membatalkan semuanya akan membuang dokumen yang sudah aman; menutup layarnya akan membawa kelompok sisanya ikut hilang bersama sesi pindainya — dan hasil pindai yang hilang tidak bisa dipulihkan dari mana pun. Menekan Simpan lagi tidak menghasilkan duplikat karena yang berhasil sudah tidak ada di layar
 - [x] **Penomoran lanjut setelah gagal sebagian** (`Kwitansi (6)`, bukan `Kwitansi (1)` lagi) — supaya percobaan kedua tidak menabrak judul yang sudah tersimpan di ronde pertama
 - [x] **Interstitial `scan-saved` dipanggil sekali untuk seluruh sesi pisah**, bukan per dokumen. Praktisnya tidak pernah tampil (ini Pro-only), tapi kalau ditulis per dokumen, langganan yang habis di kemudian hari akan meledakkan delapan interstitial beruntun
@@ -478,9 +479,79 @@ Rencana kerja: `docs/superpowers/plans/2026-08-25-fase6-c2-pisah-hasil-pindai.md
 - [ ] Isi kolom Nama → semua dokumen bernama `Nama (1..10)`
 - [ ] Kosongkan Nama → jatuh ke nama bawaan, tidak error
 - [ ] Atur gunting sendiri di dokumen 30 halaman — layarnya masih enak digulir, thumbnail tidak membuat HP tersendat
-- [ ] Akun Basic: tombol Pisah berlencana Pro dan membuka paywall (dan paywall-nya benar-benar muncul di atas layar Tinjau), lalu menutup paywall kembali ke layar Tinjau dengan hasil pindai masih utuh
+- [x] ~~Akun Basic: tombol Pisah berlencana Pro dan membuka paywall…~~ — **tidak berlaku lagi** sejak 25 Agustus 2026, Pisah jadi semua tier (bagian 6). Yang perlu diuji sekarang: tombolnya **tanpa** lencana dan langsung membuka layar Pisah
 - [ ] Simpan hasil pisah, lalu langsung batch-export semuanya — nama berkasnya tidak bertabrakan (pertemuan C1 & C2)
 
+### Fase 6 bagian 6 — Temuan Uji Device Kedua & Pembukaan Gerbang Pro — 25 Agustus 2026
+
+Boss Ali menguji C1 & C2 di Xiaomi T15 dan melaporkan lima hal sekaligus, empat di antaranya bug tampilan/performa dan satu permintaan fitur. Di penutup laporannya ia juga **mencabut gerbang Pro** untuk semua fitur yang disebut di situ.
+
+**Keputusan tier (mengganti PRD Bagian 3 & CLAUDE.md Bagian 6):** anotasi, tanda tangan digital, pisah dokumen, dan ekspor banyak dokumen sekaligus jadi **semua tier**. Ini pembatalan ketiga dengan pola yang sama seperti dua sebelumnya (reorder/filter, lalu PNG): **yang mendasar untuk semua, Pro untuk kendali & mutu**. Yang tetap Pro dari Fase 6: kontrol level kompresi manual, ekspor DOCX, bebas iklan, tanpa watermark, merge tanpa batas halaman, kuota storage lebih besar.
+
+- [x] **Gerbangnya dilepas dari library, bukan cuma dari UI** — `canBatchExport()` dan `canSplitScan()` dihapus seluruhnya (bukan diubah jadi `return true`, yang cuma menyisakan abstraksi bohong), parameter `tier` ikut hilang dari `saveSplitScan()` dan `setPageMarks()` karena tidak ada lagi yang membacanya. Lencana "Pro" dan cabang `onUpgrade()` hilang dari layar Dokumen, Tinjau, dan Editor
+- [x] **Test gerbang tidak dihapus, dibalik** — tier yang dulu ditolak sekarang diuji berhasil (`exports for Basic too`, `splits into several documents for Basic too`, `lets Basic export in bulk`). Menghapusnya akan membuat regresi ke perilaku lama lewat tanpa suara
+- [x] **Konsekuensi yang ikut ketahuan:** baris terkunci "Atur sendiri kualitas & ukuran berkas" di lembar Ekspor Banyak Dokumen dulu cuma **menutup lembarnya**, dengan alasan tertulis bahwa tombol yang membukanya Pro-only sehingga akun Basic tidak akan pernah sampai ke sana. Alasan itu mati bersama gerbangnya. Sekarang ia membuka paywall seperti di lembar satu dokumen — kontrol kualitasnya sendiri **tetap Pro**
+
+**1. Layar di belakang popup masih bisa digulir.** Backdrop `position: fixed` menutupi layar tapi tidak memiliki gestur di atasnya: jari yang menggeser di atasnya tetap menggulir wadah gulir terdekat, jadi daftar dokumen ikut bergeser di belakang lembar Ekspor yang sedang jalan.
+
+- [x] `useScrollLock()` — hook yang memasang kelas di `document.body` selama komponennya hidup, dipakai oleh **ketiga** lembar (`ExportSheet`, `BatchExportSheet`, `SignaturePad`), jadi ini bukan tambalan satu layar
+- [x] **Dihitung, bukan bendera** — lembar bisa bertumpuk (papan tanda tangan terbuka di atas alat anotasi), dan bendera akan melepas kunci begitu yang dalam ditutup padahal yang luar masih menutupi layar. Ada test regresinya di Chromium sungguhan
+- [x] CSS menyebut **kedua** wadah gulirnya: `.app__body` di layar tab, dan viewport itu sendiri di layar alur penuh yang menggulir `body`
+- [x] `.sheet` dapat `max-height: 88vh; overflow-y: auto` — begitu halaman di belakangnya dibekukan, lembarnya sendiri harus bisa mencapai tombolnya di layar pendek
+
+**2. Tidak ada tombol "Semua" di mode pilih.** Memilih sepuluh dokumen berarti sepuluh ketukan.
+
+- [x] Satu tombol yang labelnya mengikuti keadaan — **Semua** → **Kosongkan** — bukan dua tombol dengan salah satunya selalu mati. Logikanya di `documentSelection.ts` (`selectableIds`, `isAllSelected`, `toggleSelectAll`), jadi bisa diuji tanpa DOM
+- [x] Baris cloud **tidak** ikut dihitung: ia tidak punya berkas halaman di HP ini, jadi tidak akan pernah bisa dicentang. Menghitungnya akan membuat "Semua" mengaku masih ada yang tersisa padahal semua yang bisa dicentang sudah tercentang
+
+**3. Dokumen terakhir terpotong bilah Ekspor/Hapus.** Bilahnya `position: fixed`, jadi ia menutupi ujung daftar alih-alih mendorongnya naik.
+
+- [x] `.screen--select-bar` menyisakan tinggi bilah (`--select-bar-height`) selama bilah itu tampil. Kondisinya (`showSelectBar`) dipakai bersama oleh padding dan bilahnya sendiri, supaya keduanya tidak bisa berbeda pendapat
+
+**4. Tombol "Hentikan" putih tidak terbaca** (terlihat di tangkapan layar Boss Ali). Ditemukan saat menelusuri laporan pertama, bukan dilaporkan terpisah.
+
+- [x] `.button` polos ternyata tidak pernah menetapkan latar & warna sama sekali — yang selama ini menyelamatkannya adalah `.editor-actions .button`, `.viewer__actions .button`, dan `.split-entry`. Tombol "Hentikan" di lembar Ekspor Banyak Dokumen tidak duduk di salah satunya, jadi ia jatuh ke tombol bawaan browser: kotak putih dengan teks gelap di atas tema gelap. Latar & warna dasar kini ada di `.button` sendiri; varian `--primary`/`--danger`/`--upgrade` menetapkan miliknya sendiri jadi tidak ada yang berubah di sana
+
+**5. Tidak ada cara memisah dokumen yang sudah tersimpan.** Merge sepuluh dokumen jadi satu tidak punya kebalikan — merge yang salah cuma bisa dibatalkan dengan memindai ulang semuanya.
+
+- [x] **`splitDocument()` di `documentSplit.ts`**, memakai kembali seluruh geometri gunting milik `scanSplit` (`planSplit`, `toggleCut`, `everyNCuts`, `splitTitles`). Yang berbeda cuma dari mana halamannya datang dan apa yang terjadi pada asalnya
+- [x] **Halaman disalin lewat `resolvePage()`**, persis seperti merge — jadi tiap dokumen baru membawa halaman yang dilihat user (sudah dipotong, difilter, dianotasi), bukan hasil pindai mentah di bawahnya
+- [x] **Hasil pisah tidak ditandai sebagai gabungan.** `createDocumentFromPages` dulu selalu menulis `sourceDocumentIds`; array kosong itu *truthy*, jadi layar detail akan menulis "Hasil gabungan dari 0 dokumen". Parameternya kini opsional dan hanya ditulis kalau berisi
+- [x] **Dokumen asli tidak dihapus kecuali dicentang**, dan **tidak pernah** dihapus kalau ada kelompok yang gagal dibuat — halaman kelompok itu belum ada di tempat lain, jadi menghapus asalnya berarti menghilangkannya. Centangnya juga selalu mulai dari mati tiap kali layar dibuka
+- [x] **Cadangan cloud yang selamat ikut dikatakan** — sama seperti `handleDelete`, kalau tidak, dokumen asli terlihat "hidup lagi" sebagai baris Di cloud beberapa saat kemudian
+- [x] **Gagal sebagian tidak menyuruh "coba lagi"** seperti pisah hasil pindai. Di sana kelompok yang berhasil pergi dari layar; di sini dokumen asalnya masih memegang semua halaman, jadi menekan Pisah lagi akan menduplikasi kelompok yang sudah jadi. Pesannya menyuruh membereskan hasil yang sudah jadi dulu
+- [x] `SplitScanScreen` dipakai bersama kedua alur (`raw`, `heading`, `saveLabel`, `busyLabel`, `options`) dan `onSave` kini menyerahkan **indeks halaman**, bukan halamannya — supaya layar itu tidak perlu tahu ia sedang memegang URI pemindai atau path tersimpan
+- [x] Ikon `SplitIcon` baru, cerminan `MergeIcon` di grid stroke yang sama, supaya keduanya terbaca sebagai lawan saat berdampingan
+
+**6. Ekspor 10 dokumen sangat lama & simpan anotasi sangat lambat.**
+
+- [x] **Izin storage diminta sekali per sesi, bukan sekali per berkas.** `writeExportFiles()` memanggil `checkPermissions()` + kadang `requestPermissions()` untuk **tiap** dokumen — batch 10 dokumen menjalankan pasangan itu sepuluh kali, dua-duanya menyeberangi jembatan Capacitor dan yang kedua bisa memunculkan dialog sistem. Ini kandidat terkuat penyebab "seperti menggantung"
+- [x] **Halaman diperkecil saat di-decode, bukan setelahnya.** Ukuran piksel dibaca dari header JPEG (`jpegSize.ts`, ~60 baris, diuji di suite node dengan berkas yang dirakit byte demi byte), lalu `createImageBitmap` diminta mengecilkan sekalian — bukan men-decode 12 MP utuh lalu membuang tiga perempatnya di kanvas sesaat kemudian. Ekspor membayar decode penuh itu sekali per halaman, dan batch 10 dokumen membayarnya sepuluh kali
+- [x] **Hanya satu dimensi yang diminta, rasio diserahkan ke browser.** Meminta keduanya akan **merusak bentuk** halaman ber-tag rotasi EXIF: `imageOrientation: 'from-image'` menukar sumbunya sementara ukuran dari header tidak, jadi keduanya jadi berbeda pendapat soal mana yang lebar. Dengan satu dimensi, hal terburuk yang bisa dilakukan rotasi adalah membatasi sisi pendek — hasilnya tetap lebih kecil dari aslinya, tetap berbentuk benar, dan `scaledCanvas` menyelesaikan sisanya
+- [x] **Mutu berkas turunan 0,95 → 0,90.** Berkas hasil filter & hasil tinta harus di-base64, diseberangkan lewat jembatan, ditulis Java, lalu dibaca & di-decode lagi untuk ditampilkan — ukurannya dibayar empat kali di HP. **Diukur di Chromium** pada halaman mirip-pindaian 3000×4200: **5,76 MB pada 0,95 → 3,96 MB pada 0,90, yaitu 31% lebih sedikit byte** untuk selisih yang tidak selamat sampai kertas. Ini angka teknis (CLAUDE.md Bagian 6), bukan angka bisnis — kalau di HP ternyata terlihat, boleh dinaikkan lagi
+- [x] **Test membuktikan jalur cepatnya benar-benar dipakai**, bukan cuma bahwa hasilnya benar — keluarannya identik dengan atau tanpa optimasi, jadi test kebenaran saja tidak akan menyadari jalur cepat itu hilang
+
+**Test bertambah 38 (total 575 → 613 — 533 node + 80 browser):** semuanya lulus (`npm test`). Enam test gerbang tier dihapus atau dibalik seiring gerbangnya dilepas, jadi angka bersihnya menutupi lebih dari 38 test baru.
+
+**Test-nya dibuktikan menggigit:** hitungan `useScrollLock` diganti bendera → test lembar bertumpuk merah; syarat `remaining.length === 0` dilepas dari penghapusan dokumen asli → test "kelompok gagal" merah; cabang orientasi `resizeWidth`/`resizeHeight` ditukar → test jalur cepat merah (dan test ukuran **tetap hijau**, yang justru membuktikan jaring pengaman `scaledCanvas` bekerja). Semua dikembalikan setelah itu.
+
+**Security review: nihil temuan.** Tidak menyentuh Supabase, R2, maupun signed URL. Dua permukaan baru diperiksa: `readJpegSize()` mengurai byte yang tidak dipercaya — semua akses indeks berpagar, dan `at += length` dengan `length >= 2` dijamin selalu maju sehingga tidak bisa berputar selamanya; `splitDocument()` menghapus dokumen lewat id dari index kita sendiri (UUID buatan sendiri), dan `deleteScanDocument` memastikan id-nya ada di index sebelum `rmdir` — tidak ada path yang berasal dari ketikan user.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Buka lembar Ekspor / Ekspor Banyak / Tanda Tangan → coba gulir layar di belakangnya: **tidak boleh bergerak sama sekali**
+- [ ] Lembar Ekspor di layar pendek — tombol formatnya masih bisa dicapai (lembarnya sendiri yang bergulir)
+- [ ] Tombol "Hentikan" saat batch berjalan sekarang terbaca (bukan kotak putih)
+- [ ] Mode pilih → **Semua** mencentang semua dokumen HP, baris "Di cloud" tetap tidak tercentang; tombolnya berubah jadi **Kosongkan**
+- [ ] Gulir ke bawah dengan bilah Ekspor/Hapus tampil — dokumen terakhir **utuh**, tidak terpotong
+- [ ] Ekspor 10 dokumen lagi — **berapa detik sekarang** dibanding sebelumnya? (angka sebelum/sesudah dari HP yang sama)
+- [ ] Simpan anotasi di halaman 12 MP — **berapa detik sekarang** dibanding sebelumnya?
+- [ ] Hasil anotasi & filter pada mutu 0,90 masih tajam saat dicetak/di-zoom — kalau tidak, angkanya boleh dinaikkan lagi
+- [ ] Gabung 10 dokumen → buka detailnya → **Pisah jadi Beberapa Dokumen** → "Tiap 1 halaman" → 10 dokumen kembali, isinya benar & urutannya benar
+- [ ] Pisah **tanpa** mencentang hapus asli — dokumen asli masih ada
+- [ ] Pisah **dengan** mencentang hapus asli — dokumen asli hilang dari HP; kalau ia punya cadangan, toast-nya menyebut cadangan cloud tetap ada
+- [ ] Pisah dokumen yang halamannya sudah difilter/dipotong/dianotasi — hasilnya membawa halaman yang **terlihat**, bukan pindaian mentah
+- [ ] Akun **Basic**: tombol Anotasi & Tanda Tangan, Pisah, dan Ekspor PDF banyak dokumen **tanpa lencana Pro** dan langsung bisa dipakai
 
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 

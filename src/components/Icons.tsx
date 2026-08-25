@@ -167,6 +167,18 @@ export function MergeIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function SplitIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M3.5 12h4" />
+      <path d="M7.5 12a4 4 0 0 0 4-4h5" />
+      <path d="M7.5 12a4 4 0 0 1 4 4h5" />
+      <path d="m14 5.5 2.5 2.5L14 10.5" />
+      <path d="m14 13.5 2.5 2.5L14 18.5" />
+    </svg>
+  )
+}
+
 export function PdfIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">

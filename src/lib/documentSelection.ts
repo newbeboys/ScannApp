@@ -26,6 +26,34 @@ export function toggleSelection(selected: string[], id: string): string[] {
   return selected.includes(id) ? selected.filter((entry) => entry !== id) : [...selected, id]
 }
 
+/** Every row a bulk action can actually touch, in the order the list shows them. */
+export function selectableIds(entries: DocumentEntry[]): string[] {
+  return entries.filter(isSelectable).map((entry) => entry.id)
+}
+
+/**
+ * Whether everything that *can* be ticked already is.
+ *
+ * Cloud rows are left out of the question entirely — they can never be ticked,
+ * so counting them would leave "Semua" claiming there is more to select when
+ * there is not.
+ */
+export function isAllSelected(entries: DocumentEntry[], selected: string[]): boolean {
+  const ids = selectableIds(entries)
+  return ids.length > 0 && ids.every((id) => selected.includes(id))
+}
+
+/**
+ * What the header's "Semua" button hands back: everything, or nothing.
+ *
+ * One button rather than two. Ticking ten documents one at a time is ten taps
+ * and the reason this exists (diminta Boss Ali 25 Agustus 2026); untick-all is
+ * the same need in reverse, and the label follows the state.
+ */
+export function toggleSelectAll(entries: DocumentEntry[], selected: string[]): string[] {
+  return isAllSelected(entries, selected) ? [] : selectableIds(entries)
+}
+
 export interface SelectionSummary {
   count: number
   pageCount: number

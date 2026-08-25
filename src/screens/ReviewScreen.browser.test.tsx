@@ -7,7 +7,6 @@ async function renderScreen(overrides: Partial<Parameters<typeof ReviewScreen>[0
     <ReviewScreen
       pages={['uri-1', 'uri-2', 'uri-3']}
       currentIndex={0}
-      tier="pro"
       isBusy={false}
       onSelectPage={() => {}}
       onPreview={() => {}}
@@ -16,33 +15,23 @@ async function renderScreen(overrides: Partial<Parameters<typeof ReviewScreen>[0
       onCancel={() => {}}
       onSave={() => {}}
       onSplit={() => {}}
-      onUpgrade={() => {}}
       {...overrides}
     />,
   )
 }
 
 describe('the split button', () => {
-  it('opens the split screen for Pro', async () => {
+  /**
+   * Splitting stopped being Pro on 25 Agustus 2026 (Boss Ali). There is no
+   * paywall on this screen any more and no tier for it to depend on.
+   */
+  it('opens the split screen', async () => {
     const onSplit = vi.fn()
-    const onUpgrade = vi.fn()
-    const screen = await renderScreen({ onSplit, onUpgrade })
+    const screen = await renderScreen({ onSplit })
 
     await screen.getByRole('button', { name: /Pisah jadi Beberapa Dokumen/ }).click()
 
     expect(onSplit).toHaveBeenCalled()
-    expect(onUpgrade).not.toHaveBeenCalled()
-  })
-
-  it('sends Basic to the paywall instead of a dead screen', async () => {
-    const onSplit = vi.fn()
-    const onUpgrade = vi.fn()
-    const screen = await renderScreen({ tier: 'basic', onSplit, onUpgrade })
-
-    await screen.getByRole('button', { name: /Pisah jadi Beberapa Dokumen/ }).click()
-
-    expect(onUpgrade).toHaveBeenCalled()
-    expect(onSplit).not.toHaveBeenCalled()
   })
 
   it('is not offered at all for a single page', async () => {

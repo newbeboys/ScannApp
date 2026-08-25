@@ -15,6 +15,21 @@
   );
 }
 
+/*
+  Dipasang `useScrollLock` selama ada lembar/popup terbuka.
+
+  Backdrop `position: fixed` menutupi layar, tapi ia tidak memiliki gestur di
+  atasnya: jari yang menggeser di situ tetap menggulir wadah gulir terdekat,
+  jadi daftar dokumen ikut bergeser di belakang lembar yang terbuka (dilaporkan
+  dari HP, 25 Agustus 2026). Kedua wadah gulirnya disebut di sini —
+  `.app__body` di layar tab, dan viewport itu sendiri di layar alur penuh yang
+  menggulir `body`.
+*/
+body.scroll-locked,
+body.scroll-locked .app__body {
+  overflow: hidden;
+}
+
 .screen {
   padding: calc(20px + env(safe-area-inset-top, 0px)) 20px 24px;
   display: flex;
@@ -715,6 +730,18 @@
   padding: 15px;
   font-size: 16px;
   font-weight: 700;
+  /*
+    Warna dasar, bukan cuma bentuk.
+
+    Tanpa dua baris ini sebuah `.button` polos yang tidak duduk di dalam
+    `.editor-actions`/`.viewer__actions`/`.split-entry` jatuh ke tombol bawaan
+    browser: kotak putih dengan teks gelap, tidak terbaca di tema gelap. Itulah
+    tombol "Hentikan" di lembar Ekspor Banyak Dokumen (terlihat di tangkapan
+    layar HP, 25 Agustus 2026). Varian `--primary`, `--danger` dan `--upgrade`
+    menetapkan latar & warnanya sendiri, jadi tidak ada yang berubah di sana.
+  */
+  background: var(--chip);
+  color: var(--fg);
   transition:
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 160ms ease;
@@ -1091,6 +1118,8 @@
   align-items: flex-end;
   justify-content: center;
   animation: fade-in 180ms ease;
+  /* Pelengkap kunci di body: gestur yang mulai di sini tidak merambat keluar. */
+  overscroll-behavior: contain;
 }
 
 @keyframes fade-in {
@@ -1118,6 +1147,15 @@
   gap: 12px;
   box-shadow: var(--shadow);
   animation: sheet-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  /*
+    Halaman di belakang dibekukan selama lembar ini terbuka, jadi lembarnya
+    sendiri harus bisa mencapai tombolnya di layar pendek — lembar Ekspor
+    dengan dua perkiraan ukuran dan baris progres lebih tinggi dari
+    kelihatannya.
+  */
+  max-height: 88vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @keyframes sheet-in {
@@ -2177,6 +2215,15 @@
 }
 
 /*
+  Bilahnya `position: fixed`, jadi ia menutupi ujung daftar alih-alih
+  mendorongnya naik: dokumen terakhir terpotong separuh di HP (dilaporkan
+  25 Agustus 2026). Layar menyisakan ruang setinggi bilah itu selama ia tampil.
+*/
+.screen--select-bar {
+  padding-bottom: calc(24px + var(--select-bar-height));
+}
+
+/*
   Sits above the bottom nav, and above the ad banner the tab reserves room for
   — the bar is the only way out of a selection, so nothing may cover it.
 */
@@ -2232,6 +2279,26 @@
   border-radius: 12px;
   padding: 12px 14px;
   font-size: 15px;
+}
+
+/*
+  Hanya muncul saat memisah dokumen yang sudah tersimpan: hasil pindai yang
+  belum disimpan tidak punya "asli" untuk dihapus.
+*/
+.split-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.split-option input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: var(--acc);
 }
 
 .split-patterns {

@@ -3,7 +3,6 @@ import {
   normalizeDocumentTitle,
 } from '../../supabase/functions/_shared/documentTitle'
 import { saveScanDocument, type LocalScanDocument } from './scanStorage'
-import type { Tier } from './tier'
 
 /**
  * Room kept for the " (n)" the numbering appends, inside the shared cap.
@@ -111,17 +110,6 @@ export function splitTitles(base: string, count: number, startAt = 0): (string |
   return Array.from({ length: count }, (_, index) => `${clean} (${startAt + index + 1})`)
 }
 
-/**
- * Splitting into two or more documents is Pro (PRD Bagian 3).
- *
- * Splitting into one is not: that is identical to the Simpan button next to
- * it, which every tier already has. Refusing it would be refusing something
- * already free through the neighbouring door — a bug, not an enforcement.
- */
-export function canSplitScan(tier: Tier, groupCount: number): boolean {
-  return tier === 'pro' || groupCount <= 1
-}
-
 export interface SplitSaveResult {
   saved: LocalScanDocument[]
   /** Groups that did not make it, in their original order. */
@@ -131,7 +119,9 @@ export interface SplitSaveResult {
 }
 
 /**
- * Saves one document per group, sequentially.
+ * Saves one document per group, sequentially. Available to every tier — the
+ * Pro gate here was lifted by Boss Ali on 25 Agustus 2026, the same decision
+ * that opened batch export and annotate.
  *
  * Sequential rather than parallel for the same reason as the batch export:
  * these are 12 MP JPEGs being read and written, and starting eight at once
@@ -149,18 +139,12 @@ export interface SplitSaveResult {
 export async function saveSplitScan(
   groups: string[][],
   base: string,
-  tier: Tier,
   startAt = 0,
   onProgress?: (done: number, total: number) => void,
 ): Promise<SplitSaveResult> {
   const usable = groups.filter((group) => group.length > 0)
   if (usable.length === 0) {
     throw new Error('Tidak ada halaman untuk disimpan.')
-  }
-  // In the library rather than only in the screen: hiding a button is not the
-  // same as refusing the action behind it.
-  if (!canSplitScan(tier, usable.length)) {
-    throw new Error('Memisah hasil pindai jadi beberapa dokumen hanya untuk akun Pro.')
   }
 
   const titles = splitTitles(base, usable.length, startAt)

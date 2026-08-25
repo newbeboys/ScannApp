@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   compressImage,
   compressImagePair,
@@ -43,6 +43,19 @@ async function scanLike(width: number, height: number, noise = 20): Promise<Blob
   }
 
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob!), 'image/png'))
+}
+
+/** The same page, but stored as a JPEG — which is what a real scan always is. */
+async function scanLikeJpeg(width: number, height: number): Promise<Blob> {
+  const source = await scanLike(width, height)
+  const bitmap = await createImageBitmap(source)
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0)
+  bitmap.close()
+
+  return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob!), 'image/jpeg', 0.9))
 }
 
 /** First bytes of the file — the only honest way to ask what format it really is. */
@@ -207,5 +220,101 @@ describe('compressImagePair', () => {
     })
 
     expect((await getImageSize(jpeg)).height).toBe(2400)
+  })
+})
+
+/**
+ * Added 25 Agustus 2026: an export reads the page's size out of the JPEG header
+ * and asks `createImageBitmap` to shrink it during the decode, rather than
+ * decoding 12 MP in full and throwing three quarters of it away a moment later.
+ * A ten-document batch paid that full decode ten times (dilaporkan dari HP).
+ *
+ * The risk being covered is transposition: the size in the header is the size as
+ * *stored*, and `imageOrientation: 'from-image'` can hand back a bitmap with its
+ * axes swapped. Getting that wrong distorts every exported page, so both
+ * orientations are checked against real pixel counts, not against the request.
+ */
+describe('shrinking a JPEG page during the decode', () => {
+  /*
+    The short edge is checked to within a pixel rather than exactly: the browser
+    is the one preserving the aspect ratio here, and it rounds 857.14 up. What
+    matters is that the cap lands on the long edge and the shape survives — an
+    axis transposition would be out by hundreds, not by one.
+  */
+  it('caps the long edge of a portrait page and keeps its shape', async () => {
+    const out = await compressImage(await scanLikeJpeg(1500, 2100), {
+      quality: 0.75,
+      maxEdgePx: 1200,
+    })
+
+    const size = await getImageSize(out)
+    expect(size.height).toBe(1200)
+    expect(Math.abs(size.width - (1500 / 2100) * 1200)).toBeLessThanOrEqual(1)
+  })
+
+  it('caps the long edge of a landscape page and keeps its shape', async () => {
+    const out = await compressImage(await scanLikeJpeg(2100, 1500), {
+      quality: 0.75,
+      maxEdgePx: 1200,
+    })
+
+    const size = await getImageSize(out)
+    expect(size.width).toBe(1200)
+    expect(Math.abs(size.height - (1500 / 2100) * 1200)).toBeLessThanOrEqual(1)
+  })
+
+  it('leaves a JPEG that is already under the cap alone', async () => {
+    const out = await compressImage(await scanLikeJpeg(600, 800), {
+      quality: 0.75,
+      maxEdgePx: 1200,
+    })
+
+    expect(await getImageSize(out)).toEqual({ width: 600, height: 800 })
+  })
+
+  /**
+   * The saving is the whole point, so it is asserted directly rather than
+   * inferred from the output — the output is identical either way, which is
+   * exactly why a correctness test alone would not notice the fast path going
+   * missing.
+   *
+   * One dimension, never both: passing both would stretch a page whose EXIF tag
+   * swaps its axes, because the header size and the decoded size would then
+   * disagree about which number is the width.
+   */
+  it('asks the decoder for one dimension rather than decoding the page in full', async () => {
+    const page = await scanLikeJpeg(1500, 2100)
+    const decode = vi.spyOn(globalThis, 'createImageBitmap')
+
+    let options: ImageBitmapOptions | undefined
+    try {
+      await compressImage(page, { quality: 0.75, maxEdgePx: 1200 })
+      // Read before restoring: mockRestore clears the recorded calls with it.
+      options = decode.mock.calls[0]?.[1] as ImageBitmapOptions | undefined
+    } finally {
+      decode.mockRestore()
+    }
+
+    expect(options?.resizeHeight).toBe(1200)
+    expect(options?.resizeWidth).toBeUndefined()
+  })
+
+  /** A PNG has no frame header to read, so it takes the plain decode as before. */
+  it('falls back to a full decode when the size cannot be read', async () => {
+    const page = await scanLike(1500, 2100)
+    const decode = vi.spyOn(globalThis, 'createImageBitmap')
+
+    let calls: unknown[][] = []
+    try {
+      await compressImage(page, { quality: 0.75, maxEdgePx: 1200 })
+      calls = decode.mock.calls.map((call) => [...call])
+    } finally {
+      decode.mockRestore()
+    }
+
+    const options = calls[0]?.[1] as ImageBitmapOptions | undefined
+    expect(calls).toHaveLength(1)
+    expect(options?.resizeWidth).toBeUndefined()
+    expect(options?.resizeHeight).toBeUndefined()
   })
 })

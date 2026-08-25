@@ -118,7 +118,10 @@ describe('saving', () => {
 
     await screen.getByRole('button', { name: 'Simpan 3 Dokumen' }).click()
 
-    expect(onSave).toHaveBeenCalledWith([['uri-1'], ['uri-2', 'uri-3'], ['uri-4']])
+    // Page indices, not the pages themselves: the screen serves both the scan
+    // split (scanner URIs) and the document split (stored paths), so turning
+    // indices into pages is the caller's job.
+    expect(onSave).toHaveBeenCalledWith([[0], [1, 2], [3]])
   })
 
   it('is shut while a save is running, so nothing is saved twice', async () => {

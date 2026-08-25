@@ -1,10 +1,16 @@
+import type { ReactNode } from 'react'
 import { ChevronLeftIcon } from '../components/Icons'
 import { PageImage } from '../components/PageImage'
 import { everyNCuts, planSplit, splitTitles, toggleCut } from '../lib/scanSplit'
 
 interface SplitScanScreenProps {
-  /** Scanner URIs, exactly as ReviewScreen has them — hence `raw` below. */
+  /**
+   * What to show for each page: scanner URIs from a session that has not been
+   * saved yet, or stored page paths from a document that has.
+   */
   pages: string[]
+  /** True for scanner URIs, which are already displayable; paths need resolving. */
+  raw?: boolean
   cuts: number[]
   name: string
   /**
@@ -15,11 +21,23 @@ interface SplitScanScreenProps {
   isBusy: boolean
   /** `{ done, total }` while a save is running, else null. */
   progress: { done: number; total: number } | null
+  heading?: string
+  /** Label for the confirm button, given how many documents it would produce. */
+  saveLabel?: (count: number) => string
+  busyLabel?: string
+  /** An extra control under the name field — the "delete original" toggle. */
+  options?: ReactNode
   onCutsChange: (cuts: number[]) => void
   onNameChange: (name: string) => void
   onBack: () => void
-  /** Groups of scanner URIs, in screen order. */
-  onSave: (groups: string[][]) => void
+  /**
+   * Groups of page *indices*, in screen order.
+   *
+   * Indices rather than the pages themselves so this screen never has to know
+   * whether it is holding scanner URIs or stored paths — the caller already
+   * knows, and it is the caller that has to turn them into documents.
+   */
+  onSave: (groups: number[][]) => void
 }
 
 /**
@@ -29,6 +47,12 @@ interface SplitScanScreenProps {
  * separators between them would turn it into a long corridor that has to be
  * dragged just to see how many documents there are.
  *
+ * Serves both split flows — a scanning session on its way to being saved, and
+ * a document that is already saved (usually one merged by mistake). They differ
+ * only in where the pages come from and what the buttons are called, which is
+ * what the props above cover; the cut geometry is identical, so it is shared
+ * rather than written twice.
+ *
  * Controlled on purpose: `cuts` and `name` live in App. After a save that only
  * half succeeded, App has to swap the page list *and* rebuild the cuts around
  * what is left — impossible from outside if the cuts lived here, short of
@@ -36,11 +60,16 @@ interface SplitScanScreenProps {
  */
 export function SplitScanScreen({
   pages,
+  raw = true,
   cuts,
   name,
   startAt,
   isBusy,
   progress,
+  heading = 'Pisah Hasil Pindai',
+  saveLabel = (count) => `Simpan ${count} Dokumen`,
+  busyLabel = 'Menyimpan…',
+  options,
   onCutsChange,
   onNameChange,
   onBack,
@@ -61,7 +90,7 @@ export function SplitScanScreen({
           <ChevronLeftIcon size={20} />
         </button>
         <div className="flow-header__titles">
-          <h1>Pisah Hasil Pindai</h1>
+          <h1>{heading}</h1>
           <p>
             {pages.length} halaman → {groups.length} dokumen
           </p>
@@ -78,6 +107,8 @@ export function SplitScanScreen({
           disabled={isBusy}
         />
       </label>
+
+      {options}
 
       {/*
         Patterns and hand-adjustment are not separate modes: a pattern only
@@ -148,7 +179,7 @@ export function SplitScanScreen({
               )}
 
               <div className="split-page">
-                <PageImage source={page} raw alt={`Halaman ${index + 1}`} />
+                <PageImage source={page} raw={raw} alt={`Halaman ${index + 1}`} />
                 <span className="split-page__number">{index + 1}</span>
               </div>
             </li>
@@ -159,16 +190,16 @@ export function SplitScanScreen({
       <div className="flow-footer">
         {progress && (
           <p className="split-progress">
-            Menyimpan… {progress.done} dari {progress.total}
+            {busyLabel} {progress.done} dari {progress.total}
           </p>
         )}
         <button
           type="button"
           className="button button--primary"
           disabled={isBusy}
-          onClick={() => onSave(groups.map((group) => group.map((index) => pages[index])))}
+          onClick={() => onSave(groups)}
         >
-          {isBusy ? 'Menyimpan…' : `Simpan ${groups.length} Dokumen`}
+          {isBusy ? busyLabel : saveLabel(groups.length)}
         </button>
       </div>
     </div>

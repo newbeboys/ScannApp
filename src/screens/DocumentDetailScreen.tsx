@@ -6,6 +6,7 @@ import {
   ExportIcon,
   EyeIcon,
   PencilIcon,
+  SplitIcon,
   TrashIcon,
 } from '../components/Icons'
 import { PageImage } from '../components/PageImage'
@@ -22,6 +23,8 @@ interface DocumentDetailScreenProps {
   /** Opens the full-screen preview at the page the user tapped. */
   onPreview: (pageIndex: number) => void
   onExport: () => void
+  /** Opens the split screen for this document. Every tier. */
+  onSplit: () => void
   onDelete: () => void
   onBackup: () => void
   onRemoveBackup: () => void
@@ -45,6 +48,7 @@ export function DocumentDetailScreen({
   onEdit,
   onPreview,
   onExport,
+  onSplit,
   onDelete,
   onBackup,
   onRemoveBackup,
@@ -147,6 +151,24 @@ export function DocumentDetailScreen({
           <span>Ekspor</span>
         </button>
       </div>
+
+      {/*
+        A row of its own rather than a fourth button above: three is already the
+        width of a phone. Hidden for a single page — there is nothing to split —
+        which also keeps it out of the way of the documents it is not for.
+
+        This is the inverse of Gabungkan Dokumen on the Documents tab, and the
+        reason it exists: a merge done by mistake had no way back short of
+        scanning everything again (dilaporkan Boss Ali 25 Agustus 2026).
+      */}
+      {doc.pageCount > 1 && (
+        <div className="editor-actions">
+          <button type="button" className="button" onClick={onSplit}>
+            <SplitIcon size={17} />
+            <span>Pisah jadi Beberapa Dokumen</span>
+          </button>
+        </div>
+      )}
 
       <BackupRow
         status={backupStatus}

@@ -131,15 +131,15 @@ describe('exportDocumentsBatch', () => {
   })
 
   /**
-   * The gate lives here rather than only on the button: a hidden control is
-   * not a refused one (same lesson as `resolveCompressionLevel`).
+   * The Pro gate here was lifted by Boss Ali on 25 Agustus 2026. Kept as a test
+   * rather than deleted: this is the tier that used to be refused outright, so
+   * a regression to that would otherwise be silent.
    */
-  it('refuses Basic outright', async () => {
-    await expect(exportDocumentsBatch([doc('a', 'Nota')], 'basic')).rejects.toThrow(
-      'Ekspor banyak dokumen sekaligus hanya untuk akun Pro.',
-    )
+  it('exports for Basic too', async () => {
+    const result = await exportDocumentsBatch([doc('a', 'Nota')], 'basic')
 
-    expect(written).toEqual([])
+    expect(written).toEqual(['Nota.pdf'])
+    expect(result.saved).toEqual(['Nota.pdf'])
   })
 
   it('refuses an empty selection', async () => {

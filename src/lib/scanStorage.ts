@@ -783,7 +783,15 @@ export async function reorderPages(
 export async function createDocumentFromPages(
   sources: { pagePath: string }[],
   title: string,
-  sourceDocumentIds: string[],
+  /**
+   * Which documents were merged to make this one, for the "Hasil gabungan
+   * dari n dokumen" line on the detail screen.
+   *
+   * Left off by `splitDocument`, which is the opposite operation: an empty
+   * array is truthy, so passing one would have that line claim a merge of no
+   * documents at all.
+   */
+  sourceDocumentIds?: string[],
 ): Promise<LocalScanDocument> {
   await ensureScansDir()
   const id = newDocumentId()
@@ -809,7 +817,7 @@ export async function createDocumentFromPages(
     createdAt: new Date().toISOString(),
     pageCount: pages.length,
     pages,
-    sourceDocumentIds,
+    ...(sourceDocumentIds?.length ? { sourceDocumentIds } : {}),
   }
 
   const docs = await readIndex()

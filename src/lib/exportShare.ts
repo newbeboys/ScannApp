@@ -15,20 +15,36 @@ export interface DeliveryResult {
 }
 
 /**
+ * Asked for once per app run, not once per file.
+ *
+ * Both calls below cross the Capacitor bridge, and `requestPermissions` can put
+ * a system dialog on screen. A ten-document batch export ran the pair ten times
+ * — a visible part of why exporting ten documents felt like it had hung
+ * (dilaporkan dari HP, 25 Agustus 2026). The answer cannot change underneath us
+ * within a run: the only thing that would change it is the user answering the
+ * dialog, which is what this waits for the first time.
+ */
+let storagePermission: Promise<void> | null = null
+
+/**
  * Public Documents needs WRITE_EXTERNAL_STORAGE only on Android 10 and
  * below; Android 11+ grants it implicitly. Failing to get it is not fatal
  * here — the write below will surface a clearer error if it truly can't
  * proceed.
  */
-async function ensureStoragePermission(): Promise<void> {
-  try {
-    const status = await Filesystem.checkPermissions()
-    if (status.publicStorage !== 'granted') {
-      await Filesystem.requestPermissions()
+function ensureStoragePermission(): Promise<void> {
+  storagePermission ??= (async () => {
+    try {
+      const status = await Filesystem.checkPermissions()
+      if (status.publicStorage !== 'granted') {
+        await Filesystem.requestPermissions()
+      }
+    } catch {
+      // Plugin reports no permission model on this platform/API level.
     }
-  } catch {
-    // Plugin reports no permission model on this platform/API level.
-  }
+  })()
+
+  return storagePermission
 }
 
 /**

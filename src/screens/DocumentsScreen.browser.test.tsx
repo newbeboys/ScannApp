@@ -51,10 +51,10 @@ async function renderScreen(overrides: Partial<Parameters<typeof DocumentsScreen
       onMerge={() => {}}
       onEnterSelect={() => {}}
       onToggleSelect={() => {}}
+      onToggleSelectAll={() => {}}
       onExitSelect={() => {}}
       onBatchExport={() => {}}
       onBatchDelete={() => {}}
-      onUpgrade={() => {}}
       onNotice={() => {}}
       {...overrides}
     />,
@@ -165,24 +165,42 @@ describe('the action bar', () => {
   })
 
   /**
-   * A dead button explains nothing. The paywall explains what is missing and
-   * sells it in the same tap.
+   * Batch export stopped being Pro on 25 Agustus 2026 (Boss Ali). This used to
+   * send Basic to the paywall instead, so the regression is worth a test.
    */
-  it('sends Basic to the paywall rather than exporting', async () => {
+  it('lets Basic export in bulk', async () => {
     const onBatchExport = vi.fn()
-    const onUpgrade = vi.fn()
     const screen = await renderScreen({
       tier: 'basic',
       selectMode: true,
       selectedIds: ['a'],
       onBatchExport,
-      onUpgrade,
     })
 
     await screen.getByRole('button', { name: /Ekspor PDF/ }).click()
 
-    expect(onBatchExport).not.toHaveBeenCalled()
-    expect(onUpgrade).toHaveBeenCalledTimes(1)
+    expect(onBatchExport).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * Ten documents is ten taps without this, which is the complaint it answers
+   * (Boss Ali, 25 Agustus 2026). The cloud row must stay out of it: there are
+   * no page files for it on this phone, so it can never be part of a batch.
+   */
+  it('ticks every local document at once, and leaves the cloud row alone', async () => {
+    const onToggleSelectAll = vi.fn()
+    const screen = await renderScreen({ selectMode: true, onToggleSelectAll })
+
+    await screen.getByRole('button', { name: 'Semua', exact: true }).click()
+
+    expect(onToggleSelectAll).toHaveBeenCalledTimes(1)
+  })
+
+  /** The one button changes its name rather than sitting there already spent. */
+  it('offers Kosongkan once everything selectable is ticked', async () => {
+    const screen = await renderScreen({ selectMode: true, selectedIds: ['a'] })
+
+    await expect.element(screen.getByRole('button', { name: 'Kosongkan' })).toBeInTheDocument()
   })
 
   /** Tidying up your own documents is not something Pro has to buy. */

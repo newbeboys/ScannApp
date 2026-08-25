@@ -2,7 +2,6 @@ import { blobToBytes } from './blobBase64'
 import { loadPageBlob } from './documentEditing'
 import {
   BASIC_COMPRESSION,
-  canBatchExport,
   COMPRESSION_PRESETS,
   DEFAULT_COMPRESSION_LEVEL,
   resolveCompressionLevel,
@@ -180,7 +179,12 @@ export async function exportDocument(
 }
 
 /**
- * Exports several documents as one PDF each.
+ * Exports several documents as one PDF each. Available to every tier.
+ *
+ * The Pro gate this used to carry was lifted by Boss Ali on 25 Agustus 2026,
+ * alongside split and annotate: exporting the documents you already own is a
+ * basic need, not something to be sold. What stays Pro is the manual quality
+ * control — `resolveCompressionLevel` still pins Basic to Standar below.
  *
  * Sequential, and each PDF is written to disk before the next is built. The
  * same reasoning as `handleRestoreAll`: this is not work that gets faster by
@@ -197,9 +201,6 @@ export async function exportDocumentsBatch(
   onProgress?: (progress: BatchProgress) => void,
   signal?: AbortSignal,
 ): Promise<BatchExportResult> {
-  if (!canBatchExport(tier)) {
-    throw new Error('Ekspor banyak dokumen sekaligus hanya untuk akun Pro.')
-  }
   if (docs.length === 0) {
     throw new Error('Tidak ada dokumen untuk diekspor.')
   }

@@ -30,7 +30,6 @@ import {
   type PageFilter,
   type ScanPage,
 } from './scanStorage'
-import type { Tier } from './tier'
 
 /** Loads whatever the page currently shows — the ink, else the filter, else the edit, else the scan. */
 export async function loadPageBlob(page: ScanPage): Promise<Blob> {
@@ -211,24 +210,18 @@ export async function setPageFilter(
 }
 
 /**
- * Replaces what is drawn on one page (Pro).
+ * Replaces what is drawn on one page. Available to every tier.
  *
- * The tier is checked here, in the library, not only where the button is
- * drawn. Hiding a control is not a gate — the same lesson as
- * `resolveCompressionLevel` (see the Fase 6 export notes): every path into the
- * feature has to pass the same check, or the next screen that calls this
- * function quietly reopens it.
+ * This used to refuse anything but Pro, here in the library rather than only
+ * in the UI. Boss Ali lifted that on 25 Agustus 2026 — the same decision that
+ * opened batch export and split — so there is no tier left to check, and the
+ * parameter went with the check rather than sitting here unread.
  */
 export async function setPageMarks(
   doc: LocalScanDocument,
   pageIndex: number,
   marks: Mark[],
-  tier: Tier,
 ): Promise<LocalScanDocument> {
-  if (tier !== 'pro') {
-    throw new Error('Anotasi & tanda tangan tersedia untuk akun Pro.')
-  }
-
   return savePageMarks(doc.id, pageIndex, marks, drawMarks)
 }
 

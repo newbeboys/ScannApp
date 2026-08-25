@@ -14,6 +14,7 @@ async function renderSheet(overrides: Partial<Parameters<typeof BatchExportSheet
       onLevelChange={() => {}}
       onExport={() => {}}
       onStop={() => {}}
+      onUpgrade={() => {}}
       onClose={() => {}}
       {...overrides}
     />,
@@ -93,5 +94,33 @@ describe('BatchExportSheet for a Basic account', () => {
     await expect
       .element(screen.getByRole('button', { name: /Atur sendiri kualitas/ }))
       .toBeVisible()
+  })
+})
+
+/**
+ * Batch export moved to every tier on 25 Agustus 2026, so a Basic account can
+ * now open this sheet — which it never could before. The quality control inside
+ * it is still Pro, and its locked row used to just close the sheet on the
+ * grounds that nobody who saw it could ever be Basic.
+ */
+describe('the quality lock, now that Basic can get here', () => {
+  it('opens the paywall rather than closing the sheet', async () => {
+    const onUpgrade = vi.fn()
+    const onClose = vi.fn()
+    const screen = await renderSheet({ tier: 'basic', onUpgrade, onClose })
+
+    await screen.getByRole('button', { name: /Atur sendiri kualitas/ }).click()
+
+    expect(onUpgrade).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('still lets Basic run the export itself', async () => {
+    const onExport = vi.fn()
+    const screen = await renderSheet({ tier: 'basic', onExport })
+
+    await screen.getByRole('button', { name: 'Ekspor 3 PDF' }).click()
+
+    expect(onExport).toHaveBeenCalledTimes(1)
   })
 })

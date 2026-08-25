@@ -27,6 +27,7 @@ import { readExportLevel, writeExportLevel } from './lib/exportPreference'
 import type { CompressionLevel } from './lib/exportLimits'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
+import { boundaryCuts, everyNCuts, saveSplitScan } from './lib/scanSplit'
 import {
   deleteAllScanDocuments,
   deleteScanDocument,
@@ -49,6 +50,7 @@ import { MergeScreen } from './screens/MergeScreen'
 import { PageViewerScreen } from './screens/PageViewerScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
+import { SplitScanScreen } from './screens/SplitScanScreen'
 import { SplashScreen } from './screens/SplashScreen'
 import { UpgradeScreen } from './screens/UpgradeScreen'
 
@@ -75,6 +77,18 @@ function App() {
   const [currentPage, setCurrentPage] = useState(0)
   /** Which freshly-scanned page is open full-screen, if any. */
   const [reviewPreview, setReviewPreview] = useState<number | null>(null)
+  /** Split screen is on top of the review screen, and what it is holding. */
+  const [splitting, setSplitting] = useState(false)
+  const [splitCuts, setSplitCuts] = useState<number[]>([])
+  const [splitName, setSplitName] = useState('')
+  /**
+   * How many documents this split session has already saved.
+   *
+   * Only non-zero after a save that half succeeded: the retry continues the
+   * numbering rather than minting a second "Kwitansi (1)".
+   */
+  const [splitSaved, setSplitSaved] = useState(0)
+  const [splitProgress, setSplitProgress] = useState<{ done: number; total: number } | null>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -217,6 +231,15 @@ function App() {
     }
   }
 
+  /** Leaves split mode and forgets everything it was holding. */
+  const exitSplit = () => {
+    setSplitting(false)
+    setSplitCuts([])
+    setSplitName('')
+    setSplitSaved(0)
+    setSplitProgress(null)
+  }
+
   const handleStartScan = async () => {
     const pages = await runScanner()
     if (!pages) return
@@ -224,6 +247,9 @@ function App() {
     setCurrentPage(0)
     // A preview left open from the previous scan would reopen over the new one.
     setReviewPreview(null)
+    // Same reasoning for the split screen: cuts belong to the scan that made
+    // them, and a new scan is a new set of pages.
+    exitSplit()
   }
 
   const handleAddPages = async () => {
@@ -248,6 +274,7 @@ function App() {
       await saveScanDocument(pendingPages)
       await refreshDocuments()
       setPendingPages(null)
+      exitSplit()
       setTab('documents')
       setToast('Dokumen tersimpan.')
       // Counted per saved document, not per scanner launch: a cancelled scan
@@ -257,6 +284,49 @@ function App() {
       setToast(error instanceof Error ? error.message : 'Gagal menyimpan dokumen.')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleStartSplit = () => {
+    // Opens on "one document per page": that is the case the feature exists
+    // for — a stack of receipts or ID cards scanned in one run.
+    setSplitCuts(everyNCuts(pendingPages?.length ?? 0, 1))
+    setSplitName('')
+    setSplitSaved(0)
+    setSplitting(true)
+  }
+
+  const handleSplitSave = async (groups: string[][]) => {
+    setIsSaving(true)
+    try {
+      const result = await saveSplitScan(groups, splitName, tier, splitSaved, (done, total) =>
+        setSplitProgress({ done, total }),
+      )
+      await refreshDocuments()
+      setToast(result.message)
+
+      if (result.remaining.length === 0) {
+        setPendingPages(null)
+        exitSplit()
+        setTab('documents')
+      } else {
+        // The groups that failed stay on screen with their cuts rebuilt around
+        // them, so Simpan can be pressed again without scanning anything twice.
+        setPendingPages(result.remaining.flat())
+        setSplitCuts(boundaryCuts(result.remaining))
+        setSplitSaved((count) => count + result.saved.length)
+        setCurrentPage(0)
+      }
+
+      // Once for the whole split session, not once per document: written per
+      // document, a subscription that lapses later would fire eight
+      // interstitials back to back.
+      if (result.saved.length > 0) void maybeShowInterstitial('scan-saved', tier)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal menyimpan dokumen.')
+    } finally {
+      setIsSaving(false)
+      setSplitProgress(null)
     }
   }
 
@@ -667,7 +737,51 @@ function App() {
     )
   }
 
+  /*
+    Checked before `pendingPages` on purpose. The review screen returns from
+    inside that block, so a paywall opened from it — the Pro badge on "Pisah
+    jadi Beberapa Dokumen" — would never get a chance to render, and the button
+    would look dead to a Basic account. Closing the paywall leaves
+    `pendingPages` untouched, so the scan is still waiting underneath.
+  */
+  if (view.kind === 'upgrade') {
+    return (
+      <div className="app">
+        <UpgradeScreen
+          onClose={() => setView({ kind: 'tabs' })}
+          onUpgraded={() => {
+            // Tier ditulis webhook RevenueCat, bukan oleh client — jadi
+            // profil dibaca ulang beberapa kali sampai entitlement mendarat.
+            void refreshProfile({ untilPro: true })
+            refreshBackupState()
+          }}
+          onNotice={setToast}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
   if (pendingPages) {
+    if (splitting) {
+      return (
+        <div className="app">
+          <SplitScanScreen
+            pages={pendingPages}
+            cuts={splitCuts}
+            name={splitName}
+            isBusy={isSaving}
+            progress={splitProgress}
+            onCutsChange={setSplitCuts}
+            onNameChange={setSplitName}
+            onBack={() => setSplitting(false)}
+            onSave={handleSplitSave}
+          />
+          {toast && <p className="toast">{toast}</p>}
+        </div>
+      )
+    }
+
     // Full-screen look at a page that has not been saved yet. The pages are
     // still scanner URIs at this point, hence `raw`.
     if (reviewPreview !== null && reviewPreview < pendingPages.length) {
@@ -692,31 +806,19 @@ function App() {
         <ReviewScreen
           pages={pendingPages}
           currentIndex={currentPage}
+          tier={tier}
           isBusy={isSaving || isScanning}
           onSelectPage={setCurrentPage}
           onPreview={setReviewPreview}
           onRemovePage={handleRemovePage}
           onAddPages={handleAddPages}
-          onCancel={() => setPendingPages(null)}
-          onSave={handleSaveDocument}
-        />
-        {toast && <p className="toast">{toast}</p>}
-      </div>
-    )
-  }
-
-  if (view.kind === 'upgrade') {
-    return (
-      <div className="app">
-        <UpgradeScreen
-          onClose={() => setView({ kind: 'tabs' })}
-          onUpgraded={() => {
-            // Tier ditulis webhook RevenueCat, bukan oleh client — jadi
-            // profil dibaca ulang beberapa kali sampai entitlement mendarat.
-            void refreshProfile({ untilPro: true })
-            refreshBackupState()
+          onCancel={() => {
+            setPendingPages(null)
+            exitSplit()
           }}
-          onNotice={setToast}
+          onSave={handleSaveDocument}
+          onSplit={handleStartSplit}
+          onUpgrade={() => setView({ kind: 'upgrade' })}
         />
         {toast && <p className="toast">{toast}</p>}
       </div>

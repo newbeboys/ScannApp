@@ -2337,3 +2337,16 @@
   text-align: center;
   margin: 0 0 8px;
 }
+
+.split-entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 13px;
+  font-size: 14.5px;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+  color: var(--fg);
+}

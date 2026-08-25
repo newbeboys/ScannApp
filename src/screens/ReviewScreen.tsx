@@ -1,9 +1,12 @@
 import { ChevronLeftIcon, CloseIcon, PlusIcon } from '../components/Icons'
 import { PageImage } from '../components/PageImage'
+import { canSplitScan } from '../lib/scanSplit'
+import type { Tier } from '../lib/tier'
 
 interface ReviewScreenProps {
   pages: string[]
   currentIndex: number
+  tier: Tier
   isBusy: boolean
   onSelectPage: (index: number) => void
   /** Opens the full-screen preview so a page can be checked before it is kept. */
@@ -12,11 +15,15 @@ interface ReviewScreenProps {
   onAddPages: () => void
   onCancel: () => void
   onSave: () => void
+  /** Opens the split screen. Only reached when the tier allows it. */
+  onSplit: () => void
+  onUpgrade: () => void
 }
 
 export function ReviewScreen({
   pages,
   currentIndex,
+  tier,
   isBusy,
   onSelectPage,
   onPreview,
@@ -24,6 +31,8 @@ export function ReviewScreen({
   onAddPages,
   onCancel,
   onSave,
+  onSplit,
+  onUpgrade,
 }: ReviewScreenProps) {
   const safeIndex = Math.min(currentIndex, pages.length - 1)
 
@@ -92,6 +101,24 @@ export function ReviewScreen({
         <button type="button" className="button button--primary" onClick={onSave} disabled={isBusy}>
           {isBusy ? 'Menyimpan…' : `Simpan Dokumen (${pages.length} halaman)`}
         </button>
+
+        {/*
+          Hidden for a single page: there is nothing to split. Basic gets the
+          paywall rather than a dead button — the screen behind it works, it is
+          just not theirs yet. Two is the smallest split that is really a split,
+          which is what `canSplitScan` is being asked about here.
+        */}
+        {pages.length > 1 && (
+          <button
+            type="button"
+            className="button split-entry"
+            onClick={() => (canSplitScan(tier, 2) ? onSplit() : onUpgrade())}
+            disabled={isBusy}
+          >
+            <span>Pisah jadi Beberapa Dokumen</span>
+            {!canSplitScan(tier, 2) && <span className="pro-badge">Pro</span>}
+          </button>
+        )}
       </div>
     </div>
   )

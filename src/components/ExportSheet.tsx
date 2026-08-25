@@ -16,7 +16,6 @@ interface ExportSheetProps {
   estimate: ExportSizeEstimate | null
   onLevelChange: (level: CompressionLevel) => void
   onExport: (format: ExportFormat) => void
-  onUpgrade: () => void
   onClose: () => void
 }
 
@@ -28,7 +27,6 @@ export function ExportSheet({
   estimate,
   onLevelChange,
   onExport,
-  onUpgrade,
   onClose,
 }: ExportSheetProps) {
   useScrollLock()
@@ -66,13 +64,7 @@ export function ExportSheet({
           Quality sits above the formats because tapping a format exports
           immediately — by then the choice has to already be made.
         */}
-        <CompressionField
-          tier={tier}
-          level={level}
-          isBusy={isBusy}
-          onLevelChange={onLevelChange}
-          onUpgrade={onUpgrade}
-        />
+        <CompressionField level={level} isBusy={isBusy} onLevelChange={onLevelChange} />
 
         <button
           type="button"

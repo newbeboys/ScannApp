@@ -7,14 +7,12 @@ async function renderSheet(overrides: Partial<Parameters<typeof BatchExportSheet
     <BatchExportSheet
       count={3}
       pageCount={17}
-      tier="pro"
       level="standard"
       progress={null}
       isBusy={false}
       onLevelChange={() => {}}
       onExport={() => {}}
       onStop={() => {}}
-      onUpgrade={() => {}}
       onClose={() => {}}
       {...overrides}
     />,
@@ -83,44 +81,24 @@ describe('BatchExportSheet while it runs', () => {
   })
 })
 
-describe('BatchExportSheet for a Basic account', () => {
-  /**
-   * The button that opened this sheet is gated, but the slider inside it is a
-   * second gate on a different thing — quality control, which Basic never gets.
-   */
-  it('shows the Pro lock on the quality control', async () => {
-    const screen = await renderSheet({ tier: 'basic' })
+/**
+ * Both gates on this sheet came off on 25 Agustus 2026: batch export itself
+ * first, then the quality control inside it. The sheet no longer knows what
+ * tier is looking at it, so what is left to prove is that nothing Pro-shaped
+ * survived — a locked row that opened a paywall, or a slider that refused.
+ */
+describe('BatchExportSheet after the tier gates came off', () => {
+  it('offers no Pro lock over the quality control', async () => {
+    const screen = await renderSheet()
 
     await expect
       .element(screen.getByRole('button', { name: /Atur sendiri kualitas/ }))
-      .toBeVisible()
-  })
-})
-
-/**
- * Batch export moved to every tier on 25 Agustus 2026, so a Basic account can
- * now open this sheet — which it never could before. The quality control inside
- * it is still Pro, and its locked row used to just close the sheet on the
- * grounds that nobody who saw it could ever be Basic.
- */
-describe('the quality lock, now that Basic can get here', () => {
-  it('opens the paywall rather than closing the sheet', async () => {
-    const onUpgrade = vi.fn()
-    const onClose = vi.fn()
-    const screen = await renderSheet({ tier: 'basic', onUpgrade, onClose })
-
-    await screen.getByRole('button', { name: /Atur sendiri kualitas/ }).click()
-
-    expect(onUpgrade).toHaveBeenCalledTimes(1)
-    expect(onClose).not.toHaveBeenCalled()
+      .not.toBeInTheDocument()
   })
 
-  it('still lets Basic run the export itself', async () => {
-    const onExport = vi.fn()
-    const screen = await renderSheet({ tier: 'basic', onExport })
+  it('leaves the quality slider usable', async () => {
+    const screen = await renderSheet()
 
-    await screen.getByRole('button', { name: 'Ekspor 3 PDF' }).click()
-
-    expect(onExport).toHaveBeenCalledTimes(1)
+    await expect.element(screen.getByRole('slider')).toBeEnabled()
   })
 })

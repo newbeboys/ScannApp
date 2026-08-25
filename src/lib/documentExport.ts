@@ -1,11 +1,11 @@
 import { blobToBytes } from './blobBase64'
 import { loadPageBlob } from './documentEditing'
 import {
-  BASIC_COMPRESSION,
   COMPRESSION_PRESETS,
   DEFAULT_COMPRESSION_LEVEL,
   resolveCompressionLevel,
   shouldWatermark,
+  STANDARD_COMPRESSION,
   type CompressionLevel,
   type CompressOptions,
 } from './exportLimits'
@@ -92,7 +92,7 @@ async function compressedPages(doc: LocalScanDocument, options: CompressOptions)
  * 23 Agustus 2026).
  */
 export async function buildPdfFile(doc: LocalScanDocument, tier: Tier): Promise<ExportFile> {
-  return (await exportPdf(doc, tier, BASIC_COMPRESSION))[0]
+  return (await exportPdf(doc, tier, STANDARD_COMPRESSION))[0]
 }
 
 async function exportPdf(
@@ -159,12 +159,11 @@ async function exportImages(
 }
 
 /**
- * `level` is what the user asked for; `resolveCompressionLevel` decides what
- * they actually get. Enforcing the tier here rather than only in the sheet
- * means a hidden control is also a refused one.
+ * Nothing here is gated by tier any more except the watermark.
  *
- * The format itself is not gated: PDF, JPG and PNG are all available to Basic
- * (Boss Ali, 23 Agustus 2026 — PNG moved out of Pro).
+ * The formats went first (PNG, 23 Agustus 2026), then the quality level
+ * (25 Agustus 2026). `tier` survives as a parameter because `shouldWatermark`
+ * still reads it — a clean export is what Pro buys on this screen.
  */
 export async function exportDocument(
   doc: LocalScanDocument,
@@ -172,7 +171,7 @@ export async function exportDocument(
   tier: Tier,
   level: CompressionLevel = DEFAULT_COMPRESSION_LEVEL,
 ): Promise<DeliveryResult> {
-  const options = COMPRESSION_PRESETS[resolveCompressionLevel(tier, level)]
+  const options = COMPRESSION_PRESETS[resolveCompressionLevel(level)]
   const files =
     format === 'pdf' ? await exportPdf(doc, tier, options) : await exportImages(doc, options, format)
   return deliverExport(files)
@@ -183,8 +182,8 @@ export async function exportDocument(
  *
  * The Pro gate this used to carry was lifted by Boss Ali on 25 Agustus 2026,
  * alongside split and annotate: exporting the documents you already own is a
- * basic need, not something to be sold. What stays Pro is the manual quality
- * control — `resolveCompressionLevel` still pins Basic to Standar below.
+ * basic need, not something to be sold. The quality control followed the same
+ * day, so what Pro buys here is now only the absence of the watermark.
  *
  * Sequential, and each PDF is written to disk before the next is built. The
  * same reasoning as `handleRestoreAll`: this is not work that gets faster by
@@ -205,7 +204,7 @@ export async function exportDocumentsBatch(
     throw new Error('Tidak ada dokumen untuk diekspor.')
   }
 
-  const options = COMPRESSION_PRESETS[resolveCompressionLevel(tier, level)]
+  const options = COMPRESSION_PRESETS[resolveCompressionLevel(level)]
   // Decided up front, because only this function can see the whole batch:
   // `exportPdf` names one document at a time and cannot know another document
   // in the same run reduces to the same filename.

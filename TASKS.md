@@ -222,7 +222,7 @@ Desain: `docs/superpowers/specs/2026-08-23-fase6-reorder-filter-design.md`
 - [x] Reorder halaman — tombol geser kiri/kanan (bukan seret-lepas, lihat spec Bagian 2.6). **Semua tier**
 - [x] Filter lanjutan — **5 filter** (Boss Ali menaikkan dari 2 di PRD Bagian 3): Magic Color, Cerah, Abu-abu, Hitam-Putih (ambang adaptif lokal), Hemat Tinta. Berlaku untuk seluruh dokumen, bisa dikecualikan per halaman. **Semua tier**
 - [x] Export tambahan: **PNG** — **semua tier** (lihat catatan di bawah). DOCX belum: tanpa OCR isinya cuma gambar tertempel, jadi dipindah ke potongan yang sama dengan OCR
-- [x] Kontrol level kompresi manual (slider kualitas vs ukuran) — **4 takik**, tetap Pro
+- [x] Kontrol level kompresi manual (slider kualitas vs ukuran) — **4 takik**, ~~tetap Pro~~ **semua tier sejak 25 Agustus 2026** (bagian 6)
 - [x] Batch scan/export — C1 & C2 selesai (lihat bagian 4 & 5 di bawah). ~~Ekspor banyak dokumen Pro~~ → **semua tier sejak 25 Agustus 2026**, lihat bagian 6
 - [x] Pisah dokumen yang **sudah tersimpan** (kebalikan merge) — di luar daftar asli, diminta Boss Ali 25 Agustus 2026, lihat bagian 6
 
@@ -250,11 +250,11 @@ Sisa Fase 6 dipecah jadi empat potongan yang bisa jalan sendiri-sendiri; ini yan
 Pengelompokan `Export tambahan: DOCX, PNG` di daftar asli dipecah: PNG masuk ke potongan ini (cuma varian encoder dari export JPG yang sudah ada), DOCX ikut OCR karena DOCX tanpa lapisan teks isinya hanya gambar tertempel.
 
 - [x] **Export PNG — semua tier.** PNG diturunkan langsung dari halaman hasil `resolvePage()`, hanya lewat bagian perkecilan dari level yang dipilih, lalu di-encode `image/png`. **Tidak pernah** lewat encoder JPEG dulu: PNG dari hasil JPEG adalah salinan lossless dari piksel yang sudah lossy — berkasnya membengkak tanpa satu piksel pun jadi lebih baik
-- [x] **Slider kompresi manual (Pro) — 4 takik**, bukan 0–100 bebas. Mata tidak membedakan q=0.72 dari q=0.75, jadi slider bebas menjanjikan presisi yang tidak ada dan memaksa encode ulang tiap geseran. Standar = 0.75/2400px, identik dengan nilai Basic yang lama
-- [x] Gerbang Pro ditegakkan di `resolveCompressionLevel()`, bukan cuma di UI — Basic yang meminta level apa pun tetap dapat Standar
+- [x] **Slider kompresi manual — 4 takik** (~~Pro~~ **semua tier sejak 25 Agustus 2026**, bagian 6), bukan 0–100 bebas. Mata tidak membedakan q=0.72 dari q=0.75, jadi slider bebas menjanjikan presisi yang tidak ada dan memaksa encode ulang tiap geseran. Standar = 0.75/2400px, identik dengan nilai Basic yang lama
+- [x] ~~Gerbang Pro ditegakkan di `resolveCompressionLevel()`, bukan cuma di UI — Basic yang meminta level apa pun tetap dapat Standar~~ — **dicabut 25 Agustus 2026** (bagian 6). Fungsinya tetap ada, tapi tugasnya sekarang cuma menjaga nilai rusak dari `localStorage`
 - [x] Pilihan level diingat di `localStorage`; nilai rusak/hilang/storage terkunci semuanya jatuh ke Standar tanpa melempar error
 - [x] **Perkiraan ukuran per format** di lembar Ekspor (`≈ 2,3 MB` / `≈ 17 MB`) — halaman pertama saja yang di-encode lalu dikali jumlah halaman, supaya menggeser slider di dokumen 30 halaman tidak makan waktu. Angka PNG yang jauh lebih besar jadi terlihat sendiri, tidak perlu kalimat peringatan
-- [x] Perkiraannya memakai tier yang sama dengan ekspor sungguhan, jadi Basic tidak pernah diperlihatkan ukuran yang tidak bisa ia dapatkan
+- [x] ~~Perkiraannya memakai tier yang sama dengan ekspor sungguhan, jadi Basic tidak pernah diperlihatkan ukuran yang tidak bisa ia dapatkan~~ — tier tidak lagi menyentuh perkiraan sejak 25 Agustus 2026; yang tetap berlaku: perkiraan melewati resolver yang sama dengan ekspor, jadi level asing jatuh ke Standar di kedua tempat
 - [x] Test bertambah 31 (total 308)
 
 **Cadangan cloud sengaja tidak ikut level ini** (keputusan Boss Ali): `buildPdfFile()` dipaku ke Standar. Kalau ikut, satu pilihan di lembar Ekspor diam-diam menentukan berapa kuota R2 yang dimakan sebuah cadangan dan mutu maksimal yang bisa dikembalikan `cloudRestore` — dua hal yang tidak sedang dipikirkan user saat menekan tombol ekspor.
@@ -403,7 +403,7 @@ Total test 308 → **329** (295 node + 14 browser).
 - [ ] Perkiraan ukuran muncul dalam waktu wajar untuk dokumen 15+ halaman, dan tidak membuat lembar Ekspor terasa macet saat slider digeser cepat
 - [ ] Ekspor PNG dari akun **Basic** berhasil — tidak ada paywall yang menghadang
 - [ ] Bandingkan ukuran berkas sungguhan dengan angka perkiraan; kalau melenceng jauh, `PDF_STRUCTURE_BYTES_PER_PAGE` perlu disetel ulang
-- [ ] Akun Basic: slider terkunci di Standar & baris "Pro" membuka paywall
+- [x] ~~Akun Basic: slider terkunci di Standar & baris "Pro" membuka paywall~~ — **tidak berlaku lagi** sejak 25 Agustus 2026. Yang perlu diuji sekarang: slidernya bisa digeser penuh oleh Basic dan **tidak ada** baris "Pro" di bawahnya
 - [ ] Cadangkan dokumen setelah memilih level Maksimal — ukuran di layar Cadangan **tidak boleh** ikut membengkak (bukti cadangan tetap Standar)
 
 ### Fase 6 bagian 4 — Mode Pilih & Batch Export (C1) — 25 Agustus 2026
@@ -492,6 +492,16 @@ Boss Ali menguji C1 & C2 di Xiaomi T15 dan melaporkan lima hal sekaligus, empat 
 - [x] **Test gerbang tidak dihapus, dibalik** — tier yang dulu ditolak sekarang diuji berhasil (`exports for Basic too`, `splits into several documents for Basic too`, `lets Basic export in bulk`). Menghapusnya akan membuat regresi ke perilaku lama lewat tanpa suara
 - [x] **Konsekuensi yang ikut ketahuan:** baris terkunci "Atur sendiri kualitas & ukuran berkas" di lembar Ekspor Banyak Dokumen dulu cuma **menutup lembarnya**, dengan alasan tertulis bahwa tombol yang membukanya Pro-only sehingga akun Basic tidak akan pernah sampai ke sana. Alasan itu mati bersama gerbangnya. Sekarang ia membuka paywall seperti di lembar satu dokumen — kontrol kualitasnya sendiri **tetap Pro**
 
+**Susulan beberapa jam kemudian — kontrol level kompresi & DOCX ikut dibuka.** Boss Ali menutup laporan berikutnya dengan meminta dua sisa Pro dari daftar di atas ikut dibuka.
+
+- [x] `canChooseCompression()` dihapus; `resolveCompressionLevel()` **tidak lagi menerima `tier`**. Fungsinya tidak ikut dihapus karena separuh tugasnya tidak pernah soal tier: level datang dari `localStorage`, jadi bisa berupa nilai yang build ini tidak kenal, dan tanpa penjagaan itu ia sampai ke `COMPRESSION_PRESETS` sebagai `undefined` lalu meng-encode di `quality: undefined`
+- [x] `BASIC_COMPRESSION` diganti nama jadi `STANDARD_COMPRESSION` — "yang selalu didapat Basic" sudah tidak berarti apa-apa, dan nama yang berkata sebaliknya adalah komentar yang berbohong di tiap berkas yang memakainya. Dua pemakainya tetap: cadangan cloud (`buildPdfFile`, sengaja dipaku ke Standar) dan bawaan `compressImage`
+- [x] `estimateExportSizes()` kehilangan parameter `tier`-nya — dulu ada semata karena tier bisa mengubah level yang diminta jadi level lain
+- [x] Baris terkunci "Atur sendiri kualitas & ukuran berkas" **hilang seluruhnya**, bersama prop `tier`/`onUpgrade` di `CompressionField` yang cuma ada untuk menggambarnya, prop `onUpgrade` di kedua lembar ekspor, dan CSS `.export-quality__lock`. Termasuk `onUpgrade` yang baru saja ditambahkan beberapa jam sebelumnya di lembar Ekspor Banyak — umurnya satu commit
+- [x] **DOCX belum ada kodenya sama sekali** (`ExportFormat` masih `'pdf' | 'jpg' | 'png'`), jadi tidak ada gerbang untuk dicabut. Keputusannya dicatat untuk nanti: saat DOCX dibuat bersama OCR, langsung semua tier
+- [x] **Yang masih dijual Pro setelah ini:** bebas iklan, tanpa watermark, merge tanpa batas halaman, kuota storage, dan nanti OCR. Itu persis empat baris yang sudah ditampilkan `UpgradeScreen`, jadi paywall-nya **tidak perlu diubah** — ia memang tidak pernah menjual kontrol kualitas. Satu-satunya tempat tier masih menyentuh jalur ekspor: `shouldWatermark()`
+- [x] **Cadangan cloud tidak ikut terpengaruh.** `buildPdfFile()` tetap dipaku ke Standar, jadi Basic yang memilih Maksimal tidak diam-diam menghabiskan kuota R2-nya lebih cepat — keputusan Boss Ali 23 Agustus 2026 masih berlaku dan justru jadi lebih penting sekarang
+
 **1. Layar di belakang popup masih bisa digulir.** Backdrop `position: fixed` menutupi layar tapi tidak memiliki gestur di atasnya: jari yang menggeser di atasnya tetap menggulir wadah gulir terdekat, jadi daftar dokumen ikut bergeser di belakang lembar Ekspor yang sedang jalan.
 
 - [x] `useScrollLock()` — hook yang memasang kelas di `document.body` selama komponennya hidup, dipakai oleh **ketiga** lembar (`ExportSheet`, `BatchExportSheet`, `SignaturePad`), jadi ini bukan tambalan satu layar
@@ -531,7 +541,7 @@ Boss Ali menguji C1 & C2 di Xiaomi T15 dan melaporkan lima hal sekaligus, empat 
 - [x] **Mutu berkas turunan 0,95 → 0,90.** Berkas hasil filter & hasil tinta harus di-base64, diseberangkan lewat jembatan, ditulis Java, lalu dibaca & di-decode lagi untuk ditampilkan — ukurannya dibayar empat kali di HP. **Diukur di Chromium** pada halaman mirip-pindaian 3000×4200: **5,76 MB pada 0,95 → 3,96 MB pada 0,90, yaitu 31% lebih sedikit byte** untuk selisih yang tidak selamat sampai kertas. Ini angka teknis (CLAUDE.md Bagian 6), bukan angka bisnis — kalau di HP ternyata terlihat, boleh dinaikkan lagi
 - [x] **Test membuktikan jalur cepatnya benar-benar dipakai**, bukan cuma bahwa hasilnya benar — keluarannya identik dengan atau tanpa optimasi, jadi test kebenaran saja tidak akan menyadari jalur cepat itu hilang
 
-**Test bertambah 38 (total 575 → 613 — 533 node + 80 browser):** semuanya lulus (`npm test`). Enam test gerbang tier dihapus atau dibalik seiring gerbangnya dilepas, jadi angka bersihnya menutupi lebih dari 38 test baru.
+**Test: total 575 → 610 (531 node + 79 browser),** semuanya lulus (`npm test`). Angka bersihnya menutupi lebih banyak test baru dari yang terlihat: sepuluh test gerbang tier dihapus atau **dibalik** seiring gerbangnya dilepas.
 
 **Test-nya dibuktikan menggigit:** hitungan `useScrollLock` diganti bendera → test lembar bertumpuk merah; syarat `remaining.length === 0` dilepas dari penghapusan dokumen asli → test "kelompok gagal" merah; cabang orientasi `resizeWidth`/`resizeHeight` ditukar → test jalur cepat merah (dan test ukuran **tetap hijau**, yang justru membuktikan jaring pengaman `scaledCanvas` bekerja). Semua dikembalikan setelah itu.
 

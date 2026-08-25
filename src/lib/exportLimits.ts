@@ -60,25 +60,29 @@ export const COMPRESSION_HINTS: Record<CompressionLevel, string> = {
 export const DEFAULT_COMPRESSION_LEVEL: CompressionLevel = 'standard'
 
 /**
- * Standard compression — what Basic always gets, and what the cloud backup is
- * pinned to whatever the user picks here (Boss Ali, 23 Agustus 2026: an export
- * choice must not silently change backup fidelity or quota use).
+ * The standard level as a preset, for the two callers that must not follow the
+ * user's choice.
+ *
+ * The cloud backup is pinned to it (Boss Ali, 23 Agustus 2026: an export choice
+ * must not silently change backup fidelity or quota use), and it is the default
+ * for `compressImage` when no options are handed in.
+ *
+ * Renamed from `BASIC_COMPRESSION` on 25 Agustus 2026: with the quality control
+ * open to every tier there is no such thing as "what Basic gets" any more, and a
+ * name that says otherwise is a comment that lies in every file it appears in.
  */
-export const BASIC_COMPRESSION = COMPRESSION_PRESETS[DEFAULT_COMPRESSION_LEVEL]
-
-/** The manual quality control is Pro-only (PRD Bagian 3). PNG export is not — see `documentExport`. */
-export function canChooseCompression(tier: Tier): boolean {
-  return tier === 'pro'
-}
+export const STANDARD_COMPRESSION = COMPRESSION_PRESETS[DEFAULT_COMPRESSION_LEVEL]
 
 /**
  * The single place that decides which level an export really runs at.
  *
- * Lives in the library rather than the sheet on purpose: hiding a control in
- * the UI is not the same as refusing it.
+ * No longer a tier question — Boss Ali opened the quality control to every tier
+ * on 25 Agustus 2026. What is left is the guard that was always the other half
+ * of this function: the level arrives from `localStorage`, so it can be a value
+ * this build has never heard of, and an unknown level falls back to Standar
+ * rather than reaching `COMPRESSION_PRESETS` as `undefined`.
  */
-export function resolveCompressionLevel(tier: Tier, requested: CompressionLevel): CompressionLevel {
-  if (!canChooseCompression(tier)) return DEFAULT_COMPRESSION_LEVEL
+export function resolveCompressionLevel(requested: CompressionLevel): CompressionLevel {
   return COMPRESSION_LEVELS.includes(requested) ? requested : DEFAULT_COMPRESSION_LEVEL
 }
 

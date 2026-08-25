@@ -96,18 +96,23 @@ describe('PNG export', () => {
 })
 
 describe('compression level', () => {
-  it('reaches the encoder for a Pro export', async () => {
+  it('reaches the encoder', async () => {
     await exportDocument(doc(1), 'jpg', 'pro', 'max')
 
     expect(encodes[0].options.quality).toBe(COMPRESSION_PRESETS.max.quality)
     expect(encodes[0].options.maxEdgePx).toBe(COMPRESSION_PRESETS.max.maxEdgePx)
   })
 
-  it('is forced back to standard for Basic, whatever was asked for', async () => {
+  /**
+   * The quality control stopped being Pro on 25 Agustus 2026. Kept as a test
+   * rather than deleted: this is the tier that used to be pinned to standard
+   * no matter what it asked for, so a regression to that would be silent.
+   */
+  it('reaches the encoder for Basic too', async () => {
     await exportDocument(doc(1), 'jpg', 'basic', 'max')
 
-    expect(encodes[0].options.quality).toBe(COMPRESSION_PRESETS.standard.quality)
-    expect(encodes[0].options.maxEdgePx).toBe(COMPRESSION_PRESETS.standard.maxEdgePx)
+    expect(encodes[0].options.quality).toBe(COMPRESSION_PRESETS.max.quality)
+    expect(encodes[0].options.maxEdgePx).toBe(COMPRESSION_PRESETS.max.maxEdgePx)
   })
 
   it('defaults to standard when the caller names no level', async () => {

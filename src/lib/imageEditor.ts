@@ -2,7 +2,7 @@ import { HIGHLIGHTER_ALPHA, strokeWidth, type Mark } from './annotations'
 import { applyFilter } from './filters'
 import { readJpegSize } from './jpegSize'
 import type { DocumentFilter } from './scanIndexMigration'
-import { BASIC_COMPRESSION, type CompressOptions } from './exportLimits'
+import { STANDARD_COMPRESSION, type CompressOptions } from './exportLimits'
 
 /** Crop area expressed as fractions of the source image (0..1), so it survives resizing. */
 export interface CropRect {
@@ -112,13 +112,13 @@ export async function cropImage(blob: Blob, rect: CropRect): Promise<Blob> {
 /**
  * Caps the long edge and re-encodes the page for export.
  *
- * Basic always arrives here with the standard preset; Pro can arrive with any
- * of the four levels (`COMPRESSION_PRESETS`). `mimeType` picks the encoder —
- * PNG exports run this same resize and then encode losslessly.
+ * Any of the four levels can arrive (`COMPRESSION_PRESETS`); the standard one
+ * is the default for callers that have no opinion. `mimeType` picks the encoder
+ * — PNG exports run this same resize and then encode losslessly.
  */
 export async function compressImage(
   blob: Blob,
-  options: CompressOptions = BASIC_COMPRESSION,
+  options: CompressOptions = STANDARD_COMPRESSION,
 ): Promise<Blob> {
   return toBlob(await scaledCanvas(blob, options.maxEdgePx), options.quality, options.mimeType)
 }

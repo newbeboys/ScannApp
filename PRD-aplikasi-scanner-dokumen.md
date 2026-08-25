@@ -35,7 +35,7 @@ Aplikasi scan dokumen untuk Android dengan dua tier: **Basic** (gratis, ad-suppo
 | Edit dibantu AI ("AI Enhance") | ❌ Tidak tersedia | ✅ Auto-enhance gambar (cahaya/kontras/noise/ketajaman) + auto-deskew & auto-crop presisi |
 | Edit lanjutan lain | ❌ | Annotate, tanda tangan digital |
 | OCR (searchable text) | ❌ | ✅ |
-| Export format | PDF, JPG, **PNG** (kompresi otomatis, 1 level) | PDF, JPG, PNG, DOCX + kontrol level kompresi manual (4 level) |
+| Export format | PDF, JPG, **PNG**, DOCX + kontrol level kompresi manual (4 level) — **sama dengan Pro sejak 25 Agustus 2026** | PDF, JPG, PNG, DOCX + kontrol level kompresi manual (4 level) |
 | Watermark hasil export | Ada (kecil) | Tidak ada |
 | Batch scan/export | ❌ | ✅ |
 | Iklan | Banner + interstitial tiap 5 scan, + interstitial setelah export | Tidak ada |
@@ -43,7 +43,9 @@ Aplikasi scan dokumen untuk Android dengan dua tier: **Basic** (gratis, ad-suppo
 
 > **Direvisi 23 Agustus 2026:** reorder halaman dan filter dokumen **pindah dari Pro-exclusive ke tersedia untuk semua tier**, menggantikan baris "Edit lanjutan lain" versi sebelumnya yang mencantumkan keduanya sebagai Pro. Filter sekaligus naik dari 2 pilihan (B&W, magic color) jadi 5 (Magic Color, Cerah, Abu-abu, Hitam-Putih, Hemat Tinta) — lihat CLAUDE.md Bagian 6 & `TASKS.md` Fase 6. ~~Annotate dan tanda tangan digital tetap Pro-exclusive, belum diimplementasikan.~~
 >
-> **Direvisi lagi 25 Agustus 2026:** setelah uji device, Boss Ali memindahkan **anotasi, tanda tangan digital, pisah dokumen, dan ekspor banyak dokumen sekaligus** dari Pro ke **semua tier**. Yang tersisa sebagai nilai jual Pro dari baris-baris ini: kontrol level kompresi manual, ekspor DOCX, bebas iklan, tanpa watermark, merge tanpa batas halaman, dan kuota storage lebih besar. Lihat CLAUDE.md Bagian 6 & `TASKS.md` Fase 6 bagian 6.
+> **Direvisi lagi 25 Agustus 2026:** setelah uji device, Boss Ali memindahkan **anotasi, tanda tangan digital, pisah dokumen, dan ekspor banyak dokumen sekaligus** dari Pro ke **semua tier** — lalu, beberapa jam kemudian, **kontrol level kompresi manual dan ekspor DOCX** menyusul.
+>
+> Setelah pembatalan ini, seluruh **baris "Export format" dan "Edit lanjutan"** di tabel atas berlaku untuk semua tier. Yang tersisa sebagai nilai jual Pro: **bebas iklan, tanpa watermark di PDF, merge tanpa batas halaman, kuota storage lebih besar**, dan nanti **OCR**. DOCX belum ada kodenya; keputusan ini berlaku untuk saat ia dibuat nanti bersama OCR. Lihat CLAUDE.md Bagian 6 & `TASKS.md` Fase 6 bagian 6.
 >
 > **Direvisi lagi 23 Agustus 2026 (sore):** **export PNG ikut pindah ke semua tier.** Baris "Export format" di atas sebelumnya menaruh PNG di kolom Pro; sekarang Basic juga bisa mengekspor PNG. Yang tetap Pro di baris itu hanya **DOCX** dan **kontrol level kompresi manual**. Alasannya sejalan dengan revisi sebelumnya: memilih format berkas adalah kebutuhan dasar, bukan nilai jual — yang dijual Pro adalah kendali atas mutu dan ukurannya. DOCX belum diimplementasikan dan menunggu OCR (tanpa lapisan teks, DOCX hanya berisi gambar yang tidak bisa diedit).
 

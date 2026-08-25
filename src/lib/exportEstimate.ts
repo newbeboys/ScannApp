@@ -2,7 +2,6 @@ import { loadPageBlob } from './documentEditing'
 import { COMPRESSION_PRESETS, resolveCompressionLevel, type CompressionLevel } from './exportLimits'
 import { compressImagePair } from './imageEditor'
 import type { LocalScanDocument } from './scanIndexMigration'
-import type { Tier } from './tier'
 
 /** Roughly what pdf-lib adds per page around an embedded JPEG. */
 const PDF_STRUCTURE_BYTES_PER_PAGE = 2_000
@@ -22,15 +21,18 @@ export interface ExportSizeEstimate {
  * pages of one scan are alike enough that the extra work would not move the
  * figure much. Everything here is shown with a "≈".
  *
- * The tier is resolved the same way the real export resolves it, so a Basic
- * account is never shown a size it cannot actually get.
+ * The level goes through the same resolver as the real export, so the figure
+ * shown is the figure the file comes out at — including when a stored level
+ * this build does not recognise falls back to Standar.
+ *
+ * The tier used to be a parameter here, back when it could turn the requested
+ * level into a different one. It stopped being able to on 25 Agustus 2026.
  */
 export async function estimateExportSizes(
   doc: LocalScanDocument,
-  tier: Tier,
   level: CompressionLevel,
 ): Promise<ExportSizeEstimate> {
-  const options = COMPRESSION_PRESETS[resolveCompressionLevel(tier, level)]
+  const options = COMPRESSION_PRESETS[resolveCompressionLevel(level)]
   const first = await loadPageBlob(doc.pages[0])
 
   // One decode feeding both encoders — see `compressImagePair`.

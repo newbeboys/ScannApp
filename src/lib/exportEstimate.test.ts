@@ -48,42 +48,43 @@ describe('estimateExportSizes', () => {
    * a phone (diukur 24 Agustus 2026).
    */
   it('decodes the first page once and encodes both formats from it', async () => {
-    await estimateExportSizes(doc(30), 'pro', 'standard')
+    await estimateExportSizes(doc(30), 'standard')
 
     expect(asked).toHaveLength(1)
   })
 
   it('scales the estimate by the page count', async () => {
-    const one = await estimateExportSizes(doc(1), 'pro', 'standard')
-    const four = await estimateExportSizes(doc(4), 'pro', 'standard')
+    const one = await estimateExportSizes(doc(1), 'standard')
+    const four = await estimateExportSizes(doc(4), 'standard')
 
     expect(four.jpg).toBe(one.jpg * 4)
   })
 
   it('estimates PNG from the PNG encoder, not the JPEG one', async () => {
-    const sizes = await estimateExportSizes(doc(1), 'pro', 'standard')
+    const sizes = await estimateExportSizes(doc(1), 'standard')
 
     expect(sizes.png).toBeGreaterThan(sizes.jpg)
   })
 
   it('counts a PDF as its JPEG pages plus a little structure', async () => {
-    const sizes = await estimateExportSizes(doc(2), 'pro', 'standard')
+    const sizes = await estimateExportSizes(doc(2), 'standard')
 
     expect(sizes.pdf).toBeGreaterThanOrEqual(sizes.jpg)
   })
 
   it('uses the level the caller asked for', async () => {
-    await estimateExportSizes(doc(1), 'pro', 'max')
+    await estimateExportSizes(doc(1), 'max')
 
     expect(asked[0].quality).toBe(COMPRESSION_PRESETS.max.quality)
   })
 
   /**
-   * The estimate has to lie in the same direction as reality: Basic is pinned
-   * to standard when exporting, so its preview must be too.
+   * The estimate has to come out where the file does. A level this build does
+   * not recognise — `localStorage` outliving a rename — resolves to standard
+   * on the way into the export, so the preview must resolve it the same way.
    */
-  it('shows Basic the standard level even when a higher one is passed', async () => {
-    await estimateExportSizes(doc(1), 'basic', 'max')
+  it('resolves an unrecognised level the same way the export does', async () => {
+    await estimateExportSizes(doc(1), 'enormous' as CompressionLevel)
 
     expect(asked[0].quality).toBe(COMPRESSION_PRESETS.standard.quality)
   })

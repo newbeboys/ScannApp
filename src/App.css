@@ -1358,26 +1358,6 @@ body.scroll-locked .app__body {
   line-height: 1.45;
 }
 
-/* Basic sees the control it does not have yet, not a blank space. */
-.export-quality__lock {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 2px;
-  padding: 10px 12px;
-  border-radius: 13px;
-  border: 1px solid var(--upgrade-soft);
-  background: var(--upgrade-soft);
-  color: var(--upgrade);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: left;
-}
-
-.export-quality__lock .pro-badge {
-  align-self: center;
-}
-
 /* ---------- merge ---------- */
 
 .merge-meter {

@@ -2,13 +2,11 @@ import { CloseIcon, ExportIcon } from './Icons'
 import { CompressionField } from './CompressionField'
 import type { BatchProgress } from '../lib/documentExport'
 import type { CompressionLevel } from '../lib/exportLimits'
-import type { Tier } from '../lib/tier'
 import { useScrollLock } from '../lib/useScrollLock'
 
 interface BatchExportSheetProps {
   count: number
   pageCount: number
-  tier: Tier
   level: CompressionLevel
   /** Null until the run starts, and again once it ends. */
   progress: BatchProgress | null
@@ -16,8 +14,6 @@ interface BatchExportSheetProps {
   onLevelChange: (level: CompressionLevel) => void
   onExport: () => void
   onStop: () => void
-  /** Opens the paywall from the locked quality row — Basic reaches this sheet now. */
-  onUpgrade: () => void
   onClose: () => void
 }
 
@@ -32,14 +28,12 @@ interface BatchExportSheetProps {
 export function BatchExportSheet({
   count,
   pageCount,
-  tier,
   level,
   progress,
   isBusy,
   onLevelChange,
   onExport,
   onStop,
-  onUpgrade,
   onClose,
 }: BatchExportSheetProps) {
   useScrollLock()
@@ -70,20 +64,7 @@ export function BatchExportSheet({
           </button>
         </div>
 
-        {/*
-          The lock row leads to the paywall, like the single-document sheet's
-          does. It used to close the sheet instead, on the grounds that the
-          button opening it was Pro-only so no Basic account could ever get
-          here — which stopped being true on 25 Agustus 2026 when batch export
-          moved to every tier. The quality control itself is still Pro.
-        */}
-        <CompressionField
-          tier={tier}
-          level={level}
-          isBusy={isBusy}
-          onLevelChange={onLevelChange}
-          onUpgrade={onUpgrade}
-        />
+        <CompressionField level={level} isBusy={isBusy} onLevelChange={onLevelChange} />
 
         <p className="batch-note">
           Setiap dokumen jadi satu berkas PDF di folder Documents.

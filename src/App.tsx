@@ -216,7 +216,7 @@ function App() {
     setExportEstimate(null)
 
     const timer = setTimeout(() => {
-      estimateExportSizes(doc, tier, exportLevel)
+      estimateExportSizes(doc, exportLevel)
         .then((sizes) => {
           if (!cancelled) setExportEstimate(sizes)
         })
@@ -755,10 +755,6 @@ function App() {
         writeExportLevel(next)
       }}
       onExport={handleExport}
-      onUpgrade={() => {
-        setExportTarget(null)
-        setView({ kind: 'upgrade' })
-      }}
       onClose={() => setExportTarget(null)}
     />
   )
@@ -768,7 +764,6 @@ function App() {
     <BatchExportSheet
       count={batchSelection.count}
       pageCount={batchSelection.pageCount}
-      tier={tier}
       level={exportLevel}
       progress={batchProgress}
       isBusy={isBatchBusy}
@@ -778,10 +773,6 @@ function App() {
       }}
       onExport={handleBatchExport}
       onStop={() => batchAbort.current?.abort()}
-      onUpgrade={() => {
-        setBatchOpen(false)
-        setView({ kind: 'upgrade' })
-      }}
       onClose={() => setBatchOpen(false)}
     />
   )

@@ -268,3 +268,16 @@ export function SignatureIcon({ size = 24, className }: IconProps) {
     </svg>
   )
 }
+
+/** A page with lines of type on it — recognised text, as opposed to a picture. */
+export function TextIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M14 3v4h4" />
+      <path d="M8.5 12h7" />
+      <path d="M8.5 15.5h7" />
+      <path d="M8.5 19h4" />
+    </svg>
+  )
+}

@@ -9,9 +9,12 @@ import {
   SplitIcon,
   TrashIcon,
 } from '../components/Icons'
+import { OcrRow } from '../components/OcrRow'
 import { PageImage } from '../components/PageImage'
 import { MAX_TITLE_LENGTH } from '../../supabase/functions/_shared/documentTitle'
+import type { OcrProgress } from '../lib/ocr'
 import { resolvePage, type LocalScanDocument } from '../lib/scanStorage'
+import type { Tier } from '../lib/tier'
 
 interface DocumentDetailScreenProps {
   document: LocalScanDocument
@@ -29,6 +32,11 @@ interface DocumentDetailScreenProps {
   onBackup: () => void
   onRemoveBackup: () => void
   onRename: (title: string) => void
+  tier: Tier
+  /** Set while this document is being read; null when nothing is running. */
+  ocrProgress: OcrProgress | null
+  onRecognizeText: () => void
+  onUpgrade: () => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('id-ID', {
@@ -53,8 +61,13 @@ export function DocumentDetailScreen({
   onBackup,
   onRemoveBackup,
   onRename,
+  tier,
+  ocrProgress,
+  onRecognizeText,
+  onUpgrade,
 }: DocumentDetailScreenProps) {
   const editedCount = doc.pages.filter((page) => page.edited).length
+  const recognizedCount = doc.pages.filter((page) => page.text).length
   const [draft, setDraft] = useState<string | null>(null)
   const isEditingName = draft !== null
 
@@ -169,6 +182,15 @@ export function DocumentDetailScreen({
           </button>
         </div>
       )}
+
+      <OcrRow
+        tier={tier}
+        recognized={recognizedCount}
+        total={doc.pageCount}
+        progress={ocrProgress}
+        onRecognize={onRecognizeText}
+        onUpgrade={onUpgrade}
+      />
 
       <BackupRow
         status={backupStatus}

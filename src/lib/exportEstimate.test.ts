@@ -23,7 +23,7 @@ const { estimateExportSizes } = await import('./exportEstimate')
 
 function doc(pageCount: number): LocalScanDocument {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     id: 'doc-1',
     title: 'Nota',
     createdAt: '2026-03-04T00:00:00.000Z',

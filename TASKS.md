@@ -216,7 +216,7 @@ Empat temuan code-review ditutup sebelum commit, semuanya di kode iklan baru:
 
 Desain: `docs/superpowers/specs/2026-08-23-fase6-reorder-filter-design.md`
 
-- [ ] Integrasi OCR (searchable PDF)
+- [x] Integrasi OCR (searchable PDF) — **Pro** (bersama DOCX; kontradiksi tier di dokumen ditutup Boss Ali 25 Agustus 2026 malam). Lihat bagian 8. DOCX-nya menyusul di D2
 - [x] Annotate (coret/tulis di atas dokumen) — ~~**Pro**~~ **semua tier sejak 25 Agustus 2026**, lihat bagian 3 & bagian 6 di bawah
 - [x] Tanda tangan digital — ~~**Pro**~~ **semua tier sejak 25 Agustus 2026**, lihat bagian 3 & bagian 6 di bawah
 - [x] Reorder halaman — tombol geser kiri/kanan (bukan seret-lepas, lihat spec Bagian 2.6). **Semua tier**
@@ -583,6 +583,46 @@ Boss Ali menguji lagi di Xiaomi T15 dan melaporkan dua hal. Yang pertama **tidak
 **Belum diverifikasi di device fisik** (butuh Boss Ali):
 
 - [ ] Layar Pisah Dokumen digulir sampai mentok — baris "Halaman terakhir..." terbaca utuh di atas tombol, dan kartu halaman terakhir tidak terpotong
+
+### Fase 6 bagian 8 — OCR on-device & PDF Bisa Dicari (D1) — 25 Agustus 2026
+
+Potongan **D** dari empat sisa Fase 6, tahap pertama dari dua. Desain: `docs/superpowers/specs/2026-08-25-fase6-ocr-docx-design.md`.
+
+**Kontradiksi tier ditutup dulu sebelum kode ditulis.** CLAUDE.md Bagian 6 menulis dua baris yang tidak bisa keduanya benar: OCR sebagai nilai jual Pro, tapi DOCX "langsung semua tier" — padahal DOCX yang berguna isinya hasil OCR. **Keputusan Boss Ali: keduanya Pro.** Ini membalik arah tiga pembatalan gerbang Pro sebelumnya dan itu disengaja — reorder, filter, PNG, anotasi, dan pisah dokumen soal **akses ke dokumen sendiri**; OCR adalah **mesin baru** yang mengubah gambar jadi teks. Baris yang bertabrakan sudah dikoreksi di `CLAUDE.md` Bagian 6 dan PRD Bagian 3.
+
+- [x] **Engine: `@capacitor-mlkit/text-recognition` 8.2.0** — sekeluarga dengan pemindai yang sudah dipakai, on-device, model dibundel di APK jadi **tidak pernah butuh jaringan**. Tesseract.js ditolak (data latih ±25 MB, puluhan detik per halaman 12 MP di HP kelas menengah, memori WASM gampang membunuh WebView); cloud OCR ditolak (Aturan Keras #4)
+- [x] **±8,6 MB model skrip non-Latin dibuang dari APK** lewat `exclude` di `android/app/build.gradle`. Ukurannya diukur langsung dari Maven Google, bukan ditebak: Latin 1,38 MB, Mandarin 2,04, Devanagari 2,02, Jepang 2,63, Korea 1,90. Aman karena pemilih skrip di plugin cuma `switch` biasa dan adapter kita memaku `Script.Latin` — cabang yang tidak pernah dieksekusi tidak pernah memuat kelasnya. `-dontwarn` ditulis sekarang meski `minifyEnabled` masih false, supaya menyalakan minify nanti tidak berubah jadi build gagal yang sebabnya tidak ada yang ingat
+- [x] Model halaman naik ke **`schemaVersion: 5`** — `text` berisi **path** ke JSON, bukan tata letaknya. Satu halaman padat ±500 kata; menaruhnya di index berarti ratusan KB yang di-parse tiap aplikasi dibuka cuma untuk menggambar daftar dokumen. Nama berkasnya diturunkan dari `original`, jadi reorder halaman tidak menabrakkan berkas antar halaman
+- [x] **Koordinat dinormalisasi 0..1**, konvensi yang sama dengan `Mark` — ekspor memperkecil halaman menurut level kompresi (1600px sampai 4000px), jadi koordinat piksel akan menggeser tiap kata begitu levelnya diganti
+- [x] **Crop & putar membuang hasil OCR halaman itu; ganti filter & menggambar tidak.** Beda perlakuan dari goresan tinta yang justru dipetakan ulang: goresan tidak bisa dibuat ulang oleh mesin, hasil OCR bisa — dan hasil OCR di halaman yang sudah dicrop justru lebih baik daripada hasil lama yang dipetakan ulang. Membiarkannya berarti salah tempat yang **tidak akan pernah terlihat** siapa pun karena teksnya memang tak terlihat; ia cuma diam-diam merusak salin-tempel dan pencarian
+- [x] Sumber gambar OCR = `annotationSource(page)` yang sudah ada — halaman **tanpa tintanya** tapi **dengan filternya**. Dua-duanya disengaja: coretan pena dan tanda tangan di atas teks jadi sampah huruf, sedangkan Hitam-Putih dan Magic Color justru menaikkan akurasi
+- [x] **Lapisan teks tak terlihat di PDF** lewat `pdf-lib` yang sudah terpasang: `3 Tr` (mode tak terlihat baku yang dipakai semua alat OCR, bukan `opacity: 0`) + `Tz` yang menyetel tiap kata **pas selebar kotaknya**. Tanpa `Tz`, menyorot satu kata di pembaca PDF akan menyorot separuh kalimat — keluhan yang orang laporkan sebagai "OCR-nya rusak". Nol dependency baru untuk bagian ini
+- [x] **Penyaring WinAnsi** sebelum `drawText`, yang **melempar error** pada karakter yang tidak bisa di-encode: satu glyph nyasar dari OCR akan menggagalkan ekspor dua puluh halaman. Tidak ada font yang dibenamkan — Helvetica ada di setiap pembaca PDF dan seluruh Bahasa Indonesia masuk WinAnsi
+- [x] **Cadangan cloud ikut membawa lapisan teksnya** — beda dari level kompresi yang sengaja tidak diikutkan. Beberapa KB, tidak menyentuh mutu gambar maupun kuota, dan `readBackup` tetap bekerja apa adanya karena ia mencari XObject gambar, bukan teks
+- [x] **Gerbang Pro ditegakkan di `recognizeDocument()`**, bukan di UI. Tapi teks yang **sudah** dikenali tetap dipakai saat ekspor walau tier turun ke Basic: gerbangnya di titik mesin dijalankan, bukan di titik data milik user sendiri dibaca
+- [x] Menyimpan **setelah tiap halaman**, beda dari filter dokumen yang menulis index sekali di akhir — memfilter 20 halaman itu hitungan detik, membacanya hitungan menit, dan user yang keluar di tengah tidak boleh kehilangan semuanya. Efek sampingnya: tombol yang sama sekaligus jadi "lanjutkan" dan "perbaiki halaman yang baru di-crop"
+- [x] Satu halaman gagal dibaca **tidak** membatalkan sisanya; jumlahnya dilaporkan di toast supaya tidak mengaku bersih
+- [x] Baris **"Teks Dokumen"** di layar detail dengan tiga keadaan jujur (belum dikenali / "X dari Y halaman dikenali" / "Teks dikenali · Y halaman") plus progress per halaman. Akun Basic melihatnya berlencana Pro dan diarahkan ke layar Upgrade, bukan tombol mati
+- [x] **Paywall bertambah baris kelima** ("Teks dokumen · PDF bisa dicari & Word"). `limitRows` di-export supaya ada test yang menahannya tetap jujur — tiga baris pernah **dihapus** dari ledger ini sepanjang Agustus saat gerbang Pro dicabut satu per satu, jadi ledger itu klaim tentang produk, bukan hiasan
+- [x] **Test 611 → 683**, semuanya lulus (`npm test`). Enam mutasi dijalankan untuk membuktikan test-nya menggigit: `Tz` dilepas → test lebar merah; baseline dipindah ke tepi atas kotak → test posisi merah; penyaring WinAnsi dilepas → test karakter merah; sumber OCR diganti jadi ikut tinta → merah; gerbang Pro dilepas → merah; lewati-halaman-sudah-ada dilepas → merah. Semua dikembalikan setelah itu
+- [x] Penyaring WinAnsi tidak diuji dengan tabel encoding yang disalin tangan: test-nya **menyapu seluruh rentang kode 0x00–0x2FFF plus emoji**, menyanitasi tiap karakter, lalu menyerahkan hasilnya ke `Helvetica` sungguhan dari pdf-lib. Ada juga ujian arah sebaliknya, supaya penyaring yang mengembalikan string kosong tidak lolos
+- [x] Satu bug lama ikut ketangkap: `scanStorage` membandingkan versi skema dengan angka **4** yang ditulis tangan terpisah dari migrasinya, jadi tiap kenaikan skema akan membuat index ditulis ulang di **setiap** pembacaan. Sekarang keduanya memakai `CURRENT_SCHEMA_VERSION`, dengan test yang menjaganya
+
+**Belum dikerjakan — D2 (ekspor DOCX):** penulis ZIP STORE + OOXML minimal, DOCX sebagai format keempat di lembar Ekspor. Rancangannya sudah lengkap di spec Bagian 6.
+
+**Konsekuensi yang perlu keputusan Boss Ali:** keputusan 22 Agustus — "flow pembelian Pro tidak dibuka ke publik sebelum Fase 6 selesai" — tinggal menunggu D2. Membukanya keputusan Boss Ali, bukan sesuatu yang diambil kode ini.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] "Kenali Teks" pada dokumen 10+ halaman selesai tanpa aplikasi terasa beku; progress-nya bergerak
+- [ ] PDF hasil ekspor dibuka di pembaca PDF HP → cari satu kata yang ada di dokumen, sorotannya **mendarat di kata yang benar**, bukan bergeser
+- [ ] Salin-tempel satu kalimat dari PDF itu ke aplikasi catatan — hasilnya terbaca, bukan huruf acak
+- [ ] Akurasi pada dokumen Indonesia sungguhan: kwitansi termal, surat ketikan, tulisan tangan (yang terakhir memang diharapkan jelek)
+- [ ] Halaman yang di-crop setelah OCR kehilangan teksnya, dan tombolnya berubah jadi "Kenali Sisanya"
+- [ ] Filter Hitam-Putih dulu lalu OCR → akurasinya naik atau setidaknya tidak turun
+- [ ] Akun Basic: baris "Teks Dokumen" berlencana Pro dan membuka layar Upgrade
+- [ ] **Ukuran APK rilis setelah `exclude`** — bertambah ±1,4 MB, bukan ±10 MB
+- [ ] **Build AAB di CI lolos** setelah plugin baru + `exclude`
 
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 

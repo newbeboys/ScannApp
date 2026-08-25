@@ -31,7 +31,15 @@ const PLAN_LABELS: Record<PlanId, { name: string; per: string }> = {
  * 6 and are not built, so they are not sold here. A paywall that takes money
  * for features that do not exist yet is a refund request waiting to happen.
  */
-function limitRows(plan: PlanId): { label: string; basic: string; pro: string }[] {
+/**
+ * The rows the paywall shows, and the only claims it makes.
+ *
+ * Exported so a test can hold it against what the app really does: three of
+ * these rows were deleted during August as Boss Ali moved feature after
+ * feature out to every tier, and a paywall that keeps selling a lifted limit
+ * is a lie the code can catch.
+ */
+export function limitRows(plan: PlanId): { label: string; basic: string; pro: string }[] {
   return [
     {
       label: 'Halaman per dokumen gabungan',
@@ -45,6 +53,10 @@ function limitRows(plan: PlanId): { label: string; basic: string; pro: string }[
     },
     { label: 'Iklan', basic: 'Banner & sisipan', pro: 'Tidak ada' },
     { label: 'Watermark di PDF', basic: 'Ada', pro: 'Tidak ada' },
+    // Added the day OCR shipped (Fase 6 potongan D). DOCX is named here even
+    // though it lands in D2: the two come out of one engine, and the row would
+    // otherwise have to be rewritten a day later.
+    { label: 'Teks dokumen', basic: 'Tidak bisa dicari', pro: 'PDF bisa dicari & Word' },
   ]
 }
 

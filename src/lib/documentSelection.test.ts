@@ -12,7 +12,7 @@ import type { LocalScanDocument } from './scanIndexMigration'
 
 function local(id: string, pageCount: number): DocumentEntry {
   const document: LocalScanDocument = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     id,
     title: id,
     createdAt: '2026-08-25T00:00:00.000Z',

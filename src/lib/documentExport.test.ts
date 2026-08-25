@@ -26,8 +26,22 @@ vi.mock('./exportShare', () => ({
   },
 }))
 
+/** Recognised layouts on disk, keyed by the path a page points at. */
+const layouts: Record<string, unknown> = {}
+
+/** Every options object the PDF builder was handed, in order. */
+const pdfOptions: { text?: unknown[] }[] = []
+
 vi.mock('./pdfExport', () => ({
-  buildPdf: async () => new Uint8Array([1, 2, 3]),
+  buildPdf: async (_pages: unknown, options: { text?: unknown[] }) => {
+    pdfOptions.push(options)
+    return new Uint8Array([1, 2, 3])
+  },
+}))
+
+vi.mock('./scanStorage', () => ({
+  readPageText: async (page: { text?: string }) =>
+    page.text ? ((layouts[page.text] as never) ?? null) : null,
 }))
 
 vi.mock('./blobBase64', () => ({
@@ -38,7 +52,7 @@ const { buildPdfFile, exportDocument } = await import('./documentExport')
 
 function doc(pageCount: number, title = 'Nota'): LocalScanDocument {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     id: 'doc-1',
     title,
     createdAt: '2026-03-04T00:00:00.000Z',
@@ -149,5 +163,64 @@ describe('cloud backup PDF', () => {
     await buildPdfFile(doc(1), 'pro')
 
     expect(encodes[0].options.mimeType).toBe('image/jpeg')
+  })
+})
+
+describe('searchable PDF', () => {
+  beforeEach(() => {
+    for (const key of Object.keys(layouts)) delete layouts[key]
+    pdfOptions.length = 0
+  })
+
+  function withText(pageCount: number): LocalScanDocument {
+    const base = doc(pageCount)
+    base.pages = base.pages.map((page) => ({ ...page, text: `${page.original}-ocr.json` }))
+    return base
+  }
+
+  it('hands every page its recognised text', async () => {
+    layouts['page-1.jpg-ocr.json'] = { blocks: [{ text: 'Satu', lines: [] }] }
+    layouts['page-2.jpg-ocr.json'] = { blocks: [{ text: 'Dua', lines: [] }] }
+
+    await exportDocument(withText(2), 'pdf', 'pro')
+
+    expect(pdfOptions[0].text).toEqual([
+      { blocks: [{ text: 'Satu', lines: [] }] },
+      { blocks: [{ text: 'Dua', lines: [] }] },
+    ])
+  })
+
+  /**
+   * The builder matches text to pages by position, so a page without text has
+   * to take up its slot. Filtering the gaps out instead would move every later
+   * page's words onto the wrong page.
+   */
+  it('keeps a page without text in place as a gap', async () => {
+    const base = withText(2)
+    delete base.pages[0].text
+    layouts['page-2.jpg-ocr.json'] = { blocks: [{ text: 'Dua', lines: [] }] }
+
+    await exportDocument(base, 'pdf', 'pro')
+
+    expect(pdfOptions[0].text).toEqual([null, { blocks: [{ text: 'Dua', lines: [] }] }])
+  })
+
+  /**
+   * Unlike the compression level, which is deliberately kept out of backups:
+   * an invisible layer costs a few kilobytes, touches no pixel and no quota,
+   * and makes the copy that comes back out of R2 searchable wherever it lands.
+   */
+  it('carries the text layer into the cloud backup too', async () => {
+    layouts['page-1.jpg-ocr.json'] = { blocks: [{ text: 'Satu', lines: [] }] }
+
+    await buildPdfFile(withText(1), 'pro')
+
+    expect(pdfOptions[0].text).toEqual([{ blocks: [{ text: 'Satu', lines: [] }] }])
+  })
+
+  it('asks for nothing at all when no page was ever recognised', async () => {
+    await exportDocument(doc(2), 'pdf', 'pro')
+
+    expect(pdfOptions[0].text).toEqual([null, null])
   })
 })

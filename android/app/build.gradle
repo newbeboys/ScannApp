@@ -65,6 +65,22 @@ repositories {
     }
 }
 
+// @capacitor-mlkit/text-recognition menarik kelima model skrip sekaligus.
+// Diukur dari Maven Google (16.0.1): Latin 1,38 MB, Mandarin 2,04 MB,
+// Devanagari 2,02 MB, Jepang 2,63 MB, Korea 1,90 MB — jadi ±8,6 MB masuk APK
+// untuk skrip yang tidak akan pernah dipakai aplikasi berbahasa Indonesia.
+//
+// Aman dibuang karena src/lib/ocr.ts memaku Script.Latin, dan pemilihnya di
+// plugin cuma switch biasa (createRecognizerOptionsForScript): cabang yang
+// tidak pernah dieksekusi tidak pernah memuat kelasnya. Kalau suatu hari OCR
+// non-Latin benar-benar dibutuhkan, hapus baris skrip itu di sini.
+configurations.configureEach {
+    exclude group: 'com.google.mlkit', module: 'text-recognition-chinese'
+    exclude group: 'com.google.mlkit', module: 'text-recognition-devanagari'
+    exclude group: 'com.google.mlkit', module: 'text-recognition-japanese'
+    exclude group: 'com.google.mlkit', module: 'text-recognition-korean'
+}
+
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"

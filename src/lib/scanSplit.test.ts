@@ -10,7 +10,7 @@ vi.mock('./scanStorage', () => ({
     if (failTitles.has(title)) throw new Error('Penyimpanan penuh.')
     savedCalls.push({ uris, title })
     return {
-      schemaVersion: 4,
+      schemaVersion: 5,
       id: `doc-${savedCalls.length}`,
       title: title ?? 'Scan bawaan',
       createdAt: '2026-08-25T00:00:00.000Z',

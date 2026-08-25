@@ -29,7 +29,7 @@ vi.mock('./blobBase64', () => ({
   base64ToBlob: () => new Blob(),
 }))
 
-const { saveScanDocument, renameScanDocument, restoreDocumentFromJpegs } = await import(
+const { saveScanDocument, renameScanDocument, restoreDocumentFromJpegs, listScanDocuments } = await import(
   './scanStorage'
 )
 
@@ -38,7 +38,7 @@ function seedIndex(title: string) {
   fs.readFile.mockResolvedValue({
     data: JSON.stringify([
       {
-        schemaVersion: 4,
+        schemaVersion: 5,
         id: 'doc-1',
         title,
         createdAt: '2026-08-23T00:00:00.000Z',
@@ -245,7 +245,7 @@ describe('restoreDocumentFromJpegs', () => {
     fs.readFile.mockResolvedValue({
       data: JSON.stringify([
         {
-          schemaVersion: 4,
+          schemaVersion: 5,
           id: cloudDoc.id,
           title: 'Dok agent',
           createdAt: cloudDoc.createdAt,
@@ -289,7 +289,7 @@ describe('restoreDocumentFromJpegs', () => {
    */
   it('keeps a document saved while the download was still running', async () => {
     const scannedMeanwhile = {
-      schemaVersion: 4,
+      schemaVersion: 5,
       id: 'dipindai-saat-memulihkan',
       title: 'Scan baru',
       createdAt: '2026-08-23T01:00:00.000Z',
@@ -308,5 +308,45 @@ describe('restoreDocumentFromJpegs', () => {
       cloudDoc.id,
       scannedMeanwhile.id,
     ])
+  })
+})
+
+describe('readIndex — menulis ulang index yang masih versi lama', () => {
+  beforeEach(() => {
+    for (const fn of Object.values(fs)) fn.mockClear()
+  })
+
+  /**
+   * Baris penentunya di scanStorage membandingkan schemaVersion tersimpan
+   * dengan versi sekarang. Kalau angkanya ketinggalan saat skema naik, dokumen
+   * lama tetap dimigrasikan di memori tapi tidak pernah tersimpan — jadi
+   * migrasinya diulang tiap aplikasi dibuka, dan halaman yang dibuang karena
+   * rusak muncul lagi setiap kali.
+   */
+  it('menulis ulang index v4 ke disk sebagai v5', async () => {
+    fs.readFile.mockResolvedValue({
+      data: JSON.stringify([
+        {
+          schemaVersion: 4,
+          id: 'doc-lama',
+          title: 'Kwitansi',
+          createdAt: '2026-03-02T04:00:00.000Z',
+          pageCount: 1,
+          pages: [{ original: 'scans/doc-lama/page-1.jpg' }],
+        },
+      ]),
+    })
+
+    await listScanDocuments()
+
+    expect(writtenIndex()[0].schemaVersion).toBe(5)
+  })
+
+  it('tidak menulis apa pun kalau index sudah versi sekarang', async () => {
+    seedIndex('Kwitansi')
+
+    await listScanDocuments()
+
+    expect(fs.writeFile).not.toHaveBeenCalled()
   })
 })

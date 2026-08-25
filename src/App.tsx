@@ -28,6 +28,7 @@ import { readExportLevel, writeExportLevel } from './lib/exportPreference'
 import type { CompressionLevel } from './lib/exportLimits'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
+import { recognizeDocument, type OcrProgress } from './lib/ocr'
 import { boundaryCuts, everyNCuts, saveSplitScan } from './lib/scanSplit'
 import {
   deleteAllScanDocuments,
@@ -113,6 +114,7 @@ function App() {
   const [exportLevel, setExportLevel] = useState<CompressionLevel>(() => readExportLevel())
   const [exportEstimate, setExportEstimate] = useState<ExportSizeEstimate | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null)
   /** Every document this account has in the cloud, whether or not it is on the phone. */
   const [backups, setBackups] = useState<CloudBackup[]>([])
   const [backupBusyId, setBackupBusyId] = useState<string | null>(null)
@@ -596,6 +598,36 @@ function App() {
     )
   }
 
+  /**
+   * Reads a document's text, page by page.
+   *
+   * `force` is decided here rather than by the row: the row knows how many
+   * pages have text, so a document that is already complete asks for a re-read
+   * and a half-done one asks only for the rest. That is also what makes the
+   * same button the way back after cropping a page, which throws that page's
+   * text away.
+   */
+  const handleRecognizeText = async (doc: LocalScanDocument) => {
+    const complete = doc.pages.every((page) => page.text)
+    setOcrProgress({ done: 0, total: doc.pageCount })
+    try {
+      const outcome = await recognizeDocument(doc.id, tier, {
+        force: complete,
+        onProgress: setOcrProgress,
+      })
+      await refreshDocuments()
+      setToast(
+        outcome.failed > 0
+          ? `Teks dikenali di ${outcome.recognized} halaman, ${outcome.failed} gagal dibaca.`
+          : 'Teks dokumen sudah dikenali.',
+      )
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal mengenali teks.')
+    } finally {
+      setOcrProgress(null)
+    }
+  }
+
   const handleBackup = async (doc: LocalScanDocument) => {
     setBackupBusyId(doc.id)
     try {
@@ -1071,6 +1103,10 @@ function App() {
           onDelete={() => handleDelete(activeDocument.id)}
           onBackup={() => handleBackup(activeDocument)}
           onRemoveBackup={() => handleRemoveBackup(activeDocument.id)}
+          tier={tier}
+          ocrProgress={ocrProgress}
+          onRecognizeText={() => void handleRecognizeText(activeDocument)}
+          onUpgrade={() => setView({ kind: 'upgrade' })}
         />
         {exportSheet}
         {toast && <p className="toast">{toast}</p>}

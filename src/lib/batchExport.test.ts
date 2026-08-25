@@ -45,7 +45,7 @@ const { exportDocumentsBatch, summarizeBatchExport } = await import('./documentE
 
 function doc(id: string, title: string, pageCount = 1): LocalScanDocument {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     id,
     title,
     createdAt: '2026-08-25T00:00:00.000Z',

@@ -23,7 +23,7 @@ describe('migrateScanIndex', () => {
   it('converts Fase 1 documents without losing pages', () => {
     const [doc] = migrateScanIndex([v1Document])
 
-    expect(doc.schemaVersion).toBe(4)
+    expect(doc.schemaVersion).toBe(5)
     expect(doc.title).toBe('Surat Perjanjian')
     expect(doc.createdAt).toBe('2026-07-25T10:00:00.000Z')
     expect(doc.pageCount).toBe(2)
@@ -35,7 +35,7 @@ describe('migrateScanIndex', () => {
 
   it('leaves already-migrated documents alone, including their edits', () => {
     const v4Document = {
-      schemaVersion: 4 as const,
+      schemaVersion: 5 as const,
       id: 'doc-2',
       title: 'Invoice',
       createdAt: '2026-07-26T10:00:00.000Z',
@@ -51,7 +51,7 @@ describe('migrateScanIndex', () => {
    * applied. Upgrading must not change how they look at all — the
    * filter comes back empty, so resolvePage keeps returning the same file.
    */
-  it('upgrades Fase 2 documents to v4 without changing how they look', () => {
+  it('upgrades Fase 2 documents to v5 without changing how they look', () => {
     const v2Document = {
       schemaVersion: 2,
       id: 'doc-v2',
@@ -63,14 +63,14 @@ describe('migrateScanIndex', () => {
 
     const [doc] = migrateScanIndex([v2Document])
 
-    expect(doc.schemaVersion).toBe(4)
+    expect(doc.schemaVersion).toBe(5)
     expect(doc.filter).toBeUndefined()
     expect(resolvePage(doc.pages[0])).toBe('scans/doc-v2/page-1-edited.jpg')
   })
 
   it('keeps the document filter and per-page exceptions', () => {
     const filtered = {
-      schemaVersion: 4 as const,
+      schemaVersion: 5 as const,
       id: 'doc-f',
       title: 'Berfilter',
       createdAt: '2026-08-23T10:00:00.000Z',
@@ -105,7 +105,7 @@ describe('migrateScanIndex', () => {
 
   it('keeps sourceDocumentIds on merged documents', () => {
     const merged = {
-      schemaVersion: 4 as const,
+      schemaVersion: 5 as const,
       id: 'doc-3',
       title: 'Gabungan',
       createdAt: '2026-07-26T11:00:00.000Z',
@@ -145,7 +145,7 @@ describe('resolvePage', () => {
 
 describe('hasEdits', () => {
   const base = {
-    schemaVersion: 4 as const,
+    schemaVersion: 5 as const,
     id: 'd',
     title: 't',
     createdAt: '2026-07-26T00:00:00.000Z',
@@ -202,5 +202,41 @@ describe('resolvePage & filterSource', () => {
   it('derives the filter from the geometry chain, not from a prior filter render', () => {
     expect(filterSource(page)).toBe('a-edited.jpg')
     expect(filterSource({ original: 'a.jpg', filtered: 'a-bw.jpg' })).toBe('a.jpg')
+  })
+})
+
+describe('migrateScanIndex — v4 to v5 (OCR)', () => {
+  const v4 = [
+    {
+      schemaVersion: 4,
+      id: 'doc-1',
+      title: 'Kwitansi',
+      createdAt: '2026-03-02T04:00:00.000Z',
+      pageCount: 1,
+      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', filtered: 'a-bw.jpg' }],
+    },
+  ]
+
+  it('lifts a v4 document to v5 without touching a single page', () => {
+    const [doc] = migrateScanIndex(v4)
+
+    expect(doc.schemaVersion).toBe(5)
+    expect(doc.pages).toEqual([{ original: 'a.jpg', edited: 'a-edited.jpg', filtered: 'a-bw.jpg' }])
+  })
+
+  it('keeps a recognised-text path', () => {
+    const [doc] = migrateScanIndex([
+      { ...v4[0], pages: [{ original: 'a.jpg', text: 'a-ocr.json' }] },
+    ])
+
+    expect(doc.pages[0].text).toBe('a-ocr.json')
+  })
+
+  it('drops a recognised-text field that is not a path', () => {
+    const [doc] = migrateScanIndex([
+      { ...v4[0], pages: [{ original: 'a.jpg', text: { blocks: [] } }] },
+    ])
+
+    expect(doc.pages[0]).toEqual({ original: 'a.jpg' })
   })
 })

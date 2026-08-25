@@ -47,10 +47,29 @@ export interface ScanPage {
   marks?: Mark[]
   /** The rendered composite of `filtered ?? edited ?? original` plus `marks`. */
   annotated?: string
+  /**
+   * Path to this page's recognised text, laid out in page fractions (Pro).
+   *
+   * A path rather than the layout itself: a dense page holds some five hundred
+   * words, so a twenty-page document would put hundreds of kilobytes of JSON
+   * into the index — parsed on every app start just to draw the document list.
+   * The filter and annotation renders live as files for the same reason.
+   */
+  text?: string
 }
 
+/**
+ * The shape `migrateScanIndex` produces.
+ *
+ * Exported so the reader can tell a stored index apart from a current one
+ * without repeating the number. When this was written by hand in two places,
+ * raising it in one and not the other made every read rewrite the index — see
+ * the test in `scanStorageSave.test.ts`.
+ */
+export const CURRENT_SCHEMA_VERSION = 5
+
 export interface LocalScanDocument {
-  schemaVersion: 4
+  schemaVersion: typeof CURRENT_SCHEMA_VERSION
   id: string
   title: string
   createdAt: string
@@ -99,11 +118,15 @@ function migratePage(page: ScanPage): ScanPage {
     ...(marks.length > 0 && typeof page.annotated === 'string'
       ? { annotated: page.annotated }
       : {}),
+    // A v4 page simply has none. Unlike the annotated render, this is not
+    // paired with anything: recognised text stands on its own, and the page
+    // image it was read from is still there whatever else was dropped.
+    ...(typeof page.text === 'string' ? { text: page.text } : {}),
   }
 }
 
 /**
- * Brings any stored index entry up to the v4 shape.
+ * Brings any stored index entry up to the v5 shape.
  *
  * Documents scanned during Fase 1 were written as `{ pagePaths: string[] }`
  * with no schemaVersion, Fase 2 documents as v2 with no filters, and v3
@@ -137,7 +160,7 @@ export function migrateScanIndex(raw: unknown): LocalScanDocument[] {
     if (pages.length === 0) continue
 
     migrated.push({
-      schemaVersion: 4,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       id: entry.id,
       title: entry.title ?? 'Dokumen tanpa judul',
       createdAt: entry.createdAt ?? new Date(0).toISOString(),

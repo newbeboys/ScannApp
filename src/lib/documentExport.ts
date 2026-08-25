@@ -18,7 +18,8 @@ import {
   type DeliveryResult,
   type ExportFile,
 } from './exportShare'
-import type { LocalScanDocument } from './scanStorage'
+import type { PageText } from './ocrLayout'
+import { readPageText, type LocalScanDocument } from './scanStorage'
 import type { Tier } from './tier'
 
 export type ExportFormat = 'pdf' | 'jpg' | 'png'
@@ -109,12 +110,25 @@ async function exportPdf(
     bytes.push(await blobToBytes(page))
   }
 
+  // Read per page and kept index-aligned, gaps included: the builder matches
+  // words to pages by position, so dropping a page that was never recognised
+  // would move every later page's text onto the wrong page.
+  //
+  // No tier check. The gate is on running the engine (`recognizeDocument`),
+  // not on reading text the user already has: a lapsed subscription stops
+  // selling the machine, it does not confiscate what the machine produced.
+  const text: (PageText | null)[] = []
+  for (const page of doc.pages) {
+    text.push(await readPageText(page))
+  }
+
   const pdf = await buildPdf(bytes, {
     watermark: shouldWatermark(tier),
     title: doc.title,
     // Carried into the file so a backup can hand the date back on restore —
     // and so an exported PDF is dated when it was scanned either way.
     scannedAt: doc.createdAt,
+    text,
   })
 
   return [

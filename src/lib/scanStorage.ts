@@ -3,7 +3,9 @@ import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { normalizeDocumentTitle } from '../../supabase/functions/_shared/documentTitle'
 import type { Mark } from './annotations'
 import { base64ToBlob, blobToBase64 } from './blobBase64'
+import { sanitizePageText, type PageText } from './ocrLayout'
 import {
+  CURRENT_SCHEMA_VERSION,
   annotationSource,
   effectiveFilter,
   filterSource,
@@ -88,7 +90,8 @@ async function readIndex(): Promise<LocalScanDocument[]> {
 
   const docs = migrateScanIndex(parsed)
   const needsRewrite =
-    Array.isArray(parsed) && parsed.some((doc) => (doc as LocalScanDocument)?.schemaVersion !== 4)
+    Array.isArray(parsed) &&
+    parsed.some((doc) => (doc as LocalScanDocument)?.schemaVersion !== CURRENT_SCHEMA_VERSION)
   if (needsRewrite) {
     await writeIndex(docs)
   }
@@ -154,7 +157,7 @@ export async function saveScanDocument(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 4,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     id,
     title: title ?? `Scan ${new Date().toLocaleString('id-ID')}`,
     createdAt: new Date().toISOString(),
@@ -228,7 +231,7 @@ export async function restoreDocumentFromJpegs(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 4,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     id: cloud.id,
     title: cloud.title,
     // The day it was scanned, not the day it came back.
@@ -414,9 +417,17 @@ export async function savePageEdit(
   //
   // The marks themselves survive: they are coordinates, and the caller remaps
   // them onto the new geometry rather than asking the user to draw again.
-  const { filtered, annotated, ...rest } = page
+  //
+  // Recognised text is coordinates too, but it goes. Marks cannot be made
+  // again by anything but the user's hand, so they are worth remapping;
+  // recognised text can be read again by the machine, and reading it from the
+  // cropped page gives a better result than remapping the old one. Left in
+  // place it would be *invisibly* wrong — the layer nobody sees, quietly
+  // sending search and copy-paste to the wrong part of the page.
+  const { filtered, annotated, text, ...rest } = page
   await discard(filtered)
   await discard(annotated)
+  await discard(text)
 
   doc.pages[pageIndex] = { ...rest, edited: editedPath }
   await writeIndex(docs)
@@ -435,12 +446,13 @@ export async function resetPageEdit(
   const page = doc.pages[pageIndex]
   if (!page?.edited) return doc
 
-  // The filter render was made from the geometry that is about to be thrown
-  // away, so it is now wrong and gets deleted here — but *not* regenerated:
-  // that needs a canvas, which this module deliberately has no access to.
+  // The filter render and the recognised text were both derived from the
+  // geometry that is about to be thrown away, so both are now wrong and are
+  // deleted here — but the filter is *not* regenerated: that needs a canvas,
+  // which this module deliberately has no access to.
   // documentEditing.revertPage does that step right after calling this, using
   // the page this function returns.
-  for (const path of [page.edited, page.filtered, page.annotated]) {
+  for (const path of [page.edited, page.filtered, page.annotated, page.text]) {
     await discard(path)
   }
 
@@ -460,6 +472,66 @@ export async function resetPageEdit(
   }
   await writeIndex(docs)
   return doc
+}
+
+/**
+ * Where a page's recognised text lives.
+ *
+ * Derived from `original` like every other derived file: a name built from the
+ * page's position would follow the slot rather than the page, so reordering
+ * would point one page's layout at another page's words.
+ */
+function textPath(original: string): string {
+  return original.replace(/\.jpg$/i, '-ocr.json')
+}
+
+/** Stores one page's recognised text and points the page at it. */
+export async function savePageText(
+  docId: string,
+  pageIndex: number,
+  text: PageText,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const page = doc.pages[pageIndex]
+  if (!page) throw new Error('Halaman tidak ditemukan.')
+
+  const path = textPath(page.original)
+  await Filesystem.writeFile({
+    path,
+    directory: Directory.Data,
+    data: JSON.stringify(text),
+    encoding: Encoding.UTF8,
+  })
+
+  doc.pages[pageIndex] = { ...page, text: path }
+  await writeIndex(docs)
+  return doc
+}
+
+/**
+ * Reads a page's recognised text, or nothing.
+ *
+ * Nothing covers all three ways it can be absent — never recognised, file gone,
+ * file unreadable — because the caller treats them identically: the text layer
+ * is an optional extra on top of an export that must happen either way.
+ */
+export async function readPageText(page: ScanPage): Promise<PageText | null> {
+  if (!page.text) return null
+
+  try {
+    const result = await Filesystem.readFile({
+      path: page.text,
+      directory: Directory.Data,
+      encoding: Encoding.UTF8,
+    })
+    const parsed = sanitizePageText(JSON.parse(result.data as string))
+    return parsed.blocks.length > 0 ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 /** Renders one page's filter, or clears it, and returns the new page entry. */
@@ -811,7 +883,7 @@ export async function createDocumentFromPages(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 4,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     id,
     title,
     createdAt: new Date().toISOString(),

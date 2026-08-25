@@ -58,6 +58,34 @@ export function everyNCuts(pageCount: number, size: number): number[] {
 }
 
 /**
+ * Moves the cuts to follow the pages after one page is deleted.
+ *
+ * Leaving the split screen deliberately *keeps* its cuts, so that retrying a
+ * half-successful save does not lose where the user put them — but the review
+ * screen underneath can still delete a page in the meantime. Reused as they
+ * are, the old positions would quietly land on different page boundaries than
+ * the ones that were placed.
+ *
+ * A cut at `i` means "a new document starts at page i", so a cut at or before
+ * the deleted page keeps its number while one after it comes down by one.
+ * That makes the pair hugging the deleted page collapse onto the same
+ * boundary — deduplicated here rather than left for `planSplit`, so that what
+ * the screen draws and what it would save cannot disagree.
+ */
+export function remapCutsAfterRemoval(
+  cuts: readonly number[],
+  removedIndex: number,
+  pageCountAfter: number,
+): number[] {
+  const moved = cuts.map((cut) => (cut > removedIndex ? cut - 1 : cut))
+
+  return [...new Set(moved)]
+    // A cut at 0 or at the end mints a document with no pages in it.
+    .filter((cut) => cut > 0 && cut < pageCountAfter)
+    .sort((a, b) => a - b)
+}
+
+/**
  * The cuts that separate a list of groups, renumbered from zero.
  *
  * Used after a partial save: the groups that failed become the new page list,

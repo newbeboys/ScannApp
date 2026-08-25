@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LocalScanDocument, ScanPage } from './scanIndexMigration'
+import { MAX_TITLE_LENGTH } from '../../supabase/functions/_shared/documentTitle'
 
 /** Titles whose creation should blow up, so the failure path can be exercised. */
 const failTitles = new Set<string>()
@@ -215,5 +216,39 @@ describe('summarizeDocumentSplit', () => {
     expect(summarizeDocumentSplit(0, 2, false)).toBe(
       'Tidak ada dokumen yang dibuat. Dokumen aslinya masih utuh — coba lagi.',
     )
+  })
+})
+
+describe('splitDocument — nama kosong jatuh ke judul dokumennya', () => {
+  /**
+   * Temuan code-review 25 Agustus 2026. Mengosongkan kolom nama membuat
+   * `splitTitles` mengembalikan undefined, dan pemanggilnya dulu menambal itu
+   * dengan template mentah dari `doc.title` — melewati normalizer bersama
+   * *dan* batas panjangnya. Judul 200 karakter (panjang yang memang bisa
+   * diketik lewat Ubah Nama) ditambah " (1)" jadi lebih panjang dari yang
+   * diizinkan `confirm-upload`, jadi nama di HP dan di cloud berbeda begitu
+   * dokumen hasil pisah dicadangkan.
+   */
+  it('memangkas judul dokumen yang sudah mentok batas sebelum menambah nomor', async () => {
+    const longTitle = 'A'.repeat(MAX_TITLE_LENGTH)
+
+    await splitDocument(doc(plain(2), longTitle), [[0], [1]], '   ')
+
+    for (const entry of created) {
+      expect(entry.title.length).toBeLessThanOrEqual(MAX_TITLE_LENGTH)
+      expect(entry.title).toMatch(/ \(\d+\)$/)
+    }
+  })
+
+  it('tetap memakai judul dokumen apa adanya kalau masih pendek', async () => {
+    await splitDocument(doc(plain(2), 'Kontrak'), [[0], [1]], '')
+
+    expect(created.map((entry) => entry.title)).toEqual(['Kontrak (1)', 'Kontrak (2)'])
+  })
+
+  it('merapikan spasi ganda di judul dokumen, sama seperti nama yang diketik', async () => {
+    await splitDocument(doc(plain(2), 'Kontrak    Sewa'), [[0], [1]], '')
+
+    expect(created.map((entry) => entry.title)).toEqual(['Kontrak Sewa (1)', 'Kontrak Sewa (2)'])
   })
 })

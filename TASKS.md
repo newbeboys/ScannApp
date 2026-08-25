@@ -624,6 +624,15 @@ Potongan **D** dari empat sisa Fase 6, tahap pertama dari dua. Desain: `docs/sup
 - [ ] **Ukuran APK rilis setelah `exclude`** — bertambah ±1,4 MB, bukan ±10 MB
 - [ ] **Build AAB di CI lolos** setelah plugin baru + `exclude`
 
+### Dua temuan code-review di kode C2 — ditutup 25 Agustus 2026
+
+Ketemu saat code-review menjelang commit D1. Keduanya di potongan C2 (pisah dokumen), bukan di OCR — tapi ditutup sekarang juga supaya tidak menumpuk lintas potongan.
+
+- [x] **Nama pisah yang dikosongkan melewati normalizer.** Mengosongkan kolom nama membuat `splitTitles` mengembalikan `undefined`, dan pemanggilnya menambal itu dengan template mentah `${doc.title} (n)` — lewat begitu saja dari normalizer bersama **dan** batas panjangnya. Judul 200 karakter (panjang yang memang bisa diketik lewat Ubah Nama) ditambah " (1)" jadi 204, lebih panjang dari yang diizinkan `confirm-upload`, jadi nama di HP dan di cloud berbeda begitu hasil pisahnya dicadangkan. Sekarang judul dokumen dipakai sebagai **base** yang masuk `splitTitles`, bukan sebagai tambalan di hilirnya
+- [x] **Pemisah bergeser diam-diam setelah halaman dihapus.** Keluar dari layar Pisah sengaja **menyimpan** cut-nya supaya percobaan ulang setelah simpan yang setengah berhasil tidak kehilangan penempatan — tapi layar Tinjau di baliknya masih bisa menghapus halaman. Masuk lagi ke layar Pisah lalu memakai cut lama terhadap daftar yang menyusut membuat tiap pemisah setelah halaman itu jatuh ke batas yang berbeda dari yang ditempatkan user. Ditutup dengan `remapCutsAfterRemoval()`: cut sesudah halaman yang dihapus turun satu, cut sebelumnya diam, dan pasangan yang mengapitnya melebur jadi satu — deduplikasinya di sini, bukan diserahkan ke `planSplit`, supaya yang digambar layar dan yang akan disimpan tidak bisa berbeda
+- [x] `limitRows` dipindah dari `UpgradeScreen.tsx` ke `src/lib/upgradeLedger.ts`. Meng-export fungsi dari berkas komponen memang mematahkan Fast Refresh untuk berkas itu, dan oxlint menegurnya — modul sendiri lebih tepat untuk data yang memang bukan komponen
+- [x] Test 683 → 694
+
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 
 - [ ] Riset & pilih model TFLite untuk image enhancement (cahaya/kontras/noise/ketajaman)

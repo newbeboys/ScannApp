@@ -99,7 +99,16 @@ export async function splitDocument(
   }
 
   const startAt = options.startAt ?? 0
-  const titles = splitTitles(base, usable.length, startAt)
+  /*
+    An empty name field falls back to the document's own title — but through
+    `splitTitles`, not around it. Patching the gap downstream with a raw
+    `${doc.title} (n)` template skipped the shared normaliser and, worse, the
+    length cap: a title typed right up to MAX_TITLE_LENGTH plus " (1)" came out
+    longer than `confirm-upload` allows, so the document read one way on the
+    phone and another in the cloud the moment it was backed up.
+  */
+  const effectiveBase = base.trim() === '' ? doc.title : base
+  const titles = splitTitles(effectiveBase, usable.length, startAt)
 
   const saved: LocalScanDocument[] = []
   const remaining: number[][] = []
@@ -112,7 +121,11 @@ export async function splitDocument(
       saved.push(
         await createDocumentFromPages(
           group.map((page) => ({ pagePath: resolvePage(doc.pages[page]) })),
-          titles[index] ?? `${doc.title} (${startAt + index + 1})`,
+          // Always a string in practice: `effectiveBase` is non-empty, and
+          // splitTitles only leaves gaps for an empty base. The fallback is the
+          // base itself rather than a hand-built template, so even the branch
+          // that cannot happen stays inside the length cap.
+          titles[index] ?? effectiveBase,
         ),
       )
     } catch {

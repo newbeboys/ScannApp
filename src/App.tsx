@@ -29,7 +29,12 @@ import type { CompressionLevel } from './lib/exportLimits'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
 import { recognizeDocument, type OcrProgress } from './lib/ocr'
-import { boundaryCuts, everyNCuts, saveSplitScan } from './lib/scanSplit'
+import {
+  boundaryCuts,
+  everyNCuts,
+  remapCutsAfterRemoval,
+  saveSplitScan,
+} from './lib/scanSplit'
 import {
   deleteAllScanDocuments,
   deleteScanDocument,
@@ -281,6 +286,12 @@ function App() {
       const next = existing.filter((_, i) => i !== index)
       return next.length > 0 ? next : null
     })
+    // The split screen keeps its cuts when it is closed, so they outlive the
+    // page list they were placed against. Left alone, deleting a page here
+    // would silently slide every later separator onto a different boundary the
+    // next time Pisah is opened.
+    const pagesAfter = Math.max((pendingPages?.length ?? 0) - 1, 0)
+    setSplitCuts((cuts) => remapCutsAfterRemoval(cuts, index, pagesAfter))
     setCurrentPage((current) => (current > 0 ? current - 1 : 0))
   }
 

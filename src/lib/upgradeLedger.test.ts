@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { limitRows } from './UpgradeScreen'
+import { limitRows } from './upgradeLedger'
 
 /**
  * The paywall may only sell what the app actually does. Every row here was

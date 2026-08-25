@@ -24,6 +24,7 @@ const {
   boundaryCuts,
   everyNCuts,
   planSplit,
+  remapCutsAfterRemoval,
   saveSplitScan,
   splitTitles,
   summarizeSplitSave,
@@ -259,5 +260,57 @@ describe('splitTitles and the shared title rules', () => {
 
     expect(first?.endsWith(' (1)')).toBe(true)
     expect([...(first ?? '')].length).toBeLessThanOrEqual(200)
+  })
+})
+
+/**
+ * Temuan code-review 25 Agustus 2026. Keluar dari layar Pisah sengaja
+ * *menyimpan* cut-nya (supaya percobaan ulang setelah simpan yang setengah
+ * berhasil tidak kehilangan penempatan), tapi layar Tinjau di baliknya masih
+ * bisa menghapus halaman. Masuk lagi ke layar Pisah lalu memakai cut lama
+ * terhadap daftar yang sudah menyusut membuat pemisahnya diam-diam bergeser
+ * ke batas halaman yang berbeda dari yang ditempatkan user.
+ */
+describe('remapCutsAfterRemoval', () => {
+  it('membiarkan cut yang ada sebelum halaman yang dihapus', () => {
+    expect(remapCutsAfterRemoval([2], 4, 5)).toEqual([2])
+  })
+
+  it('menggeser turun cut yang ada sesudah halaman yang dihapus', () => {
+    expect(remapCutsAfterRemoval([4], 1, 5)).toEqual([3])
+  })
+
+  /**
+   * Cut tepat sebelum dan tepat sesudah halaman yang dihapus menunjuk ke batas
+   * yang sama begitu halaman di antaranya hilang. Dua pemisah di satu batas
+   * akan melahirkan dokumen tanpa halaman.
+   */
+  it('melebur dua cut yang mengapit halaman yang dihapus jadi satu', () => {
+    expect(remapCutsAfterRemoval([2, 3], 2, 4)).toEqual([2])
+  })
+
+  it('membuang cut yang jatuh ke ujung daftar', () => {
+    expect(remapCutsAfterRemoval([4], 4, 4)).toEqual([])
+  })
+
+  it('membuang cut yang jatuh ke nol, yang akan membuat dokumen kosong di depan', () => {
+    expect(remapCutsAfterRemoval([1], 0, 3)).toEqual([])
+  })
+
+  it('mengembalikan hasilnya terurut', () => {
+    expect(remapCutsAfterRemoval([5, 1, 3], 2, 5)).toEqual([1, 2, 4])
+  })
+
+  it('tidak mengarang cut untuk daftar yang belum punya', () => {
+    expect(remapCutsAfterRemoval([], 1, 3)).toEqual([])
+  })
+
+  /** Yang sebenarnya harus tetap benar: planSplit memakainya tanpa mengeluh. */
+  it('menghasilkan kelompok yang tidak pernah kosong', () => {
+    const cuts = remapCutsAfterRemoval([1, 2, 3], 1, 3)
+
+    for (const group of planSplit(3, cuts)) {
+      expect(group.length).toBeGreaterThan(0)
+    }
   })
 })

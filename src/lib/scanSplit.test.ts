@@ -258,3 +258,22 @@ describe('summarizeSplitSave', () => {
     )
   })
 })
+
+describe('splitTitles and the shared title rules', () => {
+  it('collapses runs of whitespace, like rename and confirm-upload do', () => {
+    // The split field is the first place a typed title reaches local storage.
+    // If it skipped the shared normaliser, a document would read one way on the
+    // phone and another in the cloud the moment it was backed up.
+    expect(splitTitles('Kwitansi   Agustus', 2)).toEqual([
+      'Kwitansi Agustus (1)',
+      'Kwitansi Agustus (2)',
+    ])
+  })
+
+  it('caps a very long name with room left for the numbering', () => {
+    const [first] = splitTitles('K'.repeat(400), 3)
+
+    expect(first?.endsWith(' (1)')).toBe(true)
+    expect([...(first ?? '')].length).toBeLessThanOrEqual(200)
+  })
+})

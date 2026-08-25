@@ -10,6 +10,7 @@ async function renderScreen(overrides: Partial<Parameters<typeof SplitScanScreen
       pages={pages}
       cuts={[]}
       name=""
+      startAt={0}
       isBusy={false}
       progress={null}
       onCutsChange={() => {}}
@@ -91,6 +92,16 @@ describe('what the screen says', () => {
 
     await expect.element(screen.getByText('Dokumen 1 — Kwitansi (1)')).toBeInTheDocument()
     await expect.element(screen.getByText('Dokumen 2 — Kwitansi (2)')).toBeInTheDocument()
+  })
+
+  it('continues the numbering after a partial save, instead of promising "(1)" again', async () => {
+    // The retry really saves as "Kwitansi (4)" and "(5)" — `saveSplitScan` gets
+    // the same `startAt`. A header that still said "(1)" would be a preview of
+    // something that is never going to happen.
+    const screen = await renderScreen({ cuts: [2], name: 'Kwitansi', startAt: 3 })
+
+    await expect.element(screen.getByText('Dokumen 4 — Kwitansi (4)')).toBeInTheDocument()
+    await expect.element(screen.getByText('Dokumen 5 — Kwitansi (5)')).toBeInTheDocument()
   })
 
   it('shows how far a running save has got', async () => {

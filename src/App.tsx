@@ -288,11 +288,15 @@ function App() {
   }
 
   const handleStartSplit = () => {
-    // Opens on "one document per page": that is the case the feature exists
-    // for — a stack of receipts or ID cards scanned in one run.
-    setSplitCuts(everyNCuts(pendingPages?.length ?? 0, 1))
-    setSplitName('')
-    setSplitSaved(0)
+    // Opens on "one document per page" — the case the feature exists for — but
+    // only when this split session has nothing of its own yet. Re-entering
+    // after a save that half succeeded (Kembali, then Pisah again) must keep
+    // the cuts rebuilt around what is left, the name that was typed, and
+    // `splitSaved`; resetting the last of those would number the retry from
+    // "(1)" again, straight into the titles round one already saved.
+    setSplitCuts((current) =>
+      current.length > 0 ? current : everyNCuts(pendingPages?.length ?? 0, 1),
+    )
     setSplitting(true)
   }
 
@@ -770,6 +774,7 @@ function App() {
             pages={pendingPages}
             cuts={splitCuts}
             name={splitName}
+            startAt={splitSaved}
             isBusy={isSaving}
             progress={splitProgress}
             onCutsChange={setSplitCuts}

@@ -1,5 +1,18 @@
+import {
+  MAX_TITLE_LENGTH,
+  normalizeDocumentTitle,
+} from '../../supabase/functions/_shared/documentTitle'
 import { saveScanDocument, type LocalScanDocument } from './scanStorage'
 import type { Tier } from './tier'
+
+/**
+ * Room kept for the " (n)" the numbering appends, inside the shared cap.
+ *
+ * Without it a 200-character name would have its number sliced off again by
+ * the normaliser on the way to the cloud, and every document in the batch
+ * would end up sharing one title.
+ */
+const MAX_SPLIT_BASE_LENGTH = MAX_TITLE_LENGTH - 8
 
 /**
  * Splitting one scanning session into several documents.
@@ -78,11 +91,24 @@ export function splitTitles(base: string, count: number, startAt = 0): (string |
   // "Scan <tanggal>", exactly like saving without splitting.
   if (trimmed.length === 0) return Array.from({ length: count }, () => undefined)
 
+  /*
+    Put through the same normaliser as rename and confirm-upload. This field is
+    the first place a typed title reaches local storage — saveScanDocument
+    stores what it is handed — so without this a name with doubled spaces or
+    past the length cap would read one way on the phone and another in the
+    cloud the moment the document was backed up. Sliced by code point, like the
+    normaliser itself, so an emoji on the boundary is not cut in half.
+  */
+  const clean = [...normalizeDocumentTitle(trimmed)]
+    .slice(0, MAX_SPLIT_BASE_LENGTH)
+    .join('')
+    .trim()
+
   // A lone document is an ordinary save wearing a different button; numbering
   // it "(1)" would label something that has no "(2)".
-  if (count === 1 && startAt === 0) return [trimmed]
+  if (count === 1 && startAt === 0) return [clean]
 
-  return Array.from({ length: count }, (_, index) => `${trimmed} (${startAt + index + 1})`)
+  return Array.from({ length: count }, (_, index) => `${clean} (${startAt + index + 1})`)
 }
 
 /**

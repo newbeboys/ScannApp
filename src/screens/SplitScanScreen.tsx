@@ -7,6 +7,11 @@ interface SplitScanScreenProps {
   pages: string[]
   cuts: number[]
   name: string
+  /**
+   * How many documents this split session already saved — the same value the
+   * save is given, so the numbers previewed here are the numbers that land.
+   */
+  startAt: number
   isBusy: boolean
   /** `{ done, total }` while a save is running, else null. */
   progress: { done: number; total: number } | null
@@ -33,6 +38,7 @@ export function SplitScanScreen({
   pages,
   cuts,
   name,
+  startAt,
   isBusy,
   progress,
   onCutsChange,
@@ -41,7 +47,7 @@ export function SplitScanScreen({
   onSave,
 }: SplitScanScreenProps) {
   const groups = planSplit(pages.length, cuts)
-  const titles = splitTitles(name, groups.length)
+  const titles = splitTitles(name, groups.length, startAt)
   // Which group each page belongs to, so a header can be drawn where one starts.
   const groupOfPage = new Map<number, number>()
   groups.forEach((group, groupIndex) => {
@@ -131,9 +137,13 @@ export function SplitScanScreen({
 
               {startsGroup && (
                 <p className="split-group__title">
+                  {/*
+                    Counted from `startAt` like the titles are, so the two
+                    halves of this line cannot disagree after a partial save.
+                  */}
                   {titles[groupIndex]
-                    ? `Dokumen ${groupIndex + 1} — ${titles[groupIndex]}`
-                    : `Dokumen ${groupIndex + 1}`}
+                    ? `Dokumen ${startAt + groupIndex + 1} — ${titles[groupIndex]}`
+                    : `Dokumen ${startAt + groupIndex + 1}`}
                 </p>
               )}
 

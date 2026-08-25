@@ -223,7 +223,7 @@ Desain: `docs/superpowers/specs/2026-08-23-fase6-reorder-filter-design.md`
 - [x] Filter lanjutan — **5 filter** (Boss Ali menaikkan dari 2 di PRD Bagian 3): Magic Color, Cerah, Abu-abu, Hitam-Putih (ambang adaptif lokal), Hemat Tinta. Berlaku untuk seluruh dokumen, bisa dikecualikan per halaman. **Semua tier**
 - [x] Export tambahan: **PNG** — **semua tier** (lihat catatan di bawah). DOCX belum: tanpa OCR isinya cuma gambar tertempel, jadi dipindah ke potongan yang sama dengan OCR
 - [x] Kontrol level kompresi manual (slider kualitas vs ukuran) — **4 takik**, tetap Pro
-- [~] Batch scan/export — C1 selesai, C2 (pisah sesi pindai) menyusul
+- [x] Batch scan/export — C1 & C2 selesai (lihat bagian 4 & 5 di bawah)
 
 **Diubah 23 Agustus 2026 (keputusan Boss Ali):** reorder halaman & filter dokumen semula Pro-exclusive, sekarang **tersedia untuk Basic maupun Pro** — bukan cuma akun Pro. Menggantikan baris di PRD Bagian 3 dan CLAUDE.md Bagian 6; lihat catatan di kedua file itu. Annotate dan tanda tangan digital di daftar di atas tetap Pro-exclusive (belum dikerjakan).
 
@@ -434,16 +434,53 @@ Desain: `docs/superpowers/specs/2026-08-25-fase6-batch-scan-export-design.md`
 - [x] **Timer tekan lama bisa menembak setelah layar dilepas.** `DocumentsScreen` tidak membersihkan `pressTimer` saat unmount — pindah tab di tengah tekan lama membiarkan `setTimeout` tetap berbunyi dan memanggil `onEnterSelect`/`onNotice` **setelah** `App.tsx` sudah menutup mode pilih lewat efek pindah tab, diam-diam membukanya lagi. Ditambahkan `useEffect` pembersih yang membatalkan timer saat unmount, dengan test regresi baru
 - [x] **`handleBatchDelete` bisa macet permanen kalau `pruneUnusedSignatures()`/`refreshDocuments()` gagal.** Keduanya berjalan tanpa penangkap di blok `finally`, jadi kalau salah satunya melempar, `setIsBatchBusy(false)` dan `exitSelect()` (baris setelahnya, di blok yang sama) tidak pernah tereksekusi — tombol bilah aksi tetap `disabled` selamanya walau dokumennya sudah terhapus. Sekarang dibungkus try/catch sendiri di dalam `finally`, supaya kedua reset state itu tidak bersyarat pada berhasilnya langkah pembersihan
 
-**Belum diverifikasi di device fisik** (butuh Boss Ali — walkthrough browser juga belum sempat dijalankan sesi ini karena app mensyaratkan login Supabase dan tidak ada akun uji/dev bypass; kebenarannya sejauh ini hanya dari 520 test otomatis, termasuk 12 test `DocumentsScreen` di Chromium sungguhan):
+**Terverifikasi di device fisik — Boss Ali, 25 Agustus 2026.** Seluruh daftar uji di bawah dijalankan di HP dan hasilnya sesuai:
 
-- [ ] Tekan lama sebuah dokumen — masuk mode pilih, dan dokumennya tidak ikut terbuka
-- [ ] Tekan lama baris dokumen cloud — muncul toast, bukan diam saja
-- [ ] Pilih 3 dokumen → Ekspor PDF → 3 berkas di folder Documents, nama sesuai judulnya
-- [ ] Dua dokumen berjudul sama persis → berkas kedua jadi `… (2)`, tidak menimpa yang pertama
-- [ ] Ekspor 10+ dokumen — share sheet Android sanggup atau tidak
-- [ ] Tekan Hentikan di tengah — berhenti setelah dokumen yang sedang jalan, jumlahnya sesuai toast
-- [ ] Hapus 3 dokumen sekaligus — konfirmasi muncul, cadangan cloud tetap ada
-- [ ] Akun Basic: tombol Ekspor berlencana Pro dan membuka paywall; Hapus tetap bisa dipakai
+- [x] Tekan lama sebuah dokumen — masuk mode pilih, dan dokumennya tidak ikut terbuka
+- [x] Tekan lama baris dokumen cloud — muncul toast, bukan diam saja
+- [x] Pilih 3 dokumen → Ekspor PDF → 3 berkas di folder Documents, nama sesuai judulnya
+- [x] Dua dokumen berjudul sama persis → berkas kedua jadi `… (2)`, tidak menimpa yang pertama
+- [x] Ekspor 10+ dokumen — share sheet Android sanggup atau tidak
+- [x] Tekan Hentikan di tengah — berhenti setelah dokumen yang sedang jalan, jumlahnya sesuai toast
+- [x] Hapus 3 dokumen sekaligus — konfirmasi muncul, cadangan cloud tetap ada
+- [x] Akun Basic: tombol Ekspor berlencana Pro dan membuka paywall; Hapus tetap bisa dipakai
+
+### Fase 6 bagian 5 — Pisah Hasil Pindai (C2) — 25 Agustus 2026
+
+Potongan **C** yang kedua, penutup potongan C. Satu sesi pindai (mis. 30 kwitansi sekali jalan) bisa dipecah jadi beberapa dokumen tanpa memindai ulang.
+
+Desain: `docs/superpowers/specs/2026-08-25-fase6-batch-scan-export-design.md` Bagian 4
+Rencana kerja: `docs/superpowers/plans/2026-08-25-fase6-c2-pisah-hasil-pindai.md`
+
+- [x] **Satu himpunan angka jadi sumber kebenarannya.** Seluruh keadaan layar Pisah adalah himpunan posisi gunting; `planSplit()` di `src/lib/scanSplit.ts` menerjemahkannya jadi kelompok halaman dan layar hanya menggambar hasilnya. Gunting kembar, gunting di posisi 0, dan gunting di luar jangkauan dibuang — bukan kehati-hatian berlebih, karena simpan yang gagal sebagian memang membuat daftar halaman menyusut di bawah gunting yang sudah terpasang
+- [x] **Layar tersendiri, bukan penanda di strip thumbnail layar Tinjau.** Strip itu horizontal dan sudah penuh untuk lima halaman; tiga puluh halaman dengan pemisah di antaranya jadi lorong panjang yang harus digeser jauh cuma untuk melihat sudah terbagi berapa
+- [x] **Pola siap pakai + gunting manual, bukan dua mode terpisah.** "Tiap 1 halaman" (setumpuk kwitansi/KTP — kasus utamanya), "Tiap 2 halaman" (bolak-balik), "Bersihkan pemisah". Pola cuma mengisi guntingnya; setelah itu tiap pemisah tetap bisa diketuk satu-satu. Pemisahnya tombol setinggi jempol, bukan garis rambut
+- [x] **Satu kolom Nama untuk seluruh batch** → `Nama (1)`, `Nama (2)`, … Dikosongkan pun aman: jatuh ke nama bawaan `Scan <tanggal>` seperti menyimpan biasa. Tanpa kolom ini, memindai tiga puluh kwitansi berarti tiga puluh dokumen yang identik kecuali detiknya, lalu tiga puluh kali ubah nama
+- [x] **Gerbang Pro ditegakkan di `saveSplitScan()` (library), dan syaratnya "lebih dari satu dokumen butuh Pro"** — bukan "fitur ini Pro". Memisah jadi 1 dokumen identik dengan tombol Simpan di sebelahnya yang sudah gratis untuk semua tier; menolaknya berarti menolak sesuatu yang sudah gratis lewat pintu sebelah. Akun Basic yang menekan tombolnya dapat paywall, bukan layar mati
+- [x] **Kalau menyimpan gagal di tengah, halamannya tidak hilang.** Kelompok yang berhasil pergi, kelompok yang gagal tetap tinggal di layar dengan guntingnya disusun ulang (`boundaryCuts()`), dan toast-nya berkata berapa yang tersimpan. Membatalkan semuanya akan membuang dokumen yang sudah aman; menutup layarnya akan membawa kelompok sisanya ikut hilang bersama sesi pindainya — dan hasil pindai yang hilang tidak bisa dipulihkan dari mana pun. Menekan Simpan lagi tidak menghasilkan duplikat karena yang berhasil sudah tidak ada di layar
+- [x] **Penomoran lanjut setelah gagal sebagian** (`Kwitansi (6)`, bukan `Kwitansi (1)` lagi) — supaya percobaan kedua tidak menabrak judul yang sudah tersimpan di ronde pertama
+- [x] **Interstitial `scan-saved` dipanggil sekali untuk seluruh sesi pisah**, bukan per dokumen. Praktisnya tidak pernah tampil (ini Pro-only), tapi kalau ditulis per dokumen, langganan yang habis di kemudian hari akan meledakkan delapan interstitial beruntun
+- [x] **Gotcha di `App.tsx` yang ditemukan saat menyambungkan:** blok `if (pendingPages)` mengembalikan layar Tinjau **sebelum** `if (view.kind === 'upgrade')` sempat dibaca, jadi paywall dari tombol Pisah tidak akan tampil sama sekali dan tombolnya terlihat mati untuk akun Basic. Blok paywall dipindahkan ke atas blok `pendingPages`; menutupnya mengembalikan user ke layar Tinjau karena `pendingPages` tidak disentuh
+- [x] Test bertambah 55 (total 520 → **575** — 505 node + 70 browser), termasuk `SplitScanScreen.browser.test.tsx` (12) dan `ReviewScreen.browser.test.tsx` (4) di **Chromium sungguhan**
+- [x] **Test-nya dibuktikan menggigit:** gerbang Pro dipatok ke 2 → test pengecualian 1 kelompok merah; `remaining.push` diganti `throw` → dua test kegagalan sebagian merah; filter jangkauan gunting dilepas → test gunting di luar jangkauan merah; `onSave` diganti mengirim seluruh halaman sebagai satu kelompok → test kelompok merah; `disabled={isBusy}` dilepas → test tombol terkunci merah; `startAt` dilepas dari `splitTitles` di layar → test penomoran lanjutan merah. Semua dikembalikan setelah itu
+
+**Tiga temuan review ditutup sebelum lanjut (25 Agustus 2026):**
+
+- [x] **Penomoran lanjutan hilang saat masuk ulang ke layar Pisah.** `handleStartSplit` mereset `splitSaved` dan `splitName` tiap kali layar dibuka, termasuk saat sesi yang sama masih hidup: 3 dokumen tersimpan, 2 gagal → tekan Kembali → tekan Pisah lagi → percobaan kedua menyimpan `Kwitansi (1)` yang menabrak judul ronde pertama, dan nama yang sudah diketik ikut hilang. Sekarang gunting bawaan hanya dipasang kalau sesi ini belum punya gunting sendiri; `exitSplit()` tetap membersihkan semuanya di titik yang memang akhir sesi (pindai baru, simpan biasa, batal dari layar Tinjau)
+- [x] **Pratinjau nama di layar Pisah berbohong setelah gagal sebagian.** Header memanggil `splitTitles` tanpa `startAt`, jadi tertulis "Dokumen 1 — Kwitansi (1)" padahal yang benar-benar disimpan "Kwitansi (4)". `startAt` kini prop, dan nomor "Dokumen N" ikut dihitung dari situ supaya dua bagian barisnya tidak bisa berbeda
+- [x] **Judul hasil pisah tidak lewat `normalizeDocumentTitle`** (ditemukan saat security review). Kolom Nama adalah tempat pertama judul ketikan user masuk ke `saveScanDocument`, dan fungsi itu menyimpan apa adanya — tidak seperti `renameScanDocument`. Nama berspasi ganda atau lebih dari 200 karakter jadi tersimpan beda antara HP dan cloud begitu dicadangkan, persis hal yang normalizer bersama itu ada untuk mencegah. `splitTitles` kini memakai normalizer yang sama, dengan sisa ruang untuk ` (n)` supaya nomornya tidak ikut terpotong
+
+**Security review: nihil temuan.** Judul tidak pernah jadi path berkas (berkas halaman memakai id dokumen, nama ekspor lewat `toSafeFilename`), tidak ada `dangerouslySetInnerHTML`, dan C2 tidak menyentuh Supabase, R2, maupun signed URL.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali — walkthrough browser belum dijalankan lagi sesi ini karena app tetap mensyaratkan login Supabase dan tidak ada akun uji/dev bypass; kebenarannya sejauh ini dari 575 test otomatis, termasuk 16 test layar di Chromium sungguhan):
+
+- [ ] Pindai 10 kwitansi sekali jalan → "Tiap 1 halaman" → 10 dokumen, urutannya benar
+- [ ] Isi kolom Nama → semua dokumen bernama `Nama (1..10)`
+- [ ] Kosongkan Nama → jatuh ke nama bawaan, tidak error
+- [ ] Atur gunting sendiri di dokumen 30 halaman — layarnya masih enak digulir, thumbnail tidak membuat HP tersendat
+- [ ] Akun Basic: tombol Pisah berlencana Pro dan membuka paywall (dan paywall-nya benar-benar muncul di atas layar Tinjau), lalu menutup paywall kembali ke layar Tinjau dengan hasil pindai masih utuh
+- [ ] Simpan hasil pisah, lalu langsung batch-export semuanya — nama berkasnya tidak bertabrakan (pertemuan C1 & C2)
+
 
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 

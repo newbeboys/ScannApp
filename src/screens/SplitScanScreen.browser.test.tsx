@@ -104,6 +104,21 @@ describe('what the screen says', () => {
     await expect.element(screen.getByText('Dokumen 5 — Kwitansi (5)')).toBeInTheDocument()
   })
 
+  it('closes the list, so the separator the last page never had does not read as a hidden one', async () => {
+    // Reported from the phone: scrolled to the bottom, the run of separators
+    // simply stops, and the reader concludes the last one is behind the save
+    // button. Both halves are asserted — the closing line, and that there
+    // really are only three separators for four pages.
+    const screen = await renderScreen({ cuts: [1, 2, 3] })
+
+    await expect
+      .element(
+        screen.getByText('Halaman terakhir. Pemisah hanya bisa dipasang di antara dua halaman.'),
+      )
+      .toBeInTheDocument()
+    expect(document.querySelectorAll('.split-cut')).toHaveLength(pages.length - 1)
+  })
+
   it('shows how far a running save has got', async () => {
     const screen = await renderScreen({ isBusy: true, progress: { done: 2, total: 5 } })
 

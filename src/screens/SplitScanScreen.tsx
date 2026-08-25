@@ -187,6 +187,18 @@ export function SplitScanScreen({
         })}
       </ol>
 
+      {/*
+        The rhythm of the list is page, separator, page, separator — and after
+        the last page it stops without a word, because a separator there would
+        open a document with no pages in it. Reported from the phone on 25
+        Agustus 2026 as an option assumed to be hidden behind the footer: it is
+        neither missing nor hidden, so the list now says where it ends instead
+        of leaving the reader to guess.
+      */}
+      <p className="split-end">
+        Halaman terakhir. Pemisah hanya bisa dipasang di antara dua halaman.
+      </p>
+
       <div className="flow-footer">
         {progress && (
           <p className="split-progress">

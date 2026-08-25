@@ -563,6 +563,27 @@ Boss Ali menguji C1 & C2 di Xiaomi T15 dan melaporkan lima hal sekaligus, empat 
 - [ ] Pisah dokumen yang halamannya sudah difilter/dipotong/dianotasi — hasilnya membawa halaman yang **terlihat**, bukan pindaian mentah
 - [ ] Akun **Basic**: tombol Anotasi & Tanda Tangan, Pisah, dan Ekspor PDF banyak dokumen **tanpa lencana Pro** dan langsung bisa dipakai
 
+### Fase 6 bagian 7 — Temuan Uji Device Ketiga — 25 Agustus 2026
+
+Boss Ali menguji lagi di Xiaomi T15 dan melaporkan dua hal. Yang pertama **tidak bisa diperbaiki dari kode kita** dan butuh keputusannya; yang kedua ternyata bukan bug tampilan seperti dugaannya, tapi tetap ada yang salah dan sudah diperbaiki.
+
+**1. Pemindai selalu terbuka di "Ambil otomatis", diminta bawaannya "Manual".** Auto-capture menjepret sebelum dokumen siap.
+
+- [ ] **Terhalang di sisi Google, bukan di sisi kita — perlu keputusan Boss Ali.** `GmsDocumentScannerOptions.Builder` hanya punya empat setter: `setGalleryImportAllowed`, `setPageLimit`, `setResultFormats`, `setScannerMode`. Tidak ada `setCaptureMode`. Konstanta `CAPTURE_MODE_AUTO`/`CAPTURE_MODE_MANUAL` **ada** di kelas itu tapi tidak pernah bisa diserahkan ke method publik manapun — itu persis isi bug report [googlesamples/mlkit#846](https://github.com/googlesamples/mlkit/issues/846), yang pelapornya menyerahkannya ke `setScannerMode()` dan diam-diam mendapat `SCANNER_MODE_BASE_WITH_FILTER` karena kebetulan keduanya bernilai `2`. Layar pemindainya milik Google Play services, bukan layar kita, jadi tidak ada CSS/prop yang bisa mengubahnya
+- [ ] Pilihannya cuma dua: **(A)** terima — toggle "Manual" tetap ada di layar itu, sekali ketuk; atau **(B)** ganti mesin pindai dengan kamera sendiri, yang berarti membuat ulang deteksi tepi, koreksi perspektif, dan pembersihan noda dari nol (ganti stack — CLAUDE.md Bagian 2). Rekomendasi: **(A)**
+
+**2. Di layar Pisah Dokumen, halaman terakhir tidak punya "Dokumen baru mulai di sini" — diduga tertutup tombol simpan.**
+
+- [x] **Dugaan "tertutup" dibuktikan salah.** Struktur DOM & CSS layar itu direproduksi persis di Chromium 412x870 dan diukur: `.flow-footer` itu `margin-top: auto` di aliran normal, bukan `fixed` seperti `.select-bar` yang memang menutupi daftar di temuan kemarin. Kartu halaman terakhir berakhir di 1996px, tombolnya mulai di 2018px — tidak bersentuhan, dan tangkapan layar reproduksinya sama persis dengan tangkapan layar dari HP
+- [x] **Yang sebenarnya salah: daftarnya berhenti tanpa berkata apa-apa.** Pemisah memang tidak ada setelah halaman terakhir — pemisah di situ akan melahirkan dokumen tanpa halaman, dan `planSplit()` memang membuang cut `>= pageCount`. Tapi irama "halaman - pemisah - halaman - pemisah" putus begitu saja di ujung, jadi pembacanya menyimpulkan ada yang hilang. Perbaikannya menjawab pertanyaan itu langsung: baris penutup **"Halaman terakhir. Pemisah hanya bisa dipasang di antara dua halaman."**
+- [x] Test regresinya memeriksa **dua-duanya** — baris penutupnya ada, *dan* pemisahnya benar-benar cuma `pages.length - 1` buah. Tanpa bagian kedua, test itu masih hijau seandainya suatu saat ada pemisah nyasar di ujung daftar
+
+**Test: 610 -> 611,** semuanya lulus (`npm test`).
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Layar Pisah Dokumen digulir sampai mentok — baris "Halaman terakhir..." terbaca utuh di atas tombol, dan kartu halaman terakhir tidak terpotong
+
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 
 - [ ] Riset & pilih model TFLite untuk image enhancement (cahaya/kontras/noise/ketajaman)

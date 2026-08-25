@@ -1,3 +1,4 @@
+import { saveScanDocument, type LocalScanDocument } from './scanStorage'
 import type { Tier } from './tier'
 
 /**
@@ -93,4 +94,73 @@ export function splitTitles(base: string, count: number, startAt = 0): (string |
  */
 export function canSplitScan(tier: Tier, groupCount: number): boolean {
   return tier === 'pro' || groupCount <= 1
+}
+
+export interface SplitSaveResult {
+  saved: LocalScanDocument[]
+  /** Groups that did not make it, in their original order. */
+  remaining: string[][]
+  /** Indonesian, ready for the toast. */
+  message: string
+}
+
+/**
+ * Saves one document per group, sequentially.
+ *
+ * Sequential rather than parallel for the same reason as the batch export:
+ * these are 12 MP JPEGs being read and written, and starting eight at once
+ * only makes them compete for the same memory on a phone.
+ *
+ * The failure rule is the important part. Saving eight documents is eight
+ * writes, and the sixth can fail on a full disk. Rolling the whole thing back
+ * would throw away five documents that are already safe; closing the screen
+ * would take the three unsaved groups down with the scanning session, and a
+ * scan that is gone cannot be recovered from anywhere. So: the groups that
+ * succeeded leave, the groups that failed stay, and the caller puts them back
+ * on screen. `saveScanDocument` already removes its own folder when it fails
+ * part way through, so nothing is stranded on disk.
+ */
+export async function saveSplitScan(
+  groups: string[][],
+  base: string,
+  tier: Tier,
+  startAt = 0,
+  onProgress?: (done: number, total: number) => void,
+): Promise<SplitSaveResult> {
+  const usable = groups.filter((group) => group.length > 0)
+  if (usable.length === 0) {
+    throw new Error('Tidak ada halaman untuk disimpan.')
+  }
+  // In the library rather than only in the screen: hiding a button is not the
+  // same as refusing the action behind it.
+  if (!canSplitScan(tier, usable.length)) {
+    throw new Error('Memisah hasil pindai jadi beberapa dokumen hanya untuk akun Pro.')
+  }
+
+  const titles = splitTitles(base, usable.length, startAt)
+  const saved: LocalScanDocument[] = []
+  const remaining: string[][] = []
+
+  for (let index = 0; index < usable.length; index++) {
+    onProgress?.(index, usable.length)
+    try {
+      saved.push(await saveScanDocument(usable[index], titles[index]))
+    } catch {
+      // Counted by staying behind, not thrown: one group that will not save
+      // must not take the other seven with it.
+      remaining.push(usable[index])
+    }
+  }
+  onProgress?.(usable.length, usable.length)
+
+  return { saved, remaining, message: summarizeSplitSave(saved.length, remaining.length) }
+}
+
+/** One sentence for the toast, covering all-saved, partial and nothing-saved. */
+export function summarizeSplitSave(saved: number, failed: number): string {
+  if (saved === 0) {
+    return 'Tidak ada dokumen yang tersimpan. Halamannya masih di sini — coba lagi.'
+  }
+  if (failed === 0) return `${saved} dokumen tersimpan.`
+  return `${saved} dokumen tersimpan, ${failed} gagal. Halamannya masih di sini — coba simpan lagi.`
 }

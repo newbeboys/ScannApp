@@ -1,12 +1,40 @@
-import { describe, expect, it } from 'vitest'
-import {
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LocalScanDocument } from './scanIndexMigration'
+
+/** Titles whose save should blow up, so the failure path can be exercised. */
+const failTitles = new Set<string | undefined>()
+const savedCalls: { uris: string[]; title: string | undefined }[] = []
+
+vi.mock('./scanStorage', () => ({
+  saveScanDocument: async (uris: string[], title?: string): Promise<LocalScanDocument> => {
+    if (failTitles.has(title)) throw new Error('Penyimpanan penuh.')
+    savedCalls.push({ uris, title })
+    return {
+      schemaVersion: 4,
+      id: `doc-${savedCalls.length}`,
+      title: title ?? 'Scan bawaan',
+      createdAt: '2026-08-25T00:00:00.000Z',
+      pageCount: uris.length,
+      pages: uris.map((uri) => ({ original: uri })),
+    }
+  },
+}))
+
+const {
   boundaryCuts,
   canSplitScan,
   everyNCuts,
   planSplit,
+  saveSplitScan,
   splitTitles,
+  summarizeSplitSave,
   toggleCut,
-} from './scanSplit'
+} = await import('./scanSplit')
+
+beforeEach(() => {
+  failTitles.clear()
+  savedCalls.length = 0
+})
 
 describe('planSplit', () => {
   it('groups pages around the cuts', () => {
@@ -126,5 +154,107 @@ describe('canSplitScan', () => {
     // Splitting into one document is what the Simpan button next door already
     // does for free. Refusing it would be a bug wearing the clothes of a rule.
     expect(canSplitScan('basic', 1)).toBe(true)
+  })
+})
+
+describe('saveSplitScan', () => {
+  const pages = ['uri-1', 'uri-2', 'uri-3']
+
+  it('saves one document per group, in order, with the numbered names', async () => {
+    const result = await saveSplitScan([[pages[0], pages[1]], [pages[2]]], 'Kwitansi', 'pro')
+
+    expect(savedCalls).toEqual([
+      { uris: ['uri-1', 'uri-2'], title: 'Kwitansi (1)' },
+      { uris: ['uri-3'], title: 'Kwitansi (2)' },
+    ])
+    expect(result.saved).toHaveLength(2)
+    expect(result.remaining).toEqual([])
+    expect(result.message).toBe('2 dokumen tersimpan.')
+  })
+
+  it('leaves the groups that failed on screen and reports them', async () => {
+    failTitles.add('Kwitansi (2)')
+
+    const result = await saveSplitScan([[pages[0]], [pages[1]], [pages[2]]], 'Kwitansi', 'pro')
+
+    expect(result.saved).toHaveLength(2)
+    // The pages of a scan that failed cannot be recovered from anywhere, so
+    // they stay put rather than being thrown away with the screen.
+    expect(result.remaining).toEqual([['uri-2']])
+    expect(result.message).toBe(
+      '2 dokumen tersimpan, 1 gagal. Halamannya masih di sini — coba simpan lagi.',
+    )
+  })
+
+  it('reports a total failure without claiming anything was saved', async () => {
+    failTitles.add('Kwitansi (1)')
+    failTitles.add('Kwitansi (2)')
+
+    const result = await saveSplitScan([[pages[0]], [pages[1]]], 'Kwitansi', 'pro')
+
+    expect(result.saved).toEqual([])
+    expect(result.remaining).toEqual([['uri-1'], ['uri-2']])
+    expect(result.message).toBe(
+      'Tidak ada dokumen yang tersimpan. Halamannya masih di sini — coba lagi.',
+    )
+  })
+
+  it('continues the numbering when a retry follows a partial save', async () => {
+    await saveSplitScan([[pages[0]]], 'Kwitansi', 'pro', 5)
+
+    expect(savedCalls[0].title).toBe('Kwitansi (6)')
+  })
+
+  it('leaves the title undefined when no name was typed', async () => {
+    await saveSplitScan([[pages[0]], [pages[1]]], '  ', 'pro')
+
+    expect(savedCalls.map((call) => call.title)).toEqual([undefined, undefined])
+  })
+
+  it('refuses Basic more than one document, before writing anything', async () => {
+    await expect(saveSplitScan([[pages[0]], [pages[1]]], 'Kwitansi', 'basic')).rejects.toThrow(
+      'akun Pro',
+    )
+    expect(savedCalls).toEqual([])
+  })
+
+  it('lets Basic save a single group — that is an ordinary save', async () => {
+    const result = await saveSplitScan([[pages[0], pages[1]]], 'Kwitansi', 'basic')
+
+    expect(result.saved).toHaveLength(1)
+    expect(savedCalls).toEqual([{ uris: ['uri-1', 'uri-2'], title: 'Kwitansi' }])
+  })
+
+  it('drops empty groups rather than saving a document with no pages', async () => {
+    const result = await saveSplitScan([[pages[0]], []], 'Kwitansi', 'basic')
+
+    expect(savedCalls).toHaveLength(1)
+    expect(result.saved).toHaveLength(1)
+  })
+
+  it('refuses when there is nothing to save at all', async () => {
+    await expect(saveSplitScan([], 'Kwitansi', 'pro')).rejects.toThrow('Tidak ada halaman')
+  })
+
+  it('reports progress from zero through to done', async () => {
+    const seen: string[] = []
+
+    await saveSplitScan([[pages[0]], [pages[1]]], 'Kwitansi', 'pro', 0, (done, total) =>
+      seen.push(`${done}/${total}`),
+    )
+
+    expect(seen).toEqual(['0/2', '1/2', '2/2'])
+  })
+})
+
+describe('summarizeSplitSave', () => {
+  it('says nothing about failures when there were none', () => {
+    expect(summarizeSplitSave(3, 0)).toBe('3 dokumen tersimpan.')
+  })
+
+  it('names both halves of a partial run', () => {
+    expect(summarizeSplitSave(1, 2)).toBe(
+      '1 dokumen tersimpan, 2 gagal. Halamannya masih di sini — coba simpan lagi.',
+    )
   })
 })

@@ -550,12 +550,14 @@ Then add a new `useEffect` right after the existing one that calls `refreshDocum
         } else {
           // Nothing in progress: same as handleStartScan -- a fresh review
           // session, so stale state from whatever came before is cleared.
+          // Calls exitSplit() itself rather than repeating its reset list,
+          // specifically so this can never drift out of sync with it again
+          // (an earlier draft of this effect hand-copied four of exitSplit's
+          // five resets and missed setSplitSaved(0) -- caught in review).
           setPendingPages(images)
+          setCurrentPage(0)
           setReviewPreview(null)
-          setSplitting(false)
-          setSplitCuts([])
-          setSplitName('')
-          setSplitProgress(null)
+          exitSplit()
         }
       }
 
@@ -570,7 +572,7 @@ Then add a new `useEffect` right after the existing one that calls `refreshDocum
   }, [])
 ```
 
-(All setters used here — `setPendingPages`, `setReviewPreview`, `setSplitting`, `setSplitCuts`, `setSplitName`, `setSplitProgress`, `setToast` — are the same ones `handleStartScan`/`handleAddPages`/`exitSplit` already use; they are React state setters, stable across renders, so the empty dependency array on the effect itself is correct: it only needs to run once, to register the listener for the component's lifetime. The branching reads `pendingPagesRef.current` — a ref, not the `pendingPages` state variable directly — specifically so this stable, mount-once callback never closes over a stale value.)
+(All setters used here — `setPendingPages`, `setCurrentPage`, `setReviewPreview`, `setToast`, plus `exitSplit()` itself — are the same functions `handleStartScan`/`handleAddPages` already use, called the same way `handleStartScan` calls them (`setPendingPages`, `setCurrentPage(0)`, `setReviewPreview(null)`, `exitSplit()`, in that order — see `App.tsx:313-323`). They are React state setters (or a function that only calls such setters), stable across renders, so the empty dependency array on the effect itself is correct: it only needs to run once, to register the listener for the component's lifetime. The branching reads `pendingPagesRef.current` — a ref, not the `pendingPages` state variable directly — specifically so this stable, mount-once callback never closes over a stale value.)
 
 - [ ] **Step 3: Typecheck**
 

@@ -677,6 +677,44 @@ Tahap kedua dari potongan **D**, dan yang terakhir di Fase 6. Desain: `docs/supe
 - [ ] Ekspor banyak dokumen ke Word: dokumen yang belum dikenali dilaporkan gagal dengan pesannya, sisanya tetap tersimpan
 - [ ] Judul & tanggal dokumen terbaca benar di properti berkas Word
 
+## Impor via Share Sheet Android — Gambar & PDF — 26 Agustus 2026
+
+Dipicu temuan Boss Ali: ScannApp tidak muncul di daftar "Bagikan ke..." saat berbagi
+dari WPS Office/CamScanner. Bukan soal Play Store — fitur penerimaan share intent
+memang belum pernah dibangun. Desain: `docs/superpowers/specs/2026-08-26-share-target-import-design.md`.
+
+- [x] **Plugin Capacitor native kecil (`SharedImportPlugin.java`), nol dependency baru.** Satu titik masuk, `handleOnNewIntent` — dikonfirmasi lewat pembacaan langsung `BridgeActivity.java` di node_modules bahwa `onCreate` sudah memutar ulang intent peluncuran lewat jalur yang sama, jadi kasus dingin dan hangat tidak perlu dua method terpisah
+- [x] **PDF pihak ketiga dirasterisasi lewat `PdfRenderer` bawaan Android**, bukan reuse `pdfImport.ts` — itu cuma jalan untuk PDF buatan ScannApp sendiri (satu JPEG mentah per halaman)
+- [x] **`retainUntilConsumed=true` bawaan Capacitor menggantikan kebutuhan method pull terpisah** — listener yang baru dipasang tetap menerima share yang tiba sebelum app selesai mount
+- [x] **Tier: semua tier, tanpa gerbang** — menerima file itu akses, bukan mesin baru (pola yang sama dengan reorder/filter/PNG/anotasi/pisah)
+- [x] **Masuk lewat `pendingPages` yang sudah ada, tanpa layar baru** — append kalau user sedang di tengah review lain, replace kalau kosong; tidak pernah menimpa kerja yang belum disimpan
+- [x] **Ditunda ke spec terpisah: `.docx` sebagai lampiran.** `LocalScanDocument` strict berbentuk `pages: ScanPage[]`, dipakai di 31 berkas — kind dokumen baru tanpa pages itu subsistem sendiri, bukan bagian kecil dari fitur ini
+- [x] **Test node: 647 → 653** (6 test baru di `sharedImport.test.ts`, Task 2; ganti angka ini kalau hasil `npm run test:node` di Step 3 ternyata beda)
+- [x] **Build native sungguhan lolos**, bukan cuma typecheck: `gradlew.bat assembleDebug` → `BUILD SUCCESSFUL`, dexing termasuk. Sempat mentok tiga lapis environment mesin dev ini (tidak ada JDK, tidak ada Android SDK, lalu modul `capacitor-android` butuh JDK 21 spesifik sementara modul lain butuh 17) sebelum ketiganya beres — dicatat sebagai infrastruktur di memory harness, bukan di sini
+- [x] **Tiga temuan review ditutup, semuanya kode yang saya (plan) tulis sendiri yang salah — bukan kesalahan implementer transkripsi:**
+  - Task 1, round 1/5: `resolver.getType(uri)` sempat di luar try/catch per-item — satu file rusak bisa menggagalkan `notifyListeners` untuk seluruh share, bukan cuma file itu; dan `handleOnNewIntent` sempat memproses semua file secara sinkron di main thread (risiko ANR untuk PDF banyak halaman) — dipindah ke `ExecutorService` satu thread
+  - Task 2: ditemukan sendiri sebelum dispatch (bukan lewat review) — `handlePromise` dari `addListener()` yang reject tanpa pernah di-unsubscribe (kasus normal `App.tsx`) akan jadi unhandled rejection; `.catch()` dipasang segera saat promise dibuat, bukan cuma di closure unsubscribe
+  - Task 3, round 1/5: cabang fresh-start efek share menyalin ulang 4 dari 5 reset milik `exitSplit()` dan lupa `setSplitSaved(0)` — lewat `handleRemovePage` yang mengosongkan `pendingPages` tanpa memanggil `exitSplit()`, nomor dokumen hasil pisah berikutnya bisa mulai dari angka sisa yang salah. Diperbaiki dengan memanggil `exitSplit()` langsung alih-alih menyalin daftar reset-nya
+- [x] **Task 4 (code-review + security-review): empat temuan lagi ditutup di `SharedImportPlugin.java`/`sharedImport.ts`, semuanya nyata setelah diverifikasi ke kode Capacitor di `node_modules`, bukan diterapkan mentah dari laporan skill:**
+  - `notifyListeners()` dipanggil langsung dari `importExecutor` (thread sendiri) sementara `addListener()` dari JS jalan di thread `taskHandler` milik Bridge ("CapacitorPlugins") — keduanya menulis ke `HashMap` yang sama di `Plugin` tanpa sinkronisasi, race persis di jalur cold-launch yang jadi alasan fitur ini ada. Diperbaiki dengan `execute(() -> notifyListeners(...))`, method bawaan `Plugin` yang mem-post balik ke thread `taskHandler` yang sama
+  - `catch (Exception e)` di loop per-file tidak menangkap `OutOfMemoryError` (dia `Error`, bukan `Exception`) — bitmap `ARGB_8888` penuh per halaman PDF bisa melempar itu di HP yang sudah tertekan memori, dan sebelumnya itu akan lolos dari loop lalu membatalkan `notifyListeners` untuk seluruh share. Diperbaiki jadi `catch (Exception | OutOfMemoryError e)`
+  - Closure unsubscribe di `sharedImport.ts` (`handlePromise.then((handle) => handle.remove())`) bikin promise baru yang terpisah dari `handlePromise` — `.catch()` yang sudah dipasang di Task 2 cuma menandai `handlePromise` sendiri sebagai "ditangani", bukan promise turunan dari `.then()` ini. Kalau `handlePromise` reject dan unsubscribe sempat dipanggil (mis. React StrictMode double-mount di dev), ini jadi unhandled rejection kedua — bug yang sama persis, tempat baru. Ditutup dengan `.catch(() => {})` tambahan di ujung chain
+  - `copyImageToCache` tidak membersihkan berkas JPEG setengah-tertulis kalau `fos.write` gagal di tengah jalan (mis. disk penuh) — file rusak itu tertinggal permanen di `cache/shared-import/`. Ditutup dengan `out.delete()` di catch block sebelum melempar ulang exception-nya
+  - Tiga temuan lain dari `/code-review` **tidak** diterapkan, dengan alasan (bukan diam-diam diabaikan): (1) PDF >50 halaman dipotong tanpa menambah `skippedCount` — sudah keputusan desain eksplisit di spec §9 tabel ("Dipotong di 50, tanpa gagal total"), bukan bug; (2) share masuk saat `status==='signed-out'` bisa hilang kalau proses Android direklaim — risiko arsitektur lama yang berlaku ke semua `pendingPages` in-memory di app ini, bukan regresi baru dari fitur ini; (3) App Open ad bisa muncul saat kembali dari share masuk — laporan itu salah kaitkan ke pengecualian "share sheet" di `appOpenGate.ts`, yang ternyata (diverifikasi ke `exportShare.ts`) soal share **keluar** ScannApp sendiri yang memicu `leaveForOwnFlow()`, bukan share **masuk** dari app lain; ScannApp tidak pernah memulai excursion itu jadi memang seharusnya kena App Open ad seperti resume biasa
+  - `/security-review` (fokus khusus path traversal nama berkas per brief task): dikonfirmasi **bukan** celah — nama berkas keluaran (`shared-<nanoTime>[-index].jpg`) murni dari `System.nanoTime()` dan index loop milik kode sendiri, tidak pernah disentuh data dari URI yang dibagikan. Nol temuan HIGH/MEDIUM lain di diff fitur ini
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali — disalin dari spec §9):
+
+- [ ] Share 1 foto dari galeri/app lain ke ScannApp saat app tertutup → app terbuka, langsung di layar review dengan foto itu
+- [ ] Share 1 foto saat ScannApp sedang di foreground (bukan di tengah review) → langsung ke review
+- [ ] Share saat sedang di tengah review scan lain yang belum disimpan → foto baru ditambahkan, bukan menimpa halaman yang sudah ada
+- [ ] Share beberapa foto sekaligus (pilih multi di galeri → share) → semua masuk sebagai halaman, urutannya sesuai
+- [ ] Share PDF dari WPS Office → tiap halaman PDF jadi halaman terpisah di review, kualitas gambar terbaca jelas
+- [ ] Share PDF hasil CamScanner → sama, dan pastikan bukan cuma halaman pertama yang muncul
+- [ ] Share file docx dari WPS Office → tidak muncul di daftar app (mime type tidak didaftarkan di manifest sesi ini) — perilaku yang diharapkan, bukan bug
+- [ ] Share PDF terenkripsi/rusak sengaja → toast error, app tidak crash
+- [ ] Ukuran APK & waktu build setelah plugin Java baru — tidak ada regresi mencolok
+
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 
 - [ ] Riset & pilih model TFLite untuk image enhancement (cahaya/kontras/noise/ketajaman)

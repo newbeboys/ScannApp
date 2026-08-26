@@ -717,6 +717,79 @@ memang belum pernah dibangun. Desain: `docs/superpowers/specs/2026-08-26-share-t
 - [ ] Share PDF terenkripsi/rusak sengaja → toast error, app tidak crash
 - [ ] Ukuran APK & waktu build setelah plugin Java baru — tidak ada regresi mencolok
 
+## Tujuan Ekspor: Bagikan vs Simpan ke HP — 27 Agustus 2026
+
+Menutup **tiga sisa temuan uji device 26 Agustus** yang sengaja ditunda menunggu pesan
+error asli dari HP (lihat pesan commit `467361a`), plus satu bug baru yang Boss Ali
+temukan saat menguji ulang. Ketiga temuan lama ternyata **dua akar penyebab**, bukan tiga.
+
+**Akar penyebab 1 — scoped storage menolak menimpa berkas yang bukan milik install ini.**
+Ekspor menulis lewat path mentah ke `/storage/emulated/0/Documents`
+(`Environment.getExternalStoragePublicDirectory`). Sejak Android 11 aplikasi boleh
+**membuat** berkas di folder Documents bersama tapi hanya boleh **membuka ulang** yang
+masih miliknya, dan kepemilikan itu tidak selamat dari pemasangan ulang aplikasi — jadi
+dokumen yang diekspor build kemarin, bagi build hari ini, adalah berkas aplikasi lain.
+Pola tes Boss Ali sendiri yang membuktikannya: nama sama → gagal tiap kali, nama diganti
+→ berhasil, batch 3 dokumen → yang gagal cuma yang namanya sudah ada di folder itu.
+Temuan lama "batch multi-dokumen tidak terkirim" **sebab yang sama**: ketiganya gagal
+ditulis → `uris` kosong → `shareFiles` langsung `return`, share sheet tidak pernah
+terbuka dan tidak ada apa pun di layar yang menjelaskannya.
+
+**Akar penyebab 2 — "batal" tidak berarti batal.** `deliverExport()` menulis ke folder
+publik **dulu**, baru membuka share sheet, dengan komentar yang menyatakannya sebagai
+fitur: "kalau sheet ditutup, berkasnya tetap ada". Boss Ali menutup share sheet dan
+menemukan berkasnya sudah mendarat di file manager.
+
+**Keputusan Boss Ali 27 Agustus 2026: pisahkan tujuannya, jangan lakukan dua-duanya.**
+Lembar Ekspor dapat sakelar **Tujuan** di atas daftar format, sejajar kontrol Mutu yang
+sudah ada — pilihannya harus sudah dibuat sebelum format diketuk, karena mengetuk format
+langsung mengekspor. Bawaannya **Bagikan**, dan pilihannya diingat (`localStorage`,
+divalidasi terhadap daftar seperti level kompresi).
+
+- [x] **Bagikan: berkas ditulis ke cache privat aplikasi (`cache/exports/`), bukan ke folder publik.** Tidak butuh izin, scoped storage tidak ikut campur, dan `file_paths.xml` sudah mengekspos `cache-path` ke FileProvider yang dipakai plugin Share. Batal → folder staging dihapus, nol jejak di HP
+- [x] **Benarnya tidak bergantung pada deteksi "cancel".** Ini yang membuat rancangan ini dipilih dan bukan "tulis dulu, hapus kalau batal": sebagian OEM menghentikan Activity kita saat share sheet tampil, dan plugin Share lalu melapor sukses walau user membatalkan. Di rancangan ini kegagalan mendeteksi batal cuma membuat satu toast keliru — bukan berkas nyasar di HP
+- [x] **Simpan ke HP: tidak pernah membuka share sheet sama sekali**, dan **tidak pernah menimpa** berkas yang sudah ada di folder Documents — nama dinaikkan jadi `Dok agent (2).pdf`. Dua masalah dijawab satu perbaikan: EACCES hilang, dan ekspor kedua tidak lagi menghancurkan yang pertama
+- [x] **Ada percobaan ulang setelah tulis ditolak, bukan cuma cek `stat` di depan.** `stat` tidak selalu bisa melihat berkas yang bukan milik install ini, jadi nama yang ia laporkan kosong masih bisa ditolak `writeFile` sesudahnya. Dibatasi 3 percobaan supaya disk penuh tidak berubah jadi 99 penulisan sia-sia, dan error terakhir tetap sampai ke user apa adanya
+- [x] **Toast membaca nama dari yang benar-benar ditulis**, bukan dari yang diminta — menyebut `Nota.pdf` padahal yang mendarat `Nota (2).pdf` akan menyuruh user mencari berkas yang tidak ada
+- [x] **Share sheet yang gagal beneran dibedakan dari yang ditutup user.** Plugin menolak dengan string `"Share canceled"` saat ditutup; apa pun selain itu dilempar ulang. Menyamarkan kegagalan nyata jadi "user membatalkan" persis cara sebuah sebab hilang sebelum ada yang bisa menindaklanjutinya
+- [x] **Batch menyimpan catatannya saat share sheet gagal beneran** (temuan code-review): jalur batch sudah membangun apa yang bisa dibangun dan tahu dokumen mana yang hilang di jalan; melempar exception dari situ membuang semuanya dan menyisakan satu kalimat soal sheet. Jalur satu-dokumen tetap melempar — di sana tidak ada catatan yang perlu diselamatkan, jadi sebab aslinya memang seluruh ceritanya
+- [x] **Staging dihapus sekali per run, bukan per dokumen.** Menghapus di antara dokumen akan membuang dokumen yang sudah antre untuk satu share sheet di akhir — batch akan menyerahkan berkas terakhirnya dan kehilangan sisanya
+- [x] **Tier: tidak tersentuh.** Satu-satunya tempat tier masih menyentuh jalur ekspor tetap `shouldWatermark()`
+
+**DOCX kosong — paketnya kurang lengkap, penulisnya tidak rusak.** Diverifikasi dengan
+**Microsoft Word 16.0 sungguhan lewat COM** di mesin dev: berkas dari kode lama terbuka
+benar (6 paragraf, 2 halaman, escaping utuh), jadi masalahnya bukan XML-nya. Yang kurang
+adalah **default yang paketnya serahkan ke pembaca**: tanpa `word/styles.xml` tidak ada
+`docDefaults`, dan run tanpa `rPr` mewarisi dari sana — pembaca yang menyelesaikan
+ukuran font yang hilang jadi nol membuka berkas dengan sempurna dan tidak menampilkan
+apa pun. Tanpa `sectPr` tidak ada geometri halaman sama sekali.
+
+- [x] **Tiga part/elemen ditambahkan**: `word/styles.xml` (docDefaults: Calibri 11pt + jarak paragraf, plus style `Normal`), `word/_rels/document.xml.rels` (satu relasi, ke stylesheet), dan `<w:sectPr>` A4 2,54 cm yang menutup body. `[Content_Types].xml` ikut menyebut stylesheet-nya
+- [x] **Diverifikasi lagi di Word setelah perbaikan**: ukuran kertas **595,3 × 841,9 poin** (A4 — sebelumnya Word jatuh ke Letter 612), font bawaan **Calibri 11pt** kini datang dari stylesheet kita, teks & jumlah halaman tetap benar
+- [x] **Tetap belum terbukti di WPS Android** — itu pembaca yang sebenarnya bermasalah dan tidak ada di mesin dev. Yang bisa dinyatakan jujur: ketiga sebab yang diketahui bisa membuat pembaca yang taat menampilkan halaman kosong sudah tidak ada lagi. Masuk daftar uji device
+
+**Satu temuan dari probe keamanan sendiri** (bukan celah — judul dokumen berasal dari
+user yang sama, tidak ada batas hak akses yang dilewati):
+
+- [x] **`toSafeFilename` meloloskan karakter kontrol, NUL termasuk.** Pass `\s+` sudah menelan newline/tab/CR, tapi sisa C0 lolos dan akan diserahkan langsung ke `open()`, di mana nama berkas itu C string dan segalanya setelah NUL berhenti ada. Ditutup satu baris, dengan test yang juga menahan `../`, `..`, dan backslash tidak pernah bisa keluar dari foldernya
+
+**Test 775 → 825**, semuanya lulus (`npm test`), tsc & oxlint bersih. **Sebelas mutasi
+dijalankan** untuk membuktikan test-nya menggigit: cek nama-sudah-dipakai dilepas → merah;
+percobaan ulang dilepas → merah; staging tidak dihapus saat batal → merah; jalur Bagikan
+diarahkan ke folder publik → merah; `isDismissal` dibuat selalu benar → merah; staging
+dihapus per dokumen → merah; `<w:sz>` dihapus → merah; `sectPr` dihapus → merah;
+`document.xml.rels` dihapus → merah; pembuang karakter kontrol dilepas → merah; batch
+dibuat melempar ulang kegagalan share → merah. Semua dikembalikan.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Ekspor PDF dengan **Bagikan**, lalu **tutup share sheet** → toast "Ekspor dibatalkan", dan **tidak ada berkas baru** di file manager
+- [ ] Ekspor dokumen yang **namanya sudah pernah diekspor**, tujuan **Simpan ke HP** → berhasil, toast menyebut `(2)`, berkas lama tetap utuh
+- [ ] Ekspor 3 dokumen sekaligus dengan **Simpan ke HP** → ketiganya mendarat, tidak ada share sheet
+- [ ] Ekspor 3 dokumen dengan **Bagikan** → satu share sheet di akhir berisi ketiganya
+- [ ] Pilihan Tujuan masih sama setelah aplikasi ditutup dan dibuka lagi
+- [ ] **DOCX dibuka di WPS Office di HP** → teksnya terlihat, kertasnya A4
+
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 
 - [ ] Riset & pilih model TFLite untuk image enhancement (cahaya/kontras/noise/ketajaman)

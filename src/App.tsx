@@ -33,8 +33,14 @@ import {
 import { summarizeSelection, toggleSelectAll, toggleSelection } from './lib/documentSelection'
 import { splitDocument } from './lib/documentSplit'
 import { estimateExportSizes, type ExportSizeEstimate } from './lib/exportEstimate'
-import { readExportLevel, writeExportLevel } from './lib/exportPreference'
+import {
+  readExportDestination,
+  readExportLevel,
+  writeExportDestination,
+  writeExportLevel,
+} from './lib/exportPreference'
 import type { CompressionLevel } from './lib/exportLimits'
+import type { ExportDestination } from './lib/exportShare'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
 import { onSharedFilesReceived } from './lib/sharedImport'
@@ -136,6 +142,9 @@ function App() {
   const [exportTarget, setExportTarget] = useState<string | null>(null)
   // Read once at mount: what the user chose on a previous export.
   const [exportLevel, setExportLevel] = useState<CompressionLevel>(() => readExportLevel())
+  const [exportDestination, setExportDestination] = useState<ExportDestination>(() =>
+    readExportDestination(),
+  )
   const [exportEstimate, setExportEstimate] = useState<ExportSizeEstimate | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null)
@@ -475,7 +484,12 @@ function App() {
     if (!doc) return
     setIsExporting(true)
     try {
-      const result = await exportDocument(doc, format, tier, exportLevel)
+      const result = await exportDocument(doc, format, tier, {
+        level: exportLevel,
+        destination: exportDestination,
+      })
+      // Closed either way: dismissing the share sheet is the user saying they
+      // are done, so leaving this one up behind it asks the question twice.
       setExportTarget(null)
       setToast(result.message)
       // No ad here any more. Exporting stopped being a trigger when Boss Ali
@@ -597,13 +611,16 @@ function App() {
       const result = await exportDocumentsBatch(chosen, tier, {
         level: exportLevel,
         format,
+        destination: exportDestination,
         onProgress: setBatchProgress,
         signal: controller.signal,
       })
       setToast(result.message)
-      // The selection survives a partial failure or a stop, so the rest can be
-      // retried without re-ticking everything from scratch.
-      if (result.failed.length === 0 && !result.cancelled) exitSelect()
+      // The selection survives a partial failure, a stop, or a dismissed share
+      // sheet, so the rest can be retried without re-ticking everything from
+      // scratch. A dismissed sheet delivered nothing at all, which is the case
+      // most likely to be retried immediately.
+      if (result.failed.length === 0 && !result.cancelled && !result.dismissed) exitSelect()
       setBatchOpen(false)
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Gagal mengekspor dokumen.')
@@ -865,11 +882,16 @@ function App() {
       tier={tier}
       isBusy={isExporting}
       level={exportLevel}
+      destination={exportDestination}
       estimate={exportEstimate}
       hasText={canExportDocx(exportDoc)}
       onLevelChange={(next) => {
         setExportLevel(next)
         writeExportLevel(next)
+      }}
+      onDestinationChange={(next) => {
+        setExportDestination(next)
+        writeExportDestination(next)
       }}
       onExport={handleExport}
       onRecognizeText={() => {
@@ -889,11 +911,16 @@ function App() {
       count={batchSelection.count}
       pageCount={batchSelection.pageCount}
       level={exportLevel}
+      destination={exportDestination}
       progress={batchProgress}
       isBusy={isBatchBusy}
       onLevelChange={(next) => {
         setExportLevel(next)
         writeExportLevel(next)
+      }}
+      onDestinationChange={(next) => {
+        setExportDestination(next)
+        writeExportDestination(next)
       }}
       onExport={handleBatchExport}
       onStop={() => batchAbort.current?.abort()}

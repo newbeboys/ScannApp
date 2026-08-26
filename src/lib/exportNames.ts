@@ -6,9 +6,20 @@
  * the Filesystem and Share plugins along with it.
  */
 
-/** Strips characters Android/Windows reject in filenames. */
+/**
+ * Strips characters Android/Windows reject in filenames.
+ *
+ * The control characters go with them. Newline, tab and carriage return were
+ * already collapsed by the whitespace pass below, but the rest of C0 — a NUL
+ * above all — survived it and would have been handed straight to `open()`,
+ * where a name is a C string and everything after the NUL simply stops
+ * existing. No title in this app can hold one today; the point is that the
+ * name this function returns is safe to write without the caller checking.
+ */
 export function toSafeFilename(title: string): string {
   const cleaned = title
+    // eslint-disable-next-line no-control-regex -- the point of the line
+    .replace(/[\u0000-\u001f\u007f-\u009f]+/g, '')
     .replace(/[\\/:*?"<>|]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -48,6 +59,21 @@ export function uniqueExportNames(names: string[]): string[] {
     taken.add(candidate.toLowerCase())
     return candidate
   })
+}
+
+/**
+ * The names to try for one file, in order, when the first one is unavailable.
+ *
+ * Lives here rather than in `exportShare` for the same reason the rest of this
+ * file does: it is string arithmetic, and the one caller that needs it sits in
+ * the module that cannot be tested without the Filesystem plugin.
+ *
+ * Bounded at 99. A folder already holding ninety-nine files of one name is a
+ * situation to report, not one to keep grinding through a `stat` at a time.
+ */
+export function* exportNameCandidates(name: string): Generator<string> {
+  yield name
+  for (let counter = 2; counter <= 99; counter++) yield withSuffix(name, counter)
 }
 
 /** Inserts " (n)" before the extension, so the file still opens as its type. */

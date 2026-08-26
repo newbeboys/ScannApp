@@ -1,7 +1,9 @@
 import { CompressionField } from './CompressionField'
+import { DestinationField } from './DestinationField'
 import { CloseIcon, ImageIcon, ImageStackIcon, PdfIcon, TextIcon } from './Icons'
 import type { ExportFormat } from '../lib/documentExport'
 import type { ExportSizeEstimate } from '../lib/exportEstimate'
+import type { ExportDestination } from '../lib/exportShare'
 import type { Tier } from '../lib/tier'
 import { shouldWatermark, type CompressionLevel } from '../lib/exportLimits'
 import { formatBytes } from '../lib/formatBytes'
@@ -12,11 +14,13 @@ interface ExportSheetProps {
   tier: Tier
   isBusy: boolean
   level: CompressionLevel
+  destination: ExportDestination
   /** Null while the sizes are still being measured, or if measuring failed. */
   estimate: ExportSizeEstimate | null
   /** Whether any page has been through the recogniser — the one thing Word needs. */
   hasText: boolean
   onLevelChange: (level: CompressionLevel) => void
+  onDestinationChange: (destination: ExportDestination) => void
   onExport: (format: ExportFormat) => void
   /** Takes the user to the recogniser when Word has nothing to export yet. */
   onRecognizeText: () => void
@@ -28,9 +32,11 @@ export function ExportSheet({
   tier,
   isBusy,
   level,
+  destination,
   estimate,
   hasText,
   onLevelChange,
+  onDestinationChange,
   onExport,
   onRecognizeText,
   onClose,
@@ -67,9 +73,18 @@ export function ExportSheet({
         </div>
 
         {/*
-          Quality sits above the formats because tapping a format exports
-          immediately — by then the choice has to already be made.
+          Destination and quality both sit above the formats because tapping a
+          format exports immediately — by then every choice has to already be
+          made. Destination goes first of the two: it decides whether the file
+          is being handed to another app or written to the phone, which is a
+          bigger question than how heavily it is compressed.
         */}
+        <DestinationField
+          destination={destination}
+          isBusy={isBusy}
+          onDestinationChange={onDestinationChange}
+        />
+
         <CompressionField level={level} isBusy={isBusy} onLevelChange={onLevelChange} />
 
         <button

@@ -26,15 +26,50 @@ function partNamed(pages: (PageText | null)[], name: string): string {
 const documentXml = (pages: (PageText | null)[]) => partNamed(pages, 'word/document.xml')
 
 describe('docxParts', () => {
-  it('packs the four parts an OPC reader needs to open the file', () => {
+  it('packs the six parts a reader needs to open and lay out the file', () => {
     const names = docxParts([page('Halo')], OPTIONS).map((entry) => entry.name)
 
     expect(names).toEqual([
       '[Content_Types].xml',
       '_rels/.rels',
+      'word/_rels/document.xml.rels',
       'docProps/core.xml',
       'word/document.xml',
+      'word/styles.xml',
     ])
+  })
+
+  /**
+   * The stylesheet and the section below are not decoration; they are the two
+   * defaults a package can decline to state and leave every reader to invent.
+   * A reader that resolves the missing font size to zero opens the file
+   * perfectly and shows a blank page — which is what Boss Ali saw on the phone
+   * on 26 Agustus 2026 while the same file opened correctly in Word on the
+   * desktop.
+   */
+  it('states a default font size rather than leaving it to the reader', () => {
+    const styles = partNamed([page('Halo')], 'word/styles.xml')
+
+    expect(styles).toContain('<w:docDefaults>')
+    // Half-points, so this has to be a real number and not a zero.
+    expect(styles).toMatch(/<w:sz w:val="[1-9][0-9]*"\/>/)
+  })
+
+  it('reaches the stylesheet from the document that uses it', () => {
+    const rels = partNamed([page('Halo')], 'word/_rels/document.xml.rels')
+    const types = partNamed([page('Halo')], '[Content_Types].xml')
+
+    expect(rels).toContain('Target="styles.xml"')
+    expect(types).toContain('PartName="/word/styles.xml"')
+  })
+
+  /** A body with no section has no page geometry for a reader to lay text on. */
+  it('closes the body with A4 page geometry', () => {
+    const xml = documentXml([page('Halo')])
+
+    expect(xml).toContain('<w:pgSz w:w="11906" w:h="16838"/>')
+    // Last thing in the body, where WordprocessingML requires it.
+    expect(xml).toContain('</w:sectPr></w:body>')
   })
 
   it('writes one paragraph per recognised block', () => {

@@ -1,18 +1,22 @@
 import { useState } from 'react'
 import { CloseIcon, ExportIcon } from './Icons'
 import { CompressionField } from './CompressionField'
+import { DestinationField } from './DestinationField'
 import type { BatchFormat, BatchProgress } from '../lib/documentExport'
 import type { CompressionLevel } from '../lib/exportLimits'
+import type { ExportDestination } from '../lib/exportShare'
 import { useScrollLock } from '../lib/useScrollLock'
 
 interface BatchExportSheetProps {
   count: number
   pageCount: number
   level: CompressionLevel
+  destination: ExportDestination
   /** Null until the run starts, and again once it ends. */
   progress: BatchProgress | null
   isBusy: boolean
   onLevelChange: (level: CompressionLevel) => void
+  onDestinationChange: (destination: ExportDestination) => void
   onExport: (format: BatchFormat) => void
   onStop: () => void
   onClose: () => void
@@ -36,9 +40,11 @@ export function BatchExportSheet({
   count,
   pageCount,
   level,
+  destination,
   progress,
   isBusy,
   onLevelChange,
+  onDestinationChange,
   onExport,
   onStop,
   onClose,
@@ -75,23 +81,33 @@ export function BatchExportSheet({
           </button>
         </div>
 
-        <div className="format-switch" role="radiogroup" aria-label="Format ekspor">
-          {FORMATS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              role="radio"
-              aria-checked={format === option.id}
-              className={`format-switch__option${
-                format === option.id ? ' format-switch__option--active' : ''
-              }`}
-              disabled={isBusy}
-              onClick={() => setFormat(option.id)}
-            >
-              {option.label}
-            </button>
-          ))}
+        <div className="sheet-field">
+          <strong className="sheet-field__label">Format</strong>
+
+          <div className="format-switch" role="radiogroup" aria-label="Format ekspor">
+            {FORMATS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={format === option.id}
+                className={`format-switch__option${
+                  format === option.id ? ' format-switch__option--active' : ''
+                }`}
+                disabled={isBusy}
+                onClick={() => setFormat(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
+
+        <DestinationField
+          destination={destination}
+          isBusy={isBusy}
+          onDestinationChange={onDestinationChange}
+        />
 
         {/*
           Hidden for Word, unlike the single-document sheet: there are no images
@@ -106,7 +122,10 @@ export function BatchExportSheet({
         <p className="batch-note">
           {isWord
             ? 'Setiap dokumen jadi satu berkas Word berisi teksnya. Dokumen yang belum dikenali teksnya akan dilewati.'
-            : 'Setiap dokumen jadi satu berkas PDF di folder Documents.'}
+            : 'Setiap dokumen jadi satu berkas PDF.'}
+          {destination === 'share'
+            ? ' Semuanya dikirim sekaligus lewat satu layar berbagi di akhir.'
+            : ''}
         </p>
 
         {progress ? (

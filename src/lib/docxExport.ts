@@ -11,9 +11,15 @@ import { buildZip, type ZipEntry } from './zipWriter'
  * contents that can drift apart.
  *
  * The container is written by hand — see `zipWriter` for why there is no zip
- * dependency. What is produced here is the smallest package Word will open:
- * the content types, the package relationships, the body, and the core
- * properties that carry the title and the scan date.
+ * dependency. Six parts: the content types, the package relationships, the
+ * document's own relationships, the body, the stylesheet that gives every run
+ * a font and a size, and the core properties that carry the title and the scan
+ * date.
+ *
+ * The stylesheet and the section properties were added on 26 Agustus 2026 and
+ * are not cosmetic — see the comments on each. Both supply a default that a
+ * reader is otherwise left to invent, and a reader that invents zero opens the
+ * file to a blank page.
  */
 
 export interface DocxOptions {
@@ -54,6 +60,7 @@ const contentTypes = `${XML_DECLARATION}
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 <Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
 </Types>`
 
@@ -72,6 +79,50 @@ function coreProperties(options: DocxOptions): string {
 <dcterms:modified xsi:type="dcterms:W3CDTF">${created}</dcterms:modified>
 </cp:coreProperties>`
 }
+
+/**
+ * The relationships of `word/document.xml` itself, as opposed to the package's.
+ *
+ * It carries exactly one, to the stylesheet. A part with no relationships may
+ * legally have no `.rels` part at all, which is what this package used to do —
+ * but the stylesheet has to be reachable from the document that uses it, and
+ * this is the only place a reader looks for it.
+ */
+const documentRels = `${XML_DECLARATION}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`
+
+/**
+ * The document defaults: a font, a size, and a default paragraph style.
+ *
+ * Nothing here is decoration. A WordprocessingML run with no `rPr` inherits
+ * from `docDefaults`, and a package that ships none leaves every reader to
+ * invent its own — Word supplies sensible values, but a reader that resolves
+ * the missing size to zero renders a document that opens perfectly and shows
+ * nothing at all, which is what Boss Ali saw on the phone on 26 Agustus 2026
+ * while the same file opened correctly in Word on the desktop.
+ *
+ * Half-points, so `w:sz 22` is 11pt. Calibri is named with a fallback chain
+ * no wider than it needs to be: the font is not embedded, and every reader
+ * substitutes something when it is absent.
+ */
+const styles = `${XML_DECLARATION}
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:docDefaults>
+<w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault>
+<w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault>
+</w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
+</w:styles>`
+
+/**
+ * A4 with 2,54 cm margins, in twips — the paper this app's users actually
+ * print on, rather than the US Letter a reader defaults to when a document
+ * declines to say. A body with no `sectPr` has no page geometry at all, and a
+ * reader that takes that literally has nowhere to lay the text out.
+ */
+const SECTION = '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>'
 
 /**
  * One paragraph per recognised block, its lines joined by a space.
@@ -111,7 +162,7 @@ function documentBody(pages: readonly (PageText | null)[]): string {
 
   return `${XML_DECLARATION}
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:body>${body}</w:body>
+<w:body>${body}${SECTION}</w:body>
 </w:document>`
 }
 
@@ -134,8 +185,10 @@ export function docxParts(
   return [
     { name: '[Content_Types].xml', data: utf8(contentTypes) },
     { name: '_rels/.rels', data: utf8(packageRels) },
+    { name: 'word/_rels/document.xml.rels', data: utf8(documentRels) },
     { name: 'docProps/core.xml', data: utf8(coreProperties(options)) },
     { name: 'word/document.xml', data: utf8(documentBody(pages)) },
+    { name: 'word/styles.xml', data: utf8(styles) },
   ]
 }
 

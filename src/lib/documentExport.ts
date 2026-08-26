@@ -12,10 +12,13 @@ import {
 import { compressImage } from './imageEditor'
 import { toSafeFilename, uniqueExportNames } from './exportNames'
 import {
+  CANCELLED_MESSAGE,
   deliverExport,
+  prepareStaging,
   shareFiles,
   writeExportFiles,
   type DeliveryResult,
+  type ExportDestination,
   type ExportFile,
 } from './exportShare'
 import type { PageText } from './ocrLayout'
@@ -55,6 +58,8 @@ export interface BatchExportOptions {
   level?: CompressionLevel
   /** Word instead of PDF. The compression level has nothing to compress there. */
   format?: BatchFormat
+  /** Share sheet, or straight into the public Documents folder. */
+  destination?: ExportDestination
   onProgress?: (progress: BatchProgress) => void
   signal?: AbortSignal
 }
@@ -62,10 +67,25 @@ export interface BatchExportOptions {
 export interface BatchExportResult {
   /** How many were asked for — not the same as saved + failed once stopped. */
   total: number
-  /** Filenames actually written, in order. */
+  /**
+   * Filenames actually written, in order.
+   *
+   * What landed, not what was planned: saving to Documents renames around a
+   * name the folder already holds, so these can differ from the names the run
+   * set out with.
+   */
   saved: string[]
   failed: { title: string; message: string }[]
+  /** The user stopped the run partway through. */
   cancelled: boolean
+  /** The user dismissed the share sheet at the end, so nothing was delivered. */
+  dismissed: boolean
+  /**
+   * Why the share sheet failed to open, when it failed rather than being
+   * dismissed. Null on every other path, including a successful share.
+   */
+  shareError: string | null
+  destination: ExportDestination
   /** Ready-to-toast Indonesian summary. */
   message: string
 }
@@ -79,12 +99,33 @@ export interface BatchExportResult {
 export function summarizeBatchExport(result: Omit<BatchExportResult, 'message'>): string {
   const saved = result.saved.length
   const failed = result.failed.length
+  const landed = result.destination === 'device' ? 'tersimpan di folder Documents' : 'dikirim'
+
+  // Dismissing the sheet undoes the delivery of the whole run whatever else
+  // happened on the way — the staged copies go with it and nothing reaches the
+  // phone — so it is said first. The documents that never got as far as the
+  // sheet still have a cause worth naming.
+  // A share that broke is not a share that was declined, and it arrives with
+  // a run's worth of accounting attached. Reported before the dismissal branch
+  // because the two are mutually exclusive and this one carries a cause.
+  if (result.shareError) {
+    const base = `${saved} dokumen dibuat, tapi gagal dikirim: ${result.shareError}`
+    return failed === 0
+      ? base
+      : `${base} ${failed} gagal dibuat: ${describeFailures(result.failed)}`
+  }
+
+  if (result.dismissed) {
+    return failed === 0
+      ? CANCELLED_MESSAGE
+      : `${CANCELLED_MESSAGE} ${failed} gagal dibuat: ${describeFailures(result.failed)}`
+  }
 
   if (result.cancelled) {
     const stopped =
       saved === 0
-        ? 'Dihentikan sebelum ada dokumen yang tersimpan.'
-        : `Dihentikan — ${saved} dari ${result.total} dokumen tersimpan.`
+        ? 'Dihentikan sebelum ada dokumen yang selesai.'
+        : `Dihentikan — ${saved} dari ${result.total} dokumen ${landed}.`
 
     // Stopping and failing are not alternatives: a run can hit an unwritable
     // document and *then* be stopped. Reporting only the stop would drop the
@@ -99,10 +140,10 @@ export function summarizeBatchExport(result: Omit<BatchExportResult, 'message'>)
   }
 
   if (failed > 0) {
-    return `${saved} dokumen diekspor, ${failed} gagal: ${describeFailures(result.failed)}`
+    return `${saved} dokumen ${landed}, ${failed} gagal: ${describeFailures(result.failed)}`
   }
 
-  return `${saved} dokumen diekspor ke folder Documents.`
+  return `${saved} dokumen ${landed}.`
 }
 
 /**
@@ -269,22 +310,36 @@ async function exportImages(
 /**
  * Nothing here is gated by tier any more except the watermark.
  *
+ * `destination` decides whether the files are shared out of the private cache
+ * or saved into the public Documents folder — never both, so a dismissed share
+ * sheet leaves nothing behind (Boss Ali, 26 Agustus 2026).
+ *
  * The formats went first (PNG, 23 Agustus 2026), then the quality level
  * (25 Agustus 2026). `tier` survives as a parameter because `shouldWatermark`
  * still reads it — a clean export is what Pro buys on this screen.
  */
+export interface ExportOptions {
+  level?: CompressionLevel
+  /** Share sheet, or straight into the public Documents folder. */
+  destination?: ExportDestination
+}
+
 export async function exportDocument(
   doc: LocalScanDocument,
   format: ExportFormat,
   tier: Tier,
-  level: CompressionLevel = DEFAULT_COMPRESSION_LEVEL,
+  options: ExportOptions = {},
 ): Promise<DeliveryResult> {
-  if (format === 'docx') return deliverExport(await exportDocx(doc))
+  const { level = DEFAULT_COMPRESSION_LEVEL, destination = 'share' } = options
 
-  const options = COMPRESSION_PRESETS[resolveCompressionLevel(level)]
+  if (format === 'docx') return deliverExport(await exportDocx(doc), destination)
+
+  const compress = COMPRESSION_PRESETS[resolveCompressionLevel(level)]
   const files =
-    format === 'pdf' ? await exportPdf(doc, tier, options) : await exportImages(doc, options, format)
-  return deliverExport(files)
+    format === 'pdf'
+      ? await exportPdf(doc, tier, compress)
+      : await exportImages(doc, compress, format)
+  return deliverExport(files, destination)
 }
 
 /**
@@ -301,7 +356,9 @@ export async function exportDocument(
  * — a 20-page document peaks around 16 MB, so five of them together is the
  * kind of allocation that made the editor stutter on a real phone.
  *
- * The share sheet opens once, at the end, with whatever actually landed.
+ * When the destination is the share sheet it opens once, at the end, with
+ * whatever actually landed; when it is the phone there is no sheet at all and
+ * the files simply appear in Documents.
  */
 export async function exportDocumentsBatch(
   docs: LocalScanDocument[],
@@ -312,12 +369,22 @@ export async function exportDocumentsBatch(
     throw new Error('Tidak ada dokumen untuk diekspor.')
   }
 
-  const { level = DEFAULT_COMPRESSION_LEVEL, format = 'pdf', onProgress, signal } = batch
+  const {
+    level = DEFAULT_COMPRESSION_LEVEL,
+    format = 'pdf',
+    destination = 'share',
+    onProgress,
+    signal,
+  } = batch
   const options = COMPRESSION_PRESETS[resolveCompressionLevel(level)]
   // Decided up front, because only this function can see the whole batch:
   // the per-document builders name one at a time and cannot know that another
   // document in the same run reduces to the same filename.
   const names = uniqueExportNames(docs.map((doc) => `${toSafeFilename(doc.title)}.${format}`))
+
+  // One wipe for the whole run. Staging per document would delete the ones
+  // already queued for the single share sheet at the end.
+  if (destination === 'share') await prepareStaging()
 
   const saved: string[] = []
   const failed: { title: string; message: string }[] = []
@@ -342,8 +409,16 @@ export async function exportDocumentsBatch(
       // has no idea which documents have been read.
       const [built] =
         format === 'docx' ? await exportDocx(doc) : await exportPdf(doc, tier, options)
-      uris.push(...(await writeExportFiles([{ ...built, name: names[index] }])))
-      saved.push(names[index])
+      const [written] = await writeExportFiles([{ ...built, name: names[index] }], destination)
+
+      // Nothing comes back on the web, where the browser downloads instead of
+      // writing; the planned name is all there is to report there.
+      if (written) {
+        uris.push(written.uri)
+        saved.push(written.name)
+      } else {
+        saved.push(names[index])
+      }
     } catch (error) {
       // Counted, not thrown: one unreadable document must not keep the rest
       // off the phone.
@@ -354,8 +429,34 @@ export async function exportDocumentsBatch(
     }
   }
 
-  await shareFiles(uris, 'Dokumen ScannApp')
+  let dismissed = false
+  let shareError: string | null = null
 
-  const outcome = { total: docs.length, saved, failed, cancelled }
+  if (destination === 'share' && uris.length > 0) {
+    try {
+      dismissed = (await shareFiles(uris, 'Dokumen ScannApp')) === 'cancelled'
+    } catch (error) {
+      // Caught rather than thrown, unlike the single-document path. A batch
+      // that reaches here has already built what it could and knows which
+      // documents it lost on the way; letting the exception out would throw
+      // that away and leave the caller with one sentence about the sheet.
+      shareError = error instanceof Error ? error.message : String(error)
+    }
+
+    // Staging is wiped whenever the share did not land, whichever way it
+    // failed: the staged copies are the only trace an undelivered run could
+    // leave behind.
+    if (dismissed || shareError) await prepareStaging()
+  }
+
+  const outcome = {
+    total: docs.length,
+    saved,
+    failed,
+    cancelled,
+    dismissed,
+    destination,
+    shareError,
+  }
   return { ...outcome, message: summarizeBatchExport(outcome) }
 }

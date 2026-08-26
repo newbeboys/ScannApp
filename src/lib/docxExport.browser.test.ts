@@ -29,8 +29,10 @@ describe('docx parts, through a real XML parser', () => {
   it.each([
     '[Content_Types].xml',
     '_rels/.rels',
+    'word/_rels/document.xml.rels',
     'docProps/core.xml',
     'word/document.xml',
+    'word/styles.xml',
   ])('parses %s', (name) => {
     expect(parseError(parsePart([page('Halo')], name))).toBeNull()
   })

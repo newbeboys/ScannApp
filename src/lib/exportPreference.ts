@@ -3,8 +3,22 @@ import {
   DEFAULT_COMPRESSION_LEVEL,
   type CompressionLevel,
 } from './exportLimits'
+import type { ExportDestination } from './exportShare'
 
 const LEVEL_KEY = 'scannapp.export.level'
+const DESTINATION_KEY = 'scannapp.export.destination'
+
+const DESTINATIONS: ExportDestination[] = ['share', 'device']
+
+/**
+ * Sharing, unless the user has said otherwise.
+ *
+ * "Ekspor" opening a share sheet is what the button has always done, and it is
+ * the destination that cannot leave anything behind when the user changes
+ * their mind halfway. Someone who wants the file in their file manager instead
+ * says so once and it is remembered.
+ */
+export const DEFAULT_DESTINATION: ExportDestination = 'share'
 
 /**
  * The export quality the user last chose.
@@ -29,6 +43,29 @@ export function readExportLevel(storage: Storage = localStorage): CompressionLev
 export function writeExportLevel(level: CompressionLevel, storage: Storage = localStorage): void {
   try {
     storage.setItem(LEVEL_KEY, level)
+  } catch {
+    // Remembering a preference is never worth failing an export over.
+  }
+}
+
+/** The destination the user last chose, with the same defensive posture as the level. */
+export function readExportDestination(storage: Storage = localStorage): ExportDestination {
+  try {
+    const stored = storage.getItem(DESTINATION_KEY)
+    return DESTINATIONS.includes(stored as ExportDestination)
+      ? (stored as ExportDestination)
+      : DEFAULT_DESTINATION
+  } catch {
+    return DEFAULT_DESTINATION
+  }
+}
+
+export function writeExportDestination(
+  destination: ExportDestination,
+  storage: Storage = localStorage,
+): void {
+  try {
+    storage.setItem(DESTINATION_KEY, destination)
   } catch {
     // Remembering a preference is never worth failing an export over.
   }

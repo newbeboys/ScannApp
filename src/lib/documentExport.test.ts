@@ -18,15 +18,18 @@ vi.mock('./documentEditing', () => ({
 }))
 
 const delivered: { name: string }[][] = []
+/** The destination each delivery was asked for, so the routing can be checked. */
+const destinations: string[] = []
 /** The blobs handed to delivery, so a test can look inside the file itself. */
 const deliveredBlobs: Blob[][] = []
 const deliveredBlob = (index: number) => deliveredBlobs[index][0]
 
 vi.mock('./exportShare', () => ({
-  deliverExport: async (files: { name: string; blob: Blob }[]) => {
+  deliverExport: async (files: { name: string; blob: Blob }[], destination: string) => {
     delivered.push(files.map((file) => ({ name: file.name })))
     deliveredBlobs.push(files.map((file) => file.blob))
-    return { message: `${files.length} file` }
+    destinations.push(destination)
+    return { message: `${files.length} file`, cancelled: false }
   },
 }))
 
@@ -69,6 +72,7 @@ beforeEach(() => {
   encodes.length = 0
   delivered.length = 0
   deliveredBlobs.length = 0
+  destinations.length = 0
 })
 
 /**
@@ -116,7 +120,7 @@ describe('PNG export', () => {
 
 describe('compression level', () => {
   it('reaches the encoder', async () => {
-    await exportDocument(doc(1), 'jpg', 'pro', 'max')
+    await exportDocument(doc(1), 'jpg', 'pro', { level: 'max' })
 
     expect(encodes[0].options.quality).toBe(COMPRESSION_PRESETS.max.quality)
     expect(encodes[0].options.maxEdgePx).toBe(COMPRESSION_PRESETS.max.maxEdgePx)
@@ -128,7 +132,7 @@ describe('compression level', () => {
    * no matter what it asked for, so a regression to that would be silent.
    */
   it('reaches the encoder for Basic too', async () => {
-    await exportDocument(doc(1), 'jpg', 'basic', 'max')
+    await exportDocument(doc(1), 'jpg', 'basic', { level: 'max' })
 
     expect(encodes[0].options.quality).toBe(COMPRESSION_PRESETS.max.quality)
     expect(encodes[0].options.maxEdgePx).toBe(COMPRESSION_PRESETS.max.maxEdgePx)
@@ -141,7 +145,7 @@ describe('compression level', () => {
   })
 
   it('applies to every page, not just the first', async () => {
-    await exportDocument(doc(3), 'jpg', 'pro', 'small')
+    await exportDocument(doc(3), 'jpg', 'pro', { level: 'small' })
 
     expect(encodes.map((entry) => entry.options.quality)).toEqual([
       COMPRESSION_PRESETS.small.quality,
@@ -289,5 +293,45 @@ describe('DOCX export', () => {
    */
   it('refuses a document that was never recognised', async () => {
     await expect(exportDocument(doc(1), 'docx', 'pro')).rejects.toThrow(/teks/i)
+  })
+})
+
+describe('export destination', () => {
+  /** A document the recogniser has already been over, so Word has something to write. */
+  function withText(pageCount: number): LocalScanDocument {
+    const base = doc(pageCount)
+    base.pages = base.pages.map((page) => ({ ...page, text: `${page.original}-ocr.json` }))
+    for (const page of base.pages) {
+      layouts[page.text!] = { blocks: [{ text: 'Halo', lines: [{ text: 'Halo', words: [] }] }] }
+    }
+    return base
+  }
+
+  /**
+   * Sharing unless told otherwise, matching the remembered preference's own
+   * default: "Ekspor" opening a share sheet is what the button has always
+   * done.
+   */
+  it('shares when the caller names no destination', async () => {
+    await exportDocument(doc(1), 'pdf', 'pro')
+
+    expect(destinations).toEqual(['share'])
+  })
+
+  it('carries the destination through to delivery', async () => {
+    await exportDocument(doc(1), 'pdf', 'pro', { destination: 'device' })
+
+    expect(destinations).toEqual(['device'])
+  })
+
+  /**
+   * Word takes an early exit past the compressor — there are no images in the
+   * file to compress — and that exit used to be the easy place to drop an
+   * argument the other formats carry.
+   */
+  it('carries it on the Word path too, which skips the compressor', async () => {
+    await exportDocument(withText(1), 'docx', 'pro', { destination: 'device' })
+
+    expect(destinations).toEqual(['device'])
   })
 })

@@ -9,9 +9,11 @@ async function renderSheet(overrides: Partial<Parameters<typeof ExportSheet>[0]>
       tier="pro"
       isBusy={false}
       level="standard"
+      destination="share"
       hasText={true}
       estimate={{ pdf: 2_400_000, jpg: 2_100_000, png: 24_000_000, docx: 41_984 }}
       onLevelChange={() => {}}
+      onDestinationChange={() => {}}
       onExport={() => {}}
       onRecognizeText={() => {}}
       onClose={() => {}}
@@ -83,5 +85,55 @@ describe('ExportSheet — Word', () => {
     await screen.getByRole('button', { name: /^PDF/ }).click()
 
     expect(onExport).toHaveBeenCalledWith('pdf')
+  })
+})
+
+describe('ExportSheet — tujuan ekspor', () => {
+  it('offers both destinations and marks the chosen one', async () => {
+    const screen = await renderSheet({ destination: 'share' })
+
+    await expect.element(screen.getByRole('radio', { name: 'Bagikan' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await expect.element(screen.getByRole('radio', { name: 'Simpan ke HP' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    )
+  })
+
+  it('reports the choice rather than acting on it itself', async () => {
+    const onDestinationChange = vi.fn()
+    const screen = await renderSheet({ onDestinationChange })
+
+    await screen.getByRole('radio', { name: 'Simpan ke HP' }).click()
+
+    expect(onDestinationChange).toHaveBeenCalledWith('device')
+  })
+
+  /**
+   * The two options differ in what happens when the user changes their mind
+   * halfway, which is the whole reason this control exists. A label alone
+   * would leave that invisible until it surprised someone.
+   */
+  it('says what happens on a cancel while sharing', async () => {
+    const screen = await renderSheet({ destination: 'share' })
+
+    await expect
+      .element(screen.getByText(/tidak ada berkas yang tertinggal di HP/i))
+      .toBeVisible()
+  })
+
+  it('says where a saved file goes', async () => {
+    const screen = await renderSheet({ destination: 'device' })
+
+    await expect.element(screen.getByText(/folder Documents/i)).toBeVisible()
+  })
+
+  /** Every choice has to be made before a format is tapped, because that exports. */
+  it('locks the destination while an export is running', async () => {
+    const screen = await renderSheet({ isBusy: true })
+
+    await expect.element(screen.getByRole('radio', { name: 'Simpan ke HP' })).toBeDisabled()
   })
 })

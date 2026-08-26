@@ -29,24 +29,40 @@ vi.mock('./blobBase64', () => ({
 
 /** Titles whose write should blow up, so failure paths can be exercised. */
 const failWrites = new Set<string>()
-const written: string[] = []
+const written: { name: string; destination: string }[] = []
 const shared: { uris: string[]; title: string }[] = []
+/** How many times the run wiped the staging folder. */
+let staged = 0
+/** What the share sheet does when the run reaches it. */
+let shareOutcome: 'sent' | 'cancelled' | 'broken' = 'sent'
+
+const CANCELLED = 'Ekspor dibatalkan — tidak ada berkas yang disimpan di HP.'
 
 vi.mock('./exportShare', () => ({
-  writeExportFiles: async (files: { name: string; blob: Blob }[]) => {
+  CANCELLED_MESSAGE: 'Ekspor dibatalkan — tidak ada berkas yang disimpan di HP.',
+  prepareStaging: async () => {
+    staged++
+  },
+  writeExportFiles: async (files: { name: string; blob: Blob }[], destination: string) => {
     for (const file of files) {
       if (failWrites.has(file.name)) throw new Error('Penyimpanan penuh.')
-      written.push(file.name)
+      written.push({ name: file.name, destination })
     }
-    return files.map((file) => `file:///Documents/${file.name}`)
+    return files.map((file) => ({ name: file.name, uri: `file:///Documents/${file.name}` }))
   },
   shareFiles: async (uris: string[], title: string) => {
     // Mirrors the real function, which returns early on an empty list.
-    if (uris.length === 0) return
+    if (uris.length === 0) return 'cancelled'
     shared.push({ uris, title })
+    // The real one rethrows anything that is not a dismissal.
+    if (shareOutcome === 'broken') throw new Error('Gagal membuka layar berbagi.')
+    return shareOutcome
   },
-  deliverExport: async () => ({ message: 'tidak dipakai di test ini' }),
+  deliverExport: async () => ({ message: 'tidak dipakai di test ini', cancelled: false }),
 }))
+
+/** The names that reached disk, which is what most assertions here care about. */
+const names = () => written.map((entry) => entry.name)
 
 const { exportDocumentsBatch, summarizeBatchExport } = await import('./documentExport')
 
@@ -65,6 +81,8 @@ beforeEach(() => {
   failWrites.clear()
   written.length = 0
   shared.length = 0
+  staged = 0
+  shareOutcome = 'sent'
   for (const key of Object.keys(layouts)) delete layouts[key]
 })
 
@@ -75,9 +93,12 @@ describe('summarizeBatchExport', () => {
       saved: ['A.pdf', 'B.pdf', 'C.pdf'],
       failed: [],
       cancelled: false,
+      dismissed: false,
+      destination: 'device',
+      shareError: null,
     })
 
-    expect(message).toBe('3 dokumen diekspor ke folder Documents.')
+    expect(message).toBe('3 dokumen tersimpan di folder Documents.')
   })
 
   /**
@@ -93,9 +114,12 @@ describe('summarizeBatchExport', () => {
       saved: ['A.pdf', 'B.pdf', 'C.pdf', 'D.pdf'],
       failed: [{ title: 'E', message: 'Penyimpanan penuh.' }],
       cancelled: false,
+      dismissed: false,
+      destination: 'device',
+      shareError: null,
     })
 
-    expect(message).toBe('4 dokumen diekspor, 1 gagal: Penyimpanan penuh.')
+    expect(message).toBe('4 dokumen tersimpan di folder Documents, 1 gagal: Penyimpanan penuh.')
   })
 
   /** One shared cause is stated once, not repeated per document. */
@@ -108,6 +132,9 @@ describe('summarizeBatchExport', () => {
         { title: 'B', message: 'Penyimpanan penuh.' },
       ],
       cancelled: false,
+      dismissed: false,
+      destination: 'device',
+      shareError: null,
     })
 
     expect(message).toBe('Tidak ada dokumen yang berhasil diekspor: Penyimpanan penuh.')
@@ -123,6 +150,9 @@ describe('summarizeBatchExport', () => {
         { title: 'B', message: 'Penyimpanan penuh.' },
       ],
       cancelled: false,
+      dismissed: false,
+      destination: 'device',
+      shareError: null,
     })
 
     expect(message).toBe(
@@ -137,15 +167,26 @@ describe('summarizeBatchExport', () => {
       saved: ['A.pdf', 'B.pdf'],
       failed: [],
       cancelled: true,
+      dismissed: false,
+      destination: 'device',
+      shareError: null,
     })
 
-    expect(message).toBe('Dihentikan — 2 dari 5 dokumen tersimpan.')
+    expect(message).toBe('Dihentikan — 2 dari 5 dokumen tersimpan di folder Documents.')
   })
 
   it('handles a stop before anything was written', () => {
-    const message = summarizeBatchExport({ total: 5, saved: [], failed: [], cancelled: true })
+    const message = summarizeBatchExport({
+      total: 5,
+      saved: [],
+      failed: [],
+      cancelled: true,
+      dismissed: false,
+      destination: 'device',
+      shareError: null,
+    })
 
-    expect(message).toBe('Dihentikan sebelum ada dokumen yang tersimpan.')
+    expect(message).toBe('Dihentikan sebelum ada dokumen yang selesai.')
   })
 
   /**
@@ -158,9 +199,14 @@ describe('summarizeBatchExport', () => {
       saved: ['B.pdf'],
       failed: [{ title: 'A', message: 'Penyimpanan penuh.' }],
       cancelled: true,
+      dismissed: false,
+      destination: 'device',
+      shareError: null,
     })
 
-    expect(message).toBe('Dihentikan — 1 dari 3 dokumen tersimpan. 1 gagal: Penyimpanan penuh.')
+    expect(message).toBe(
+      'Dihentikan — 1 dari 3 dokumen tersimpan di folder Documents. 1 gagal: Penyimpanan penuh.',
+    )
   })
 
   it('keeps the reason when a stopped run saved nothing', () => {
@@ -169,10 +215,13 @@ describe('summarizeBatchExport', () => {
       saved: [],
       failed: [{ title: 'A', message: 'Penyimpanan penuh.' }],
       cancelled: true,
+      dismissed: false,
+      destination: 'device',
+      shareError: null,
     })
 
     expect(message).toBe(
-      'Dihentikan sebelum ada dokumen yang tersimpan. 1 gagal: Penyimpanan penuh.',
+      'Dihentikan sebelum ada dokumen yang selesai. 1 gagal: Penyimpanan penuh.',
     )
   })
 })
@@ -184,7 +233,7 @@ describe('exportDocumentsBatch', () => {
       'pro',
     )
 
-    expect(written).toEqual(['Kwitansi Agustus.pdf', 'Kontrak Sewa.pdf'])
+    expect(names()).toEqual(['Kwitansi Agustus.pdf', 'Kontrak Sewa.pdf'])
     expect(result.saved).toEqual(['Kwitansi Agustus.pdf', 'Kontrak Sewa.pdf'])
     expect(result.failed).toEqual([])
   })
@@ -197,7 +246,7 @@ describe('exportDocumentsBatch', () => {
   it('exports for Basic too', async () => {
     const result = await exportDocumentsBatch([doc('a', 'Nota')], 'basic')
 
-    expect(written).toEqual(['Nota.pdf'])
+    expect(names()).toEqual(['Nota.pdf'])
     expect(result.saved).toEqual(['Nota.pdf'])
   })
 
@@ -233,7 +282,7 @@ describe('exportDocumentsBatch', () => {
     expect(result.saved).toEqual(['A.pdf', 'C.pdf'])
     expect(result.failed).toEqual([{ title: 'B', message: 'Penyimpanan penuh.' }])
     // The cause reaches the user, not just the count — see `describeFailures`.
-    expect(result.message).toBe('2 dokumen diekspor, 1 gagal: Penyimpanan penuh.')
+    expect(result.message).toBe('2 dokumen dikirim, 1 gagal: Penyimpanan penuh.')
   })
 
   it('shares only the documents that made it', async () => {
@@ -285,7 +334,91 @@ describe('exportDocumentsBatch', () => {
 
     expect(result.saved).toEqual(['A.pdf'])
     expect(result.cancelled).toBe(true)
-    expect(result.message).toBe('Dihentikan — 1 dari 3 dokumen tersimpan.')
+    expect(result.message).toBe('Dihentikan — 1 dari 3 dokumen dikirim.')
+  })
+
+  /**
+   * "Simpan ke HP" is not a share with an extra step: no sheet opens at all,
+   * so there is nothing to dismiss and nothing to clean up afterwards.
+   */
+  it('never opens the share sheet when saving to the phone', async () => {
+    const result = await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B')], 'pro', {
+      destination: 'device',
+    })
+
+    expect(shared).toHaveLength(0)
+    expect(staged).toBe(0)
+    expect(written.map((entry) => entry.destination)).toEqual(['device', 'device'])
+    expect(result.message).toBe('2 dokumen tersimpan di folder Documents.')
+  })
+
+  /**
+   * The staging folder is wiped once for the whole run, not per document.
+   * Wiping between documents would delete the ones already queued for the
+   * single share sheet at the end — the batch would hand over its last file
+   * and lose the rest.
+   */
+  it('wipes staging once for the run, not once per document', async () => {
+    await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B'), doc('c', 'C')], 'pro')
+
+    expect(staged).toBe(1)
+    expect(shared[0].uris).toHaveLength(3)
+  })
+
+  /**
+   * Dismissing the sheet has to leave the phone as it was: the staged copies
+   * are wiped again and the summary says so, rather than claiming three
+   * documents were delivered to nobody.
+   */
+  it('wipes staging again and reports a cancel when the sheet is dismissed', async () => {
+    shareOutcome = 'cancelled'
+
+    const result = await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B')], 'pro')
+
+    expect(result.dismissed).toBe(true)
+    expect(staged).toBe(2)
+    expect(result.message).toBe(CANCELLED)
+  })
+
+  /**
+   * A share that genuinely broke is not a share that was declined. Throwing
+   * from there would discard a whole run's accounting — which documents were
+   * built, which were lost and why — and leave one sentence about the sheet.
+   */
+  it('keeps the run accounting when the share sheet fails outright', async () => {
+    shareOutcome = 'broken'
+
+    const result = await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B')], 'pro')
+
+    expect(result.saved).toEqual(['A.pdf', 'B.pdf'])
+    expect(result.dismissed).toBe(false)
+    expect(result.shareError).toBe('Gagal membuka layar berbagi.')
+    expect(result.message).toBe(
+      '2 dokumen dibuat, tapi gagal dikirim: Gagal membuka layar berbagi.',
+    )
+    // Nothing landed, so the staged copies go the same way as on a cancel.
+    expect(staged).toBe(2)
+  })
+
+  it('still names the documents it lost when the share sheet fails', async () => {
+    shareOutcome = 'broken'
+    failWrites.add('B.pdf')
+
+    const result = await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B')], 'pro')
+
+    expect(result.message).toBe(
+      '1 dokumen dibuat, tapi gagal dikirim: Gagal membuka layar berbagi. 1 gagal dibuat: Penyimpanan penuh.',
+    )
+  })
+
+  /** A cancel still has to carry the reason documents never reached the sheet. */
+  it('keeps the failure reason when the sheet is dismissed', async () => {
+    shareOutcome = 'cancelled'
+    failWrites.add('B.pdf')
+
+    const result = await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B')], 'pro')
+
+    expect(result.message).toBe(`${CANCELLED} 1 gagal dibuat: Penyimpanan penuh.`)
   })
 
   it('still shares what it managed to write before stopping', async () => {
@@ -322,7 +455,7 @@ describe('exportDocumentsBatch — Word', () => {
       { format: 'docx' },
     )
 
-    expect(written).toEqual(['Kwitansi.docx', 'Kontrak.docx'])
+    expect(names()).toEqual(['Kwitansi.docx', 'Kontrak.docx'])
     expect(result.failed).toEqual([])
   })
 
@@ -338,7 +471,7 @@ describe('exportDocumentsBatch — Word', () => {
       { format: 'docx' },
     )
 
-    expect(written).toEqual(['Kwitansi.docx'])
+    expect(names()).toEqual(['Kwitansi.docx'])
     expect(result.saved).toEqual(['Kwitansi.docx'])
     expect(result.failed).toEqual([
       { title: 'Belum Dibaca', message: 'Belum ada teks yang dikenali di dokumen ini.' },
@@ -358,6 +491,6 @@ describe('exportDocumentsBatch — Word', () => {
   it('still defaults to PDF when no format is asked for', async () => {
     await exportDocumentsBatch([recognized('a', 'Nota')], 'pro')
 
-    expect(written).toEqual(['Nota.pdf'])
+    expect(names()).toEqual(['Nota.pdf'])
   })
 })

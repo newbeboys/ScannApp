@@ -8,9 +8,11 @@ async function renderSheet(overrides: Partial<Parameters<typeof BatchExportSheet
       count={3}
       pageCount={17}
       level="standard"
+      destination="share"
       progress={null}
       isBusy={false}
       onLevelChange={() => {}}
+      onDestinationChange={() => {}}
       onExport={() => {}}
       onStop={() => {}}
       onClose={() => {}}
@@ -159,5 +161,39 @@ describe('BatchExportSheet — memilih PDF atau Word', () => {
     const screen = await renderSheet({ isBusy: true })
 
     await expect.element(screen.getByRole('radio', { name: 'Word' })).toBeDisabled()
+  })
+})
+
+describe('BatchExportSheet — tujuan ekspor', () => {
+  it('reports the choice rather than acting on it itself', async () => {
+    const onDestinationChange = vi.fn()
+    const screen = await renderSheet({ onDestinationChange })
+
+    await screen.getByRole('radio', { name: 'Simpan ke HP' }).click()
+
+    expect(onDestinationChange).toHaveBeenCalledWith('device')
+  })
+
+  /**
+   * Two segmented controls stacked one above the other: without names on both,
+   * neither says which question it is answering.
+   */
+  it('names both switches', async () => {
+    const screen = await renderSheet()
+
+    await expect.element(screen.getByText('Format')).toBeVisible()
+    await expect.element(screen.getByText('Tujuan')).toBeVisible()
+  })
+
+  it('promises a single share sheet at the end when sharing', async () => {
+    const screen = await renderSheet({ destination: 'share' })
+
+    await expect.element(screen.getByText(/satu layar berbagi di akhir/i)).toBeVisible()
+  })
+
+  it('drops that promise when the files are only being saved', async () => {
+    const screen = await renderSheet({ destination: 'device' })
+
+    await expect.element(screen.getByText(/satu layar berbagi di akhir/i)).not.toBeInTheDocument()
   })
 })

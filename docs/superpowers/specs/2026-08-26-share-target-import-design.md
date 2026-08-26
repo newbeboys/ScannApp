@@ -38,12 +38,11 @@ Tambah `intent-filter` pada `<activity>` `MainActivity` yang sudah ada (selain M
 
 Berkas baru: `android/app/src/main/java/com/newbeboys/scannapp/SharedImportPlugin.java`.
 
-- `load()` — dipanggil sekali saat bridge siap. Cek `getActivity().getIntent()`: kalau app dibuka dingin lewat share, intent-nya ada di sini.
-- `handleOnNewIntent(Intent)` — dipanggil otomatis oleh bridge saat share masuk ke app yang sudah berjalan.
-- Kedua jalur bermuara ke satu fungsi pemroses: baca `EXTRA_STREAM` (URI tunggal untuk `SEND`, `ArrayList<Uri>` untuk `SEND_MULTIPLE`), saring hanya `image/*` dan `application/pdf` per item (mimeType dari `ContentResolver`, bukan cuma percaya ekstensi nama file), lalu:
+- **Cukup satu override: `handleOnNewIntent(Intent)`.** Dicek langsung di source `BridgeActivity.java` (node_modules): `onCreate` → `load()` sudah memanggil `this.onNewIntent(getIntent())` di baris terakhirnya, yang dari `BridgeActivity.onNewIntent` diteruskan ke `Bridge.onNewIntent(intent)`, yang memanggil `handleOnNewIntent` di **setiap plugin terdaftar** — termasuk untuk intent peluncuran awal. Jadi kasus dingin (app dibuka lewat share) dan kasus hangat (`singleTop` menerima intent baru saat app jalan) lewat satu jalur kode yang sama persis. Tidak perlu override `load()` terpisah.
+- Fungsi pemroses tunggal: baca `EXTRA_STREAM` (URI tunggal untuk `SEND`, `ArrayList<Uri>` untuk `SEND_MULTIPLE`), saring hanya `image/*` dan `application/pdf` per item (mimeType dari `ContentResolver`, bukan cuma percaya ekstensi nama file), lalu:
   - Gambar → disalin langsung ke cache app lewat `ContentResolver.openInputStream` (izin baca `content://` dari share cuma valid selama diproses, jadi harus segera).
   - PDF → dirender per halaman lewat `PdfRenderer` (lihat §2), tiap halaman jadi satu JPEG di cache.
-- Hasil disangga jadi satu daftar path `file://` terurut, lalu dikirim ke JS lewat event `sharedFilesReceived`. Kalau belum ada listener JS terpasang saat event ditembak (kasus dingin), plugin menyimpannya sampai `getPendingShare()` dipanggil — idiom yang sama dengan `App.getLaunchUrl()` bawaan Capacitor.
+- Hasil disangga jadi satu daftar path `file://` terurut, lalu dikirim ke JS lewat `notifyListeners("sharedFilesReceived", data, /* retainUntilConsumed */ true)`. Argumen ketiga itu bawaan Capacitor (dicek di `Plugin.java`): kalau belum ada listener JS terpasang saat event ditembak — persis kasus dingin, karena `handleOnNewIntent` jalan sebelum WebView sempat memanggil `addListener` — Capacitor sendiri yang menyimpannya di `retainedEventArguments` dan mengirimkannya begitu listener pertama didaftarkan. Tidak perlu penyangga buatan sendiri atau method pull terpisah.
 
 ---
 
@@ -54,10 +53,10 @@ Pola yang sama dengan `documentScanner.ts`: satu-satunya berkas yang tahu plugin
 ```ts
 export interface SharedImportResult {
   images: string[] // sudah convertFileSrc, urutan dipertahankan
+  skippedCount: number // lihat §6 -- item yang gagal menghasilkan halaman
 }
 
 export function onSharedFilesReceived(cb: (result: SharedImportResult) => void): () => void
-export async function getPendingSharedFiles(): Promise<SharedImportResult>
 ```
 
 Tidak ada implementasi web/iOS — plugin Android-only, sama seperti `documentScanner.ts` menyatakan itu di komentarnya.
@@ -66,10 +65,12 @@ Tidak ada implementasi web/iOS — plugin Android-only, sama seperti `documentSc
 
 ## 5. Integrasi `App.tsx`
 
-Dipasang sekali saat mount: daftarkan `onSharedFilesReceived`, dan panggil `getPendingSharedFiles()` untuk menangkap share yang membuka app dari kondisi dingin. Keduanya bermuara ke satu handler, mengikuti pola `handleStartScan`/`handleAddPages` yang sudah ada:
+Dipasang sekali saat mount: daftarkan `onSharedFilesReceived`. Berkat `retainUntilConsumed` (§3.2), satu listener ini saja sudah menangkap baik share yang membuka app dari kondisi dingin maupun share yang masuk saat app sudah berjalan — tidak ada method pull terpisah yang perlu dipanggil. Mengikuti pola `handleStartScan`/`handleAddPages` yang sudah ada:
 
+- `images.length === 0` → tidak melakukan apa-apa selain toast (lihat §6), `pendingPages` tidak disentuh.
 - `pendingPages` kosong → sama seperti `handleStartScan`: isi `pendingPages` dengan hasilnya, buka `ReviewScreen` (yang sudah dirender tanpa syarat tab saat `pendingPages` terisi — lihat `App.tsx:892`).
 - `pendingPages` sudah terisi (user sedang di tengah review scan lain) → **append**, sama seperti `handleAddPages`. Tidak pernah menimpa kerja yang belum disimpan.
+- `skippedCount > 0` → `setToast(...)` dengan salah satu dari dua pesan di §6, tergantung apakah `images` ikut berisi sesuatu atau tidak.
 
 Tidak ada layar baru. 100% reuse `ReviewScreen` — crop, filter, reorder, simpan berjalan persis seperti untuk hasil kamera.
 
@@ -77,13 +78,15 @@ Tidak ada layar baru. 100% reuse `ReviewScreen` — crop, filter, reorder, simpa
 
 ## 6. Penanganan error
 
+Native menghitung, JS yang menyapa user — plugin tidak tahu kata-kata apa yang pas untuk toast, jadi ia cuma melaporkan angka. Payload event `sharedFilesReceived` membawa `skippedCount` di samping `paths`: jumlah item dalam share yang gagal menghasilkan satu pun halaman (mime type tidak dikenali, atau `PdfRenderer` gagal buka file korup/terenkripsi). Dua penyebab itu digabung jadi satu angka, bukan dua field terpisah — dalam praktiknya nyaris selalu berarti "file rusak", karena manifest (§3.1) sudah menyaring tipe di level Android sebelum ScannApp ditawarkan sebagai tujuan sama sekali; kasus tipe campuran dalam satu `SEND_MULTIPLE` cukup jarang untuk tidak perlu pesan terpisah.
+
 | Kondisi | Perilaku |
 |---|---|
-| Mime type di luar `image/*`/`application/pdf` lolos ke plugin | Diabaikan per item, bukan gagal total |
-| Semua item dalam satu share ditolak | Toast: "Format file ini tidak didukung." |
-| PDF gagal dibuka `PdfRenderer` (korup/terenkripsi) | PDF itu dilewati, toast: "Sebagian file tidak bisa dibuka." |
-| Share tanpa `EXTRA_STREAM` valid / kosong | Tidak melakukan apa-apa — tidak membuka review dengan 0 halaman |
-| PDF > 50 halaman | Dipotong di 50, tanpa gagal total (angka teknis, boleh disetel ulang) |
+| `paths` berisi hasil, `skippedCount` 0 | Langsung ke review, tanpa toast |
+| `paths` berisi hasil, `skippedCount` > 0 | Tetap ke review dengan yang berhasil, toast: "Sebagian file tidak bisa diimpor." |
+| `paths` kosong, `skippedCount` > 0 | Tidak membuka review, toast: "Tidak ada file yang bisa diimpor." |
+| Share tanpa `EXTRA_STREAM` valid / kosong (keduanya nol) | Event tidak dikirim sama sekali — tidak melakukan apa-apa |
+| PDF > 50 halaman | Dipotong di 50, halaman yang terpotong tidak dihitung sebagai skip (angka teknis, boleh disetel ulang) |
 
 ---
 
@@ -103,7 +106,7 @@ Tidak ada layar baru. 100% reuse `ReviewScreen` — crop, filter, reorder, simpa
 
 ## 8. Rencana test
 
-Suite **node**: `sharedImport.ts` dites dengan plugin native di-mock (persis pola `documentScanner.test.ts` memock `@capacitor-mlkit/document-scanner`) — kontrak `onSharedFilesReceived`/`getPendingSharedFiles`, urutan hasil dipertahankan, `convertFileSrc` diterapkan ke tiap path.
+Suite **node**: `sharedImport.ts` dites dengan plugin native di-mock (persis pola `documentScanner.test.ts` memock `@capacitor-mlkit/document-scanner`) — kontrak `onSharedFilesReceived`, urutan hasil dipertahankan, `convertFileSrc` diterapkan ke tiap path.
 
 Logika append-vs-replace ke `pendingPages` di `App.tsx`: tidak ada `App.browser.test.tsx` hari ini (dicek — belum pernah dibuat), dan `handleStartScan`/`handleAddPages` yang sudah ada pun tidak punya test komponen. Titik integrasi baru ini mengikuti pola yang sama: diverifikasi manual di HP (lihat §9), bukan dipaksa jadi test baru untuk satu pemanggilan state setter.
 

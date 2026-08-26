@@ -395,6 +395,20 @@ describe('onSharedFilesReceived', () => {
 
     expect(removeMock).toHaveBeenCalledTimes(1)
   })
+
+  it('does not leave an unhandled rejection when native addListener itself rejects', async () => {
+    // App.tsx registers this once on mount and (in practice) never calls the
+    // returned unsubscribe function during normal operation, so a rejection
+    // must be caught right away -- not only inside the unsubscribe closure,
+    // which may never run.
+    addListenerMock.mockImplementationOnce(() => Promise.reject(new Error('plugin not implemented')))
+
+    expect(() => onSharedFilesReceived(vi.fn())).not.toThrow()
+    await Promise.resolve()
+    await Promise.resolve()
+    // No assertion beyond "got here": an uncaught rejection here would fail
+    // the test file via vitest's unhandled-rejection detection.
+  })
 })
 ```
 
@@ -456,6 +470,13 @@ export function onSharedFilesReceived(
     })
   })
 
+  // Attached immediately, not deferred into the returned closure: App.tsx
+  // registers this once on mount and never calls the unsubscribe function
+  // during normal operation, so if native registration itself fails, this
+  // must not surface as an unhandled promise rejection while nobody has
+  // called unsubscribe yet.
+  handlePromise.catch(() => {})
+
   return () => {
     void handlePromise.then((handle) => handle.remove())
   }
@@ -465,12 +486,12 @@ export function onSharedFilesReceived(
 - [ ] **Step 4: Run the test again to confirm it passes**
 
 Run: `npm run test:node -- sharedImport`
-Expected: PASS, 5 tests.
+Expected: PASS, 6 tests.
 
 - [ ] **Step 5: Run the full node suite to confirm nothing else broke**
 
 Run: `npm run test:node`
-Expected: PASS, 652 tests (647 existing + 5 new).
+Expected: PASS, 653 tests (647 existing + 6 new).
 
 - [ ] **Step 6: Commit**
 
@@ -592,7 +613,8 @@ memang belum pernah dibangun. Desain: `docs/superpowers/specs/2026-08-26-share-t
 - [x] **Tier: semua tier, tanpa gerbang** — menerima file itu akses, bukan mesin baru (pola yang sama dengan reorder/filter/PNG/anotasi/pisah)
 - [x] **Masuk lewat `pendingPages` yang sudah ada, tanpa layar baru** — append kalau user sedang di tengah review lain, replace kalau kosong; tidak pernah menimpa kerja yang belum disimpan
 - [x] **Ditunda ke spec terpisah: `.docx` sebagai lampiran.** `LocalScanDocument` strict berbentuk `pages: ScanPage[]`, dipakai di 31 berkas — kind dokumen baru tanpa pages itu subsistem sendiri, bukan bagian kecil dari fitur ini
-- [x] **Test node: 647 → 652** (5 test baru di `sharedImport.test.ts`, Task 2; ganti angka ini kalau hasil `npm run test:node` di Step 3 ternyata beda)
+- [x] **Test node: 647 → 653** (6 test baru di `sharedImport.test.ts`, Task 2; ganti angka ini kalau hasil `npm run test:node` di Step 3 ternyata beda)
+- [x] **Dua temuan review ditutup di Task 1** (round 1/5, kode plan sendiri yang salah, bukan implementer): `resolver.getType(uri)` sempat di luar try/catch per-item — satu file rusak bisa menggagalkan `notifyListeners` untuk seluruh share, bukan cuma file itu; dan `handleOnNewIntent` sempat memproses semua file secara sinkron di main thread (risiko ANR untuk PDF banyak halaman) — dipindah ke `ExecutorService` satu thread
 
 **Belum diverifikasi di device fisik** (butuh Boss Ali — disalin dari spec §9):
 
@@ -607,7 +629,7 @@ memang belum pernah dibangun. Desain: `docs/superpowers/specs/2026-08-26-share-t
 - [ ] Ukuran APK & waktu build setelah plugin Java baru — tidak ada regresi mencolok
 ```
 
-Kalau jumlah test node yang keluar dari Step 3 bukan 652, koreksi angka itu di baris yang baru ditambahkan sebelum commit.
+Kalau jumlah test node yang keluar dari Step 3 bukan 653, koreksi angka itu di baris yang baru ditambahkan sebelum commit.
 
 - [ ] **Step 5: Commit**
 

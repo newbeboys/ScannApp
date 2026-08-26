@@ -16,6 +16,13 @@ vi.mock('./pdfExport', () => ({
   buildPdf: async () => new Uint8Array([1, 2, 3]),
 }))
 
+/** Recognised layouts on disk, keyed by the path a page points at. */
+const layouts: Record<string, unknown> = {}
+
+vi.mock('./scanStorage', () => ({
+  readPageText: async (page: { text?: string }) => (page.text ? (layouts[page.text] ?? null) : null),
+}))
+
 vi.mock('./blobBase64', () => ({
   blobToBytes: async () => new Uint8Array([1]),
 }))
@@ -58,6 +65,7 @@ beforeEach(() => {
   failWrites.clear()
   written.length = 0
   shared.length = 0
+  for (const key of Object.keys(layouts)) delete layouts[key]
 })
 
 describe('summarizeBatchExport', () => {
@@ -195,9 +203,9 @@ describe('exportDocumentsBatch', () => {
   it('reports progress before each document, not after', async () => {
     const seen: BatchProgress[] = []
 
-    await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B')], 'pro', 'standard', (progress) =>
-      seen.push(progress),
-    )
+    await exportDocumentsBatch([doc('a', 'A'), doc('b', 'B')], 'pro', {
+      onProgress: (progress) => seen.push(progress),
+    })
 
     expect(seen).toEqual([
       { index: 0, total: 2, title: 'A' },
@@ -215,11 +223,12 @@ describe('exportDocumentsBatch', () => {
     const result = await exportDocumentsBatch(
       [doc('a', 'A'), doc('b', 'B'), doc('c', 'C')],
       'pro',
-      'standard',
-      (progress) => {
-        if (progress.index === 0) controller.abort()
+      {
+        onProgress: (progress) => {
+          if (progress.index === 0) controller.abort()
+        },
+        signal: controller.signal,
       },
-      controller.signal,
     )
 
     expect(result.saved).toEqual(['A.pdf'])
@@ -234,13 +243,69 @@ describe('exportDocumentsBatch', () => {
     const result = await exportDocumentsBatch(
       [doc('a', 'A')],
       'pro',
-      'standard',
-      undefined,
-      controller.signal,
+      { signal: controller.signal },
     )
 
     expect(result.saved).toEqual([])
     expect(result.cancelled).toBe(true)
     expect(shared).toHaveLength(0)
+  })
+})
+
+describe('exportDocumentsBatch — Word', () => {
+  /** A document whose pages all carry recognised text. */
+  function recognized(id: string, title: string, pageCount = 1): LocalScanDocument {
+    const base = doc(id, title, pageCount)
+    base.pages = base.pages.map((page) => ({ ...page, text: `${page.original}-ocr.json` }))
+    for (const page of base.pages) {
+      layouts[page.text!] = { blocks: [{ text: title, lines: [{ text: title, words: [] }] }] }
+    }
+    return base
+  }
+
+  it('writes one .docx per document instead of a PDF', async () => {
+    const result = await exportDocumentsBatch(
+      [recognized('a', 'Kwitansi'), recognized('b', 'Kontrak')],
+      'pro',
+      { format: 'docx' },
+    )
+
+    expect(written).toEqual(['Kwitansi.docx', 'Kontrak.docx'])
+    expect(result.failed).toEqual([])
+  })
+
+  /**
+   * The selection is made on the documents tab, which knows nothing about
+   * which of them have been read. Skipping one quietly would leave the user
+   * counting files to work out which; it is reported like any other failure.
+   */
+  it('reports a document that has no text rather than writing an empty file', async () => {
+    const result = await exportDocumentsBatch(
+      [recognized('a', 'Kwitansi'), doc('b', 'Belum Dibaca')],
+      'pro',
+      { format: 'docx' },
+    )
+
+    expect(written).toEqual(['Kwitansi.docx'])
+    expect(result.saved).toEqual(['Kwitansi.docx'])
+    expect(result.failed).toEqual([
+      { title: 'Belum Dibaca', message: 'Belum ada teks yang dikenali di dokumen ini.' },
+    ])
+  })
+
+  it('numbers repeated titles against the Word extension', async () => {
+    const result = await exportDocumentsBatch(
+      [recognized('a', 'Nota'), recognized('b', 'Nota')],
+      'pro',
+      { format: 'docx' },
+    )
+
+    expect(result.saved).toEqual(['Nota.docx', 'Nota (2).docx'])
+  })
+
+  it('still defaults to PDF when no format is asked for', async () => {
+    await exportDocumentsBatch([recognized('a', 'Nota')], 'pro')
+
+    expect(written).toEqual(['Nota.pdf'])
   })
 })

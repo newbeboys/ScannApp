@@ -20,7 +20,14 @@ import {
 import { restoreBackup } from './lib/cloudRestore'
 import { mergeDocumentEntries } from './lib/documentEntries'
 import { quotaBytesFor } from './lib/storageQuota'
-import { exportDocument, exportDocumentsBatch, type BatchProgress, type ExportFormat } from './lib/documentExport'
+import {
+  canExportDocx,
+  exportDocument,
+  exportDocumentsBatch,
+  type BatchFormat,
+  type BatchProgress,
+  type ExportFormat,
+} from './lib/documentExport'
 import { summarizeSelection, toggleSelectAll, toggleSelection } from './lib/documentSelection'
 import { splitDocument } from './lib/documentSplit'
 import { estimateExportSizes, type ExportSizeEstimate } from './lib/exportEstimate'
@@ -28,7 +35,7 @@ import { readExportLevel, writeExportLevel } from './lib/exportPreference'
 import type { CompressionLevel } from './lib/exportLimits'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
-import { recognizeDocument, type OcrProgress } from './lib/ocr'
+import { describeOcrOutcome, recognizeDocument, type OcrProgress } from './lib/ocr'
 import {
   boundaryCuts,
   everyNCuts,
@@ -507,7 +514,7 @@ function App() {
     if (id) setSelectedIds([id])
   }
 
-  const handleBatchExport = async () => {
+  const handleBatchExport = async (format: BatchFormat) => {
     const chosen = summarizeSelection(entries, selectedIds).documents
     if (chosen.length === 0) return
 
@@ -515,13 +522,12 @@ function App() {
     batchAbort.current = controller
     setIsBatchBusy(true)
     try {
-      const result = await exportDocumentsBatch(
-        chosen,
-        tier,
-        exportLevel,
-        setBatchProgress,
-        controller.signal,
-      )
+      const result = await exportDocumentsBatch(chosen, tier, {
+        level: exportLevel,
+        format,
+        onProgress: setBatchProgress,
+        signal: controller.signal,
+      })
       setToast(result.message)
       // The selection survives a partial failure or a stop, so the rest can be
       // retried without re-ticking everything from scratch.
@@ -627,11 +633,7 @@ function App() {
         onProgress: setOcrProgress,
       })
       await refreshDocuments()
-      setToast(
-        outcome.failed > 0
-          ? `Teks dikenali di ${outcome.recognized} halaman, ${outcome.failed} gagal dibaca.`
-          : 'Teks dokumen sudah dikenali.',
-      )
+      setToast(describeOcrOutcome(outcome))
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Gagal mengenali teks.')
     } finally {
@@ -793,11 +795,19 @@ function App() {
       isBusy={isExporting}
       level={exportLevel}
       estimate={exportEstimate}
+      hasText={canExportDocx(exportDoc)}
       onLevelChange={(next) => {
         setExportLevel(next)
         writeExportLevel(next)
       }}
       onExport={handleExport}
+      onRecognizeText={() => {
+        // The sheet is closed first: the recogniser reports its progress on
+        // the row underneath, which the sheet would be covering.
+        setExportTarget(null)
+        if (tier === 'pro') void handleRecognizeText(exportDoc)
+        else setView({ kind: 'upgrade' })
+      }}
       onClose={() => setExportTarget(null)}
     />
   )

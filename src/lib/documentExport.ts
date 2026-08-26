@@ -22,7 +22,22 @@ import type { PageText } from './ocrLayout'
 import { readPageText, type LocalScanDocument } from './scanStorage'
 import type { Tier } from './tier'
 
-export type ExportFormat = 'pdf' | 'jpg' | 'png'
+export type ExportFormat = 'pdf' | 'jpg' | 'png' | 'docx'
+
+/** The formats that are pages of pixels, as opposed to a document of text. */
+export function isImageFormat(format: ExportFormat): format is 'jpg' | 'png' {
+  return format === 'jpg' || format === 'png'
+}
+
+/**
+ * True once a document has text to put in a Word file.
+ *
+ * The one thing DOCX depends on, kept here so the export sheet and the export
+ * itself cannot disagree about when it is offered.
+ */
+export function canExportDocx(doc: LocalScanDocument): boolean {
+  return doc.pages.some((page) => page.text)
+}
 
 /** Which document a running batch is on, for the sheet's progress line. */
 export interface BatchProgress {
@@ -30,6 +45,18 @@ export interface BatchProgress {
   index: number
   total: number
   title: string
+}
+
+/** What a whole selection is turned into. Narrower than ExportFormat on purpose:
+ * one image file per page across five documents is a hundred files at once. */
+export type BatchFormat = 'pdf' | 'docx'
+
+export interface BatchExportOptions {
+  level?: CompressionLevel
+  /** Word instead of PDF. The compression level has nothing to compress there. */
+  format?: BatchFormat
+  onProgress?: (progress: BatchProgress) => void
+  signal?: AbortSignal
 }
 
 export interface BatchExportResult {
@@ -110,17 +137,7 @@ async function exportPdf(
     bytes.push(await blobToBytes(page))
   }
 
-  // Read per page and kept index-aligned, gaps included: the builder matches
-  // words to pages by position, so dropping a page that was never recognised
-  // would move every later page's text onto the wrong page.
-  //
-  // No tier check. The gate is on running the engine (`recognizeDocument`),
-  // not on reading text the user already has: a lapsed subscription stops
-  // selling the machine, it does not confiscate what the machine produced.
-  const text: (PageText | null)[] = []
-  for (const page of doc.pages) {
-    text.push(await readPageText(page))
-  }
+  const text = await pageTexts(doc)
 
   const pdf = await buildPdf(bytes, {
     watermark: shouldWatermark(tier),
@@ -136,6 +153,54 @@ async function exportPdf(
       name: `${toSafeFilename(doc.title)}.pdf`,
       // Copied into a fresh buffer so the Blob gets a plain ArrayBuffer view.
       blob: new Blob([new Uint8Array(pdf)], { type: 'application/pdf' }),
+    },
+  ]
+}
+
+/**
+ * Reads every page's recognised text, keeping the gaps.
+ *
+ * Index-aligned on purpose: both consumers match text to pages by position, so
+ * dropping a page that was never recognised would move every later page's
+ * words onto the wrong page.
+ *
+ * No tier check here or in either consumer. The gate is on running the engine
+ * (`recognizeDocument`), not on reading text the user already has: a lapsed
+ * subscription stops selling the machine, it does not confiscate what the
+ * machine produced.
+ */
+async function pageTexts(doc: LocalScanDocument): Promise<(PageText | null)[]> {
+  const text: (PageText | null)[] = []
+  for (const page of doc.pages) {
+    text.push(await readPageText(page))
+  }
+  return text
+}
+
+/**
+ * The recognised text as an editable Word document.
+ *
+ * Touches no page image at all — that is the point of it. Running the
+ * compressor here would re-encode twenty 12 MP JPEGs to build a file that
+ * contains none of them.
+ *
+ * No tier check, for the same reason the PDF text layer has none: the gate is
+ * on running the recogniser (`recognizeDocument`), not on reading text the
+ * user already has. In practice that makes DOCX Pro anyway — a Basic account
+ * has no way to produce the text this needs.
+ */
+async function exportDocx(doc: LocalScanDocument): Promise<ExportFile[]> {
+  // Loaded on demand, like pdf-lib: neither belongs in the initial bundle.
+  const { buildDocx } = await import('./docxExport')
+
+  const docx = buildDocx(await pageTexts(doc), { title: doc.title, createdAt: doc.createdAt })
+
+  return [
+    {
+      name: `${toSafeFilename(doc.title)}.docx`,
+      blob: new Blob([new Uint8Array(docx)], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
     },
   ]
 }
@@ -185,6 +250,8 @@ export async function exportDocument(
   tier: Tier,
   level: CompressionLevel = DEFAULT_COMPRESSION_LEVEL,
 ): Promise<DeliveryResult> {
+  if (format === 'docx') return deliverExport(await exportDocx(doc))
+
   const options = COMPRESSION_PRESETS[resolveCompressionLevel(level)]
   const files =
     format === 'pdf' ? await exportPdf(doc, tier, options) : await exportImages(doc, options, format)
@@ -210,19 +277,18 @@ export async function exportDocument(
 export async function exportDocumentsBatch(
   docs: LocalScanDocument[],
   tier: Tier,
-  level: CompressionLevel = DEFAULT_COMPRESSION_LEVEL,
-  onProgress?: (progress: BatchProgress) => void,
-  signal?: AbortSignal,
+  batch: BatchExportOptions = {},
 ): Promise<BatchExportResult> {
   if (docs.length === 0) {
     throw new Error('Tidak ada dokumen untuk diekspor.')
   }
 
+  const { level = DEFAULT_COMPRESSION_LEVEL, format = 'pdf', onProgress, signal } = batch
   const options = COMPRESSION_PRESETS[resolveCompressionLevel(level)]
   // Decided up front, because only this function can see the whole batch:
-  // `exportPdf` names one document at a time and cannot know another document
-  // in the same run reduces to the same filename.
-  const names = uniqueExportNames(docs.map((doc) => `${toSafeFilename(doc.title)}.pdf`))
+  // the per-document builders name one at a time and cannot know that another
+  // document in the same run reduces to the same filename.
+  const names = uniqueExportNames(docs.map((doc) => `${toSafeFilename(doc.title)}.${format}`))
 
   const saved: string[] = []
   const failed: { title: string; message: string }[] = []
@@ -241,7 +307,12 @@ export async function exportDocumentsBatch(
     onProgress?.({ index, total: docs.length, title: doc.title })
 
     try {
-      const [built] = await exportPdf(doc, tier, options)
+      // A document nobody has run the recogniser over throws here, from
+      // `buildDocx`, and lands in `failed` with its own message. That is the
+      // right place for it: the selection is made on the documents tab, which
+      // has no idea which documents have been read.
+      const [built] =
+        format === 'docx' ? await exportDocx(doc) : await exportPdf(doc, tier, options)
       uris.push(...(await writeExportFiles([{ ...built, name: names[index] }])))
       saved.push(names[index])
     } catch (error) {

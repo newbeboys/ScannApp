@@ -221,7 +221,7 @@ Desain: `docs/superpowers/specs/2026-08-23-fase6-reorder-filter-design.md`
 - [x] Tanda tangan digital — ~~**Pro**~~ **semua tier sejak 25 Agustus 2026**, lihat bagian 3 & bagian 6 di bawah
 - [x] Reorder halaman — tombol geser kiri/kanan (bukan seret-lepas, lihat spec Bagian 2.6). **Semua tier**
 - [x] Filter lanjutan — **5 filter** (Boss Ali menaikkan dari 2 di PRD Bagian 3): Magic Color, Cerah, Abu-abu, Hitam-Putih (ambang adaptif lokal), Hemat Tinta. Berlaku untuk seluruh dokumen, bisa dikecualikan per halaman. **Semua tier**
-- [x] Export tambahan: **PNG** — **semua tier** (lihat catatan di bawah). DOCX belum: tanpa OCR isinya cuma gambar tertempel, jadi dipindah ke potongan yang sama dengan OCR
+- [x] Export tambahan: **PNG** — **semua tier** (lihat catatan di bawah) dan **DOCX** — **Pro**, dibuat bersama OCR di potongan D2 (lihat bagian 9)
 - [x] Kontrol level kompresi manual (slider kualitas vs ukuran) — **4 takik**, ~~tetap Pro~~ **semua tier sejak 25 Agustus 2026** (bagian 6)
 - [x] Batch scan/export — C1 & C2 selesai (lihat bagian 4 & 5 di bawah). ~~Ekspor banyak dokumen Pro~~ → **semua tier sejak 25 Agustus 2026**, lihat bagian 6
 - [x] Pisah dokumen yang **sudah tersimpan** (kebalikan merge) — di luar daftar asli, diminta Boss Ali 25 Agustus 2026, lihat bagian 6
@@ -632,6 +632,50 @@ Ketemu saat code-review menjelang commit D1. Keduanya di potongan C2 (pisah doku
 - [x] **Pemisah bergeser diam-diam setelah halaman dihapus.** Keluar dari layar Pisah sengaja **menyimpan** cut-nya supaya percobaan ulang setelah simpan yang setengah berhasil tidak kehilangan penempatan — tapi layar Tinjau di baliknya masih bisa menghapus halaman. Masuk lagi ke layar Pisah lalu memakai cut lama terhadap daftar yang menyusut membuat tiap pemisah setelah halaman itu jatuh ke batas yang berbeda dari yang ditempatkan user. Ditutup dengan `remapCutsAfterRemoval()`: cut sesudah halaman yang dihapus turun satu, cut sebelumnya diam, dan pasangan yang mengapitnya melebur jadi satu — deduplikasinya di sini, bukan diserahkan ke `planSplit`, supaya yang digambar layar dan yang akan disimpan tidak bisa berbeda
 - [x] `limitRows` dipindah dari `UpgradeScreen.tsx` ke `src/lib/upgradeLedger.ts`. Meng-export fungsi dari berkas komponen memang mematahkan Fast Refresh untuk berkas itu, dan oxlint menegurnya — modul sendiri lebih tepat untuk data yang memang bukan komponen
 - [x] Test 683 → 694
+
+### Fase 6 bagian 9 — Ekspor DOCX (D2) — 25 Agustus 2026
+
+Tahap kedua dari potongan **D**, dan yang terakhir di Fase 6. Desain: `docs/superpowers/specs/2026-08-25-fase6-ocr-docx-design.md` Bagian 6.
+
+- [x] **Penulis ZIP sendiri (`zipWriter.ts`), nol dependency baru.** Metode **STORE**, tanpa kompresi: DOCX berisi teks saja itu puluhan KB, jadi deflate menghemat lebih sedikit daripada ongkos menambah dependency (`docx` menyeret jszip) atau menulis deflate sendiri — dan entry ber-STORE sah sepenuhnya menurut OPC. Tanpa zip64, tanpa data descriptor, nama entry ASCII saja, dan **menolak** nama non-ASCII alih-alih menulis mojibake
+- [x] **Cap waktu dari `createdAt` dokumen, bukan dari jam.** Itu yang membuat keluarannya **deterministik**: dokumen yang sama diekspor dua kali menghasilkan byte yang sama, dan tanpa itu tidak ada yang bisa dibandingkan persis di test
+- [x] **`docxExport.ts` — empat part OOXML minimal**: `[Content_Types].xml`, `_rels/.rels`, `word/document.xml`, `docProps/core.xml` (judul & tanggal, sejajar `setTitle`/`setCreationDate` di PDF)
+- [x] **Satu paragraf per blok OCR, baris di dalamnya digabung spasi** — itu yang membuat teksnya bisa di-reflow saat diedit, yang memang arti "ubah scan jadi Word". Risikonya diakui terang-terangan di komentarnya: untuk struk dan formulir, di mana tiap baris adalah butir sendiri, menggabungkan baris membaca lebih buruk. Masuk daftar uji device, dan gantinya satu baris kode
+- [x] **Escaping `& < > "` plus membuang karakter kontrol C0.** XML 1.0 menolak sebagian besar C0, dan satu byte nyasar dari OCR membuat Word menolak berkasnya sebagai "rusak" tanpa menyebut byte yang mana
+- [x] **DOCX membawa karakter yang justru dibuang lapisan teks PDF.** Body-nya UTF-8, jadi 名前 selamat di sini sementara di PDF ia harus dibuang karena Helvetica/WinAnsi tidak punya glyph-nya
+- [x] **Ekspor DOCX tidak menyentuh satu pun gambar halaman.** Itu intinya: menjalankan kompresor di jalur ini akan meng-encode ulang dua puluh JPEG 12 MP untuk membuat berkas yang tidak memuat satu pun dari mereka. Ada test yang menjaganya
+- [x] **Perkiraan ukuran DOCX bukan perkiraan.** Format gambar harus meng-encode satu halaman lalu dikali karena meng-encode tiga puluh halaman akan makan detik tiap geseran slider; DOCX cukup dibuat betulan (milidetik, tanpa gambar) lalu diukur. Ditampilkan **tanpa "≈"**, dan `null` — bukan nol — saat belum ada teks, supaya "belum dikenali" tidak terbaca sebagai "berkas kosong"
+- [x] **Baris Word di lembar Ekspor menawarkan pengenal teks saat belum ada teksnya**, bukan diam-diam mati. Baris mati terbaca sebagai aplikasi rusak, padahal jalan keluarnya satu layar saja
+- [x] **Ekspor banyak dokumen menerima Word** lewat pilihan PDF/Word di lembarnya. Kontrol mutu **disembunyikan** saat Word dipilih — tidak ada gambar untuk dikompresi, dan di lembar ini memang ada keadaan "terpilih" untuk ditanggapi (beda dari lembar satu-dokumen, di mana mengetuk format langsung mengekspor). Dokumen yang belum dikenali teksnya dilaporkan sebagai gagal dengan pesannya sendiri, bukan dilewati diam-diam — pemilihannya dilakukan di tab Dokumen, yang tidak tahu dokumen mana yang sudah dibaca
+- [x] **`exportDocumentsBatch` dirapikan jadi objek opsi** (`{ level, format, onProgress, signal }`). Menambahkan `format` sebagai argumen keenam setelah `signal` akan jadi tanda tangan yang beberapa bulan lagi terbaca sebagai kekeliruan
+- [x] **CSS kontrol segmented dipakai bersama, bukan disalin** — selektor `.filter-scope` di editor digabung dengan `.format-switch` yang baru. Dua salinan aturan yang sama pasti berbeda cepat atau lambat
+- [x] **Gerbang tier: tidak ada, dan itu disengaja.** DOCX itu Pro, tapi gerbangnya tetap satu — `recognizeDocument()`. Menambah cek tier di jalur ekspor akan menyandera teks yang sudah dibayar kalau langganan habis, persis yang sudah dihindari di lapisan teks PDF. Akun Basic tidak punya cara membuat teksnya, jadi DOCX praktis tetap Pro tanpa gerbang kedua
+- [x] **Test 694 → 756.** Lima mutasi dijalankan untuk membuktikan test-nya menggigit: metode STORE diganti deflate → merah; CRC dinolkan → merah; pembuang karakter kontrol dilepas → merah; page break dihapus → dua test merah; ekspor DOCX dibuat ikut meng-encode halaman → merah. Semua dikembalikan
+- [x] **CRC-32 diuji terhadap implementasi terpisah** yang dihitung bit-per-bit tanpa tabel, bukan terhadap angka emas — tabel yang disalin dari sumber yang sama dengan kode produksi akan setuju dengan kode itu meski dua-duanya salah
+- [x] **Kesahihan XML dibuktikan parser sungguhan** di suite browser (`DOMParser` Chromium), bukan cuma dengan mencocokkan string. Markup buatan tangan itu persis jenis hal yang terbaca benar tapi tetap gagal di-parse
+
+**Dua temuan code-review ditutup sebelum commit:**
+
+- [x] **Cap waktu ZIP bocor timezone device.** `dosDateTime` membaca `Date` dengan getter waktu lokal (`getHours`, `getDate`, dst.), padahal `createdAt` yang dibungkusnya adalah ISO UTC. Efeknya dua: klaim "diekspor dua kali menghasilkan byte yang sama" jadi bergantung timezone mesin yang mengekspor, dan cap ZIP bisa jatuh di hari yang beda dari `dcterms:created` (yang tetap string ISO asli) untuk device yang bukan UTC — termasuk WIB. Diganti ke getter `getUTC*`, dengan komentar yang menjelaskan kenapa. Test lama diam-diam lolos di kedua versi karena ia membaca ulang dengan getter lokal yang sama (mem-vonis mock, bukan perilaku); test baru menuliskan bagian tanggal/jam sebagai literal UTC dari `MODIFIED`, dan mutasi baliknya (kembali ke getter lokal) terbukti merah
+- [x] **Toast OCR menutupi halaman kosong.** `ocr.ts` sudah membedakan `empty` (mesin jalan, kertas kosong) dari `failed`, tapi `App.tsx` cuma mengecek `outcome.failed > 0` — dokumen yang semua halamannya kosong (foto, kertas polos) dilaporkan "Teks dokumen sudah dikenali." padahal `recognized` tetap 0 dan tombol Word tetap menolak dengan "belum ada teks yang dikenali", persis kontradiksi yang coba dihindari `ocr.ts`, cuma pindah satu lapisan ke atas. Ditambahkan `describeOcrOutcome()` di `ocr.ts` sebagai satu-satunya tempat yang tahu cara merangkai keempat angka jadi satu kalimat, dipakai `App.tsx` menggantikan ternary lama
+
+**Terverifikasi di luar kode kita** (sekali saat pengerjaan, seperti verifikasi Chromium waktu potongan kontrol export). Berkas `.docx` sungguhan dibuat lalu dibuka **tiga pembaca independen**:
+
+- **`tar.exe` bawaan Windows** (bsdtar) mengekstraknya bersih, keempat part keluar, exit code 0 — dan ekstraksinya memverifikasi CRC tiap entry
+- **.NET `System.IO.Compression.ZipFile`** membaca keempat entry dan isinya, lalu `XmlDocument` mem-parse `word/document.xml`: 4 paragraf, escaping `&amp;`/`&lt;` benar, baris yang terbungkus tergabung jadi satu paragraf seperti rancangannya
+- **.NET `System.IO.Packaging.Package`** — abstraksi OPC yang sama yang dipakai Word — membuka paketnya, mengenali kedua content type, dan menemukan kedua relationship
+
+**Fase 6 selesai** setelah ini.
+
+**Menunggu keputusan Boss Ali:** keputusan 22 Agustus — "flow pembelian Pro tidak dibuka ke publik sebelum Fase 6 selesai" — **sudah tidak terhalang apa pun**. Kodenya siap dan sudah diuji sejak Fase 5; yang ditunda hanya pembukaannya ke user. Ini keputusan Boss Ali, bukan sesuatu yang diambil kode ini.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] **DOCX dibuka di WPS/Word di HP** — ini bukti yang sebenarnya; tiga pembaca di atas mesin dev, bukan Android
+- [ ] **Penggabungan baris dalam satu blok: cek di struk & formulir.** Titik keputusan yang sengaja ditunda sampai lihat keluaran ML Kit di dokumen Indonesia sungguhan — kalau hasilnya jelek, ganti ke satu paragraf per baris
+- [ ] Page break mendarat di tempat yang benar untuk dokumen banyak halaman
+- [ ] Ekspor banyak dokumen ke Word: dokumen yang belum dikenali dilaporkan gagal dengan pesannya, sisanya tetap tersimpan
+- [ ] Judul & tanggal dokumen terbaca benar di properti berkas Word
 
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 

@@ -1608,7 +1608,13 @@ body.scroll-locked .app__body {
   Cakupan dipisah dari daftar filternya supaya jelas: chip yang sama berarti
   dua hal berbeda tergantung tombol mana yang aktif di sini.
 */
-.filter-scope {
+/*
+  Dipakai dua tempat: cakupan filter di editor, dan pilihan format di lembar
+  Ekspor Banyak Dokumen. Selektornya digabung, bukan disalin — dua salinan
+  aturan yang sama pasti berbeda cepat atau lambat.
+*/
+.filter-scope,
+.format-switch {
   display: flex;
   gap: 4px;
   padding: 4px;
@@ -1617,7 +1623,8 @@ body.scroll-locked .app__body {
   border: 1px solid var(--chip-border);
 }
 
-.filter-scope__option {
+.filter-scope__option,
+.format-switch__option {
   flex: 1 1 0;
   padding: 9px 8px;
   border: none;
@@ -1629,13 +1636,15 @@ body.scroll-locked .app__body {
   transition: background 160ms ease, color 160ms ease;
 }
 
-.filter-scope__option--active {
+.filter-scope__option--active,
+.format-switch__option--active {
   background: var(--surface);
   color: var(--fg);
   box-shadow: var(--shadow);
 }
 
-.filter-scope__option:disabled {
+.filter-scope__option:disabled,
+.format-switch__option:disabled {
   opacity: 0.6;
 }
 

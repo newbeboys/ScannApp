@@ -57,7 +57,7 @@ vi.mock('./scanStorage', async () => {
   }
 })
 
-const { recognizeDocument } = await import('./ocr')
+const { describeOcrOutcome, recognizeDocument } = await import('./ocr')
 
 beforeEach(() => {
   processImage.mockClear()
@@ -189,5 +189,87 @@ describe('recognizeDocument', () => {
 
     expect(result.failed).toBe(1)
     expect(result.recognized).toBe(1)
+  })
+})
+
+describe('recognizeDocument — halaman yang tidak menghasilkan teks', () => {
+  /** ML Kit menemukan apa-apa: foto, halaman kosong, kertas gelap. */
+  const NOTHING = { text: '', blocks: [] }
+
+  /**
+   * Temuan code-review 25 Agustus 2026. Menyimpan tata letak kosong membuat
+   * `page.text` terisi, dan itu satu-satunya hal yang dilihat layar detail
+   * maupun `canExportDocx` — jadi UI mengumumkan "Teks dikenali" lalu ekspor
+   * Word menolak dengan "belum ada teks yang dikenali". Dua pesan yang
+   * bertentangan tentang dokumen yang sama.
+   */
+  it('tidak menyimpan apa pun untuk halaman yang kosong hasilnya', async () => {
+    processImage.mockResolvedValue(NOTHING)
+
+    const result = await recognizeDocument('doc-1', 'pro')
+
+    expect(savePageText).not.toHaveBeenCalled()
+    expect(result.recognized).toBe(0)
+    expect(result.empty).toBe(2)
+  })
+
+  it('tetap menyimpan halaman yang ada teksnya di dokumen yang sama', async () => {
+    processImage.mockResolvedValueOnce(NOTHING)
+
+    const result = await recognizeDocument('doc-1', 'pro')
+
+    expect(savePageText).toHaveBeenCalledTimes(1)
+    expect(result.recognized).toBe(1)
+    expect(result.empty).toBe(1)
+  })
+
+  /** Halaman kosong bukan kegagalan — mesinnya bekerja, kertasnya yang polos. */
+  it('tidak menghitungnya sebagai gagal', async () => {
+    processImage.mockResolvedValue(NOTHING)
+
+    const result = await recognizeDocument('doc-1', 'pro')
+
+    expect(result.failed).toBe(0)
+  })
+})
+
+/**
+ * Kalimat inilah yang dilihat user, jadi ia yang harus setuju dengan apa yang
+ * sebenarnya terjadi — bukan cuma penghitungnya. Halaman kosong meninggalkan
+ * `page.text` tetap kosong, jadi melaporkannya sebagai sukses polos berarti
+ * layar bilang teksnya siap sementara ekspor Word menolak dengan alasan
+ * sebaliknya.
+ */
+describe('describeOcrOutcome', () => {
+  it('bilang selesai kalau semuanya terbaca', () => {
+    expect(describeOcrOutcome({ recognized: 3, skipped: 0, empty: 0, failed: 0 })).toBe(
+      'Teks dokumen sudah dikenali.',
+    )
+  })
+
+  it('tidak menyebut dokumen tanpa teks sebagai berhasil', () => {
+    const message = describeOcrOutcome({ recognized: 0, skipped: 0, empty: 2, failed: 0 })
+
+    expect(message).not.toBe('Teks dokumen sudah dikenali.')
+    expect(message).toBe('Tidak ada teks yang dikenali: 2 halaman tanpa teks.')
+  })
+
+  it('menyebut halaman kosong di samping yang terbaca', () => {
+    expect(describeOcrOutcome({ recognized: 2, skipped: 0, empty: 1, failed: 0 })).toBe(
+      'Teks dikenali di 2 halaman, 1 halaman tanpa teks.',
+    )
+  })
+
+  /** Halaman yang sudah punya teks tetap punya teks — itu yang ditanyakan user. */
+  it('menghitung halaman yang dilewati sebagai halaman berteks', () => {
+    expect(describeOcrOutcome({ recognized: 1, skipped: 3, empty: 0, failed: 1 })).toBe(
+      'Teks dikenali di 4 halaman, 1 gagal dibaca.',
+    )
+  })
+
+  it('menyebut kosong dan gagal sekaligus kalau keduanya ada', () => {
+    expect(describeOcrOutcome({ recognized: 1, skipped: 0, empty: 2, failed: 3 })).toBe(
+      'Teks dikenali di 1 halaman, 2 halaman tanpa teks, 3 gagal dibaca.',
+    )
   })
 })

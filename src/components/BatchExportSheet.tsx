@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { CloseIcon, ExportIcon } from './Icons'
 import { CompressionField } from './CompressionField'
-import type { BatchProgress } from '../lib/documentExport'
+import type { BatchFormat, BatchProgress } from '../lib/documentExport'
 import type { CompressionLevel } from '../lib/exportLimits'
 import { useScrollLock } from '../lib/useScrollLock'
 
@@ -12,18 +13,24 @@ interface BatchExportSheetProps {
   progress: BatchProgress | null
   isBusy: boolean
   onLevelChange: (level: CompressionLevel) => void
-  onExport: () => void
+  onExport: (format: BatchFormat) => void
   onStop: () => void
   onClose: () => void
 }
 
+const FORMATS: { id: BatchFormat; label: string }[] = [
+  { id: 'pdf', label: 'PDF' },
+  { id: 'docx', label: 'Word' },
+]
+
 /**
  * The batch counterpart of `ExportSheet`.
  *
- * Deliberately narrower than that one: PDF only, and no size estimate. The
- * single-document sheet takes about 1.2 s to measure one document on a real
- * phone, so measuring a selection of five would leave this sheet blank for six
- * seconds before it could show anything at all.
+ * Deliberately narrower than that one: PDF or Word only, never one image file
+ * per page — five documents in JPG is a hundred files landing at once — and no
+ * size estimate. The single-document sheet takes about 1.2 s to measure one
+ * document on a real phone, so measuring a selection of five would leave this
+ * sheet blank for six seconds before it could show anything at all.
  */
 export function BatchExportSheet({
   count,
@@ -37,6 +44,10 @@ export function BatchExportSheet({
   onClose,
 }: BatchExportSheetProps) {
   useScrollLock()
+  // PDF first: it is the one format every selected document can always
+  // produce, whether or not anybody has run the recogniser over it.
+  const [format, setFormat] = useState<BatchFormat>('pdf')
+  const isWord = format === 'docx'
 
   return (
     <div className="sheet-backdrop" onClick={isBusy ? undefined : onClose}>
@@ -64,10 +75,38 @@ export function BatchExportSheet({
           </button>
         </div>
 
-        <CompressionField level={level} isBusy={isBusy} onLevelChange={onLevelChange} />
+        <div className="format-switch" role="radiogroup" aria-label="Format ekspor">
+          {FORMATS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={format === option.id}
+              className={`format-switch__option${
+                format === option.id ? ' format-switch__option--active' : ''
+              }`}
+              disabled={isBusy}
+              onClick={() => setFormat(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {/*
+          Hidden for Word, unlike the single-document sheet: there are no images
+          in a Word file to compress, and here there *is* a selected format for
+          the control to react to — tapping a format in the other sheet exports
+          straight away, so it never has one.
+        */}
+        {!isWord && (
+          <CompressionField level={level} isBusy={isBusy} onLevelChange={onLevelChange} />
+        )}
 
         <p className="batch-note">
-          Setiap dokumen jadi satu berkas PDF di folder Documents.
+          {isWord
+            ? 'Setiap dokumen jadi satu berkas Word berisi teksnya. Dokumen yang belum dikenali teksnya akan dilewati.'
+            : 'Setiap dokumen jadi satu berkas PDF di folder Documents.'}
         </p>
 
         {progress ? (
@@ -110,10 +149,10 @@ export function BatchExportSheet({
             type="button"
             className="button button--primary"
             data-testid="batch-export"
-            onClick={onExport}
+            onClick={() => onExport(format)}
           >
             <ExportIcon size={17} />
-            <span>Ekspor {count} PDF</span>
+            <span>Ekspor {count} {isWord ? 'Word' : 'PDF'}</span>
           </button>
         )}
       </div>

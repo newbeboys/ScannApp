@@ -15,6 +15,13 @@ vi.mock('./imageEditor', () => ({
   },
 }))
 
+/** Recognised layouts on disk, keyed by the path a page points at. */
+const layouts: Record<string, unknown> = {}
+
+vi.mock('./scanStorage', () => ({
+  readPageText: async (page: { text?: string }) => (page.text ? (layouts[page.text] ?? null) : null),
+}))
+
 vi.mock('./documentEditing', () => ({
   loadPageBlob: async () => new Blob(['page']),
 }))
@@ -34,6 +41,7 @@ function doc(pageCount: number): LocalScanDocument {
 
 beforeEach(() => {
   asked.length = 0
+  for (const key of Object.keys(layouts)) delete layouts[key]
 })
 
 describe('estimateExportSizes', () => {
@@ -87,5 +95,63 @@ describe('estimateExportSizes', () => {
     await estimateExportSizes(doc(1), 'enormous' as CompressionLevel)
 
     expect(asked[0].quality).toBe(COMPRESSION_PRESETS.standard.quality)
+  })
+})
+
+describe('estimateExportSizes — DOCX', () => {
+  const layout = (text: string) => ({ blocks: [{ text, lines: [{ text, words: [] }] }] })
+
+  function withText(pageCount: number, texts: string[]): LocalScanDocument {
+    const base = doc(pageCount)
+    base.pages = base.pages.map((page, index) => ({
+      ...page,
+      ...(texts[index] ? { text: `${page.original}-ocr.json` } : {}),
+    }))
+    for (const [index, text] of texts.entries()) {
+      if (text) layouts[`page-${index + 1}.jpg-ocr.json`] = layout(text)
+    }
+    return base
+  }
+
+  /**
+   * Unlike the image formats, which encode one page and multiply, a text-only
+   * DOCX is cheap enough to build for real — so the number shown is the number
+   * the file weighs, not an approximation of it.
+   */
+  it('measures the real file rather than estimating it', async () => {
+    const { buildDocx } = await import('./docxExport')
+    const document = withText(2, ['Halaman satu', 'Halaman dua'])
+
+    const estimate = await estimateExportSizes(document, 'standard')
+
+    expect(estimate.docx).toBe(
+      buildDocx(
+        [layout('Halaman satu'), layout('Halaman dua')],
+        { title: 'Nota', createdAt: '2026-03-04T00:00:00.000Z' },
+      ).length,
+    )
+  })
+
+  it('grows with the amount of text, not with the page count', async () => {
+    const short = await estimateExportSizes(withText(1, ['Halo']), 'standard')
+    const long = await estimateExportSizes(withText(1, ['Halo '.repeat(200)]), 'standard')
+
+    expect(long.docx!).toBeGreaterThan(short.docx!)
+  })
+
+  /**
+   * Null, not zero: the sheet has to tell "nothing to export yet" apart from
+   * "an empty file", and zero would read as the second.
+   */
+  it('reports nothing at all for a document that was never recognised', async () => {
+    const estimate = await estimateExportSizes(doc(2), 'standard')
+
+    expect(estimate.docx).toBeNull()
+  })
+
+  it('does not change what the image formats cost to work out', async () => {
+    await estimateExportSizes(withText(1, ['Halo']), 'standard')
+
+    expect(asked).toHaveLength(1)
   })
 })

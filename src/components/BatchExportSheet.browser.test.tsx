@@ -102,3 +102,62 @@ describe('BatchExportSheet after the tier gates came off', () => {
     await expect.element(screen.getByRole('slider')).toBeEnabled()
   })
 })
+
+describe('BatchExportSheet — memilih PDF atau Word', () => {
+  it('berangkat dari PDF, format yang selalu bisa dipakai', async () => {
+    const screen = await renderSheet()
+
+    await expect.element(screen.getByRole('radio', { name: 'PDF' })).toBeChecked()
+    await expect.element(screen.getByTestId('batch-export')).toHaveTextContent('Ekspor 3 PDF')
+  })
+
+  it('mengganti tujuan ekspor ke Word', async () => {
+    const onExport = vi.fn()
+    const screen = await renderSheet({ onExport })
+
+    await screen.getByRole('radio', { name: 'Word' }).click()
+    await expect.element(screen.getByTestId('batch-export')).toHaveTextContent('Ekspor 3 Word')
+    await screen.getByTestId('batch-export').click()
+
+    expect(onExport).toHaveBeenCalledWith('docx')
+  })
+
+  it('tetap mengirim pdf kalau pilihannya tidak disentuh', async () => {
+    const onExport = vi.fn()
+    const screen = await renderSheet({ onExport })
+
+    await screen.getByTestId('batch-export').click()
+
+    expect(onExport).toHaveBeenCalledWith('pdf')
+  })
+
+  /**
+   * Tidak ada gambar di dalam berkas Word, jadi menampilkan kontrol mutu di
+   * sebelahnya itu menjanjikan pengaruh yang tidak ada. Beda dengan lembar
+   * satu-dokumen, yang tidak punya keadaan "terpilih" untuk ditanggapi.
+   */
+  it('menyembunyikan kontrol mutu saat Word dipilih', async () => {
+    const screen = await renderSheet()
+
+    await expect.element(screen.getByText('Kualitas')).toBeVisible()
+    await screen.getByRole('radio', { name: 'Word' }).click()
+
+    await expect.element(screen.getByText('Kualitas')).not.toBeInTheDocument()
+  })
+
+  it('memberitahu bahwa dokumen yang belum dikenali akan dilewati', async () => {
+    const screen = await renderSheet()
+
+    await screen.getByRole('radio', { name: 'Word' }).click()
+
+    await expect
+      .element(screen.getByText(/belum dikenali teksnya akan dilewati/i))
+      .toBeVisible()
+  })
+
+  it('mengunci pilihan format selama ekspor berjalan', async () => {
+    const screen = await renderSheet({ isBusy: true })
+
+    await expect.element(screen.getByRole('radio', { name: 'Word' })).toBeDisabled()
+  })
+})

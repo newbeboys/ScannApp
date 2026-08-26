@@ -12,10 +12,17 @@ export interface OcrProgress {
 }
 
 export interface OcrOutcome {
-  /** Pages read on this run. */
+  /** Pages read on this run that actually yielded words. */
   recognized: number
   /** Pages that already had text and were left alone. */
   skipped: number
+  /**
+   * Pages the engine read but found nothing on — a photo, a blank sheet.
+   *
+   * Not a failure: the machine worked, the paper was empty. Counted separately
+   * so the screen can say which of the two happened.
+   */
+  empty: number
   /** Pages the engine could not read. The document keeps whatever it had. */
   failed: number
 }
@@ -82,7 +89,7 @@ export async function recognizeDocument(
   if (!doc) throw new Error('Dokumen tidak ditemukan.')
 
   const total = doc.pages.length
-  const outcome: OcrOutcome = { recognized: 0, skipped: 0, failed: 0 }
+  const outcome: OcrOutcome = { recognized: 0, skipped: 0, empty: 0, failed: 0 }
   options.onProgress?.({ done: 0, total })
 
   for (let index = 0; index < total; index++) {
@@ -92,8 +99,21 @@ export async function recognizeDocument(
       outcome.skipped++
     } else {
       try {
-        await savePageText(docId, index, await recognizePage(page))
-        outcome.recognized++
+        const text = await recognizePage(page)
+        if (text.blocks.length === 0) {
+          /*
+            Nothing found, so nothing is stored — and `page.text` stays unset.
+            That matters beyond tidiness: `page.text` being present is the only
+            thing the detail screen and `canExportDocx` look at, while the
+            export itself checks for actual blocks. Writing an empty layout
+            makes those two disagree, and the user is told "Teks dikenali"
+            right before Word refuses with "belum ada teks yang dikenali".
+          */
+          outcome.empty++
+        } else {
+          await savePageText(docId, index, text)
+          outcome.recognized++
+        }
       } catch {
         // Deliberately swallowed: the page keeps whatever text it had, and the
         // count is what the caller reports. Re-running picks it up again.
@@ -105,4 +125,29 @@ export async function recognizeDocument(
   }
 
   return outcome
+}
+
+/**
+ * The one line the screen shows once a read is over.
+ *
+ * `empty` has to reach the user here, not only in the counts: a page the engine
+ * read and found nothing on leaves `page.text` unset, so `canExportDocx` stays
+ * false. Reporting that run as a plain success brings back the exact
+ * contradiction the split between `recognized` and `empty` removed — the screen
+ * says the text is ready, and Word then refuses with "belum ada teks yang
+ * dikenali".
+ *
+ * Pages that already had text count as pages with text: what the user is asking
+ * after pressing the button is how much of the document can be read now, not
+ * how much of it this particular run touched.
+ */
+export function describeOcrOutcome(outcome: OcrOutcome): string {
+  const problems: string[] = []
+  if (outcome.empty > 0) problems.push(`${outcome.empty} halaman tanpa teks`)
+  if (outcome.failed > 0) problems.push(`${outcome.failed} gagal dibaca`)
+  if (problems.length === 0) return 'Teks dokumen sudah dikenali.'
+
+  const withText = outcome.recognized + outcome.skipped
+  if (withText === 0) return `Tidak ada teks yang dikenali: ${problems.join(', ')}.`
+  return `Teks dikenali di ${withText} halaman, ${problems.join(', ')}.`
 }

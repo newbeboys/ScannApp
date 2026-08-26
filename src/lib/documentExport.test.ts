@@ -18,10 +18,14 @@ vi.mock('./documentEditing', () => ({
 }))
 
 const delivered: { name: string }[][] = []
+/** The blobs handed to delivery, so a test can look inside the file itself. */
+const deliveredBlobs: Blob[][] = []
+const deliveredBlob = (index: number) => deliveredBlobs[index][0]
 
 vi.mock('./exportShare', () => ({
   deliverExport: async (files: { name: string; blob: Blob }[]) => {
     delivered.push(files.map((file) => ({ name: file.name })))
+    deliveredBlobs.push(files.map((file) => file.blob))
     return { message: `${files.length} file` }
   },
 }))
@@ -64,6 +68,7 @@ function doc(pageCount: number, title = 'Nota'): LocalScanDocument {
 beforeEach(() => {
   encodes.length = 0
   delivered.length = 0
+  deliveredBlobs.length = 0
 })
 
 /**
@@ -222,5 +227,67 @@ describe('searchable PDF', () => {
     await exportDocument(doc(2), 'pdf', 'pro')
 
     expect(pdfOptions[0].text).toEqual([null, null])
+  })
+})
+
+describe('DOCX export', () => {
+  beforeEach(() => {
+    for (const key of Object.keys(layouts)) delete layouts[key]
+  })
+
+  function withText(pageCount: number): LocalScanDocument {
+    const base = doc(pageCount)
+    base.pages = base.pages.map((page) => ({ ...page, text: `${page.original}-ocr.json` }))
+    return base
+  }
+
+  const layout = (text: string) => ({
+    blocks: [{ text, lines: [{ text, words: [] }] }],
+  })
+
+  it('delivers one real Word archive named after the document', async () => {
+    layouts['page-1.jpg-ocr.json'] = layout('Kwitansi')
+
+    await exportDocument(withText(1), 'docx', 'pro')
+
+    expect(delivered[0]).toEqual([{ name: 'Nota.docx' }])
+    // The name alone proves nothing — the image path would happily produce a
+    // JPEG called Nota.docx. These are the bytes of a ZIP local file header.
+    const head = new Uint8Array(await deliveredBlob(0).slice(0, 4).arrayBuffer())
+    expect(Array.from(head)).toEqual([0x50, 0x4b, 0x03, 0x04])
+  })
+
+  /**
+   * The whole point of a text-only DOCX: it costs no image work at all. If the
+   * encoder ran here, exporting a twenty-page scan to Word would re-encode
+   * twenty 12 MP JPEGs to produce a file that contains none of them.
+   */
+  it('never re-encodes a single page image', async () => {
+    layouts['page-1.jpg-ocr.json'] = layout('Kwitansi')
+
+    await exportDocument(withText(2), 'docx', 'pro')
+
+    expect(encodes).toEqual([])
+  })
+
+  it('carries the recognised text of every page into the file', async () => {
+    layouts['page-1.jpg-ocr.json'] = layout('Halaman satu')
+    layouts['page-2.jpg-ocr.json'] = layout('Halaman dua')
+
+    await exportDocument(withText(2), 'docx', 'pro')
+
+    // The archive is stored uncompressed, so the words are in it verbatim.
+    const body = new TextDecoder().decode(await deliveredBlob(0).arrayBuffer())
+    expect(body).toContain('Halaman satu')
+    expect(body).toContain('Halaman dua')
+  })
+
+  /**
+   * The sheet keeps DOCX unselectable until the document has been read, but
+   * the rule lives here too: a Word file with nothing in it looks like the
+   * export silently failed.
+   */
+  it('refuses a document that was never recognised', async () => {
+    await expect(exportDocument(doc(1), 'docx', 'pro')).rejects.toThrow(/teks/i)
   })
 })

@@ -521,18 +521,42 @@ import { onSharedFilesReceived } from './lib/sharedImport'
 
 - [ ] **Step 2: Register the listener in a mount effect**
 
-Add a new `useEffect` right after the existing one that calls `refreshDocuments`/`refreshBackupState` (the block starting `useEffect(() => { if (status !== 'signed-in') return; ...`, around `App.tsx:196-200`):
+First, add a ref that always holds the current `pendingPages` value, right after the `pendingPages` state declaration (`App.tsx:91`, `const [pendingPages, setPendingPages] = useState<string[] | null>(null)`):
+
+```tsx
+  // Lets the effect below read the *current* pendingPages without adding it
+  // to the effect's dependency array (which would tear down and rebuild the
+  // native listener subscription on every single page added or removed --
+  // wasteful, and a real risk of missing a share that arrives in the gap
+  // between unsubscribe and resubscribe, since the unsubscribe itself is
+  // async). Assigning during render is the standard way to keep a ref
+  // current without an extra effect.
+  const pendingPagesRef = useRef(pendingPages)
+  pendingPagesRef.current = pendingPages
+```
+
+Then add a new `useEffect` right after the existing one that calls `refreshDocuments`/`refreshBackupState` (the block starting `useEffect(() => { if (status !== 'signed-in') return; ...`, around `App.tsx:196-200`):
 
 ```tsx
   useEffect(() => {
     return onSharedFilesReceived(({ images, skippedCount }) => {
       if (images.length > 0) {
-        setPendingPages((existing) => (existing ? [...existing, ...images] : images))
-        setReviewPreview(null)
-        setSplitting(false)
-        setSplitCuts([])
-        setSplitName('')
-        setSplitProgress(null)
+        if (pendingPagesRef.current) {
+          // Mid-review already: same as handleAddPages -- append only.
+          // Deliberately does NOT touch split state: if the user is in the
+          // middle of the Pisah screen with cuts already placed, a share
+          // arriving must not silently discard that unsaved work.
+          setPendingPages((existing) => [...(existing ?? []), ...images])
+        } else {
+          // Nothing in progress: same as handleStartScan -- a fresh review
+          // session, so stale state from whatever came before is cleared.
+          setPendingPages(images)
+          setReviewPreview(null)
+          setSplitting(false)
+          setSplitCuts([])
+          setSplitName('')
+          setSplitProgress(null)
+        }
       }
 
       if (skippedCount > 0) {
@@ -546,7 +570,7 @@ Add a new `useEffect` right after the existing one that calls `refreshDocuments`
   }, [])
 ```
 
-(The five setters used here — `setPendingPages`, `setReviewPreview`, `setSplitting`, `setSplitCuts`, `setSplitName`, `setSplitProgress`, `setToast` — are the same ones `handleStartScan`/`handleAddPages`/`exitSplit` already use; they are React state setters, stable across renders, so the empty dependency array is correct: this effect only needs to run once, to register the listener for the component's lifetime.)
+(All setters used here — `setPendingPages`, `setReviewPreview`, `setSplitting`, `setSplitCuts`, `setSplitName`, `setSplitProgress`, `setToast` — are the same ones `handleStartScan`/`handleAddPages`/`exitSplit` already use; they are React state setters, stable across renders, so the empty dependency array on the effect itself is correct: it only needs to run once, to register the listener for the component's lifetime. The branching reads `pendingPagesRef.current` — a ref, not the `pendingPages` state variable directly — specifically so this stable, mount-once callback never closes over a stale value.)
 
 - [ ] **Step 3: Typecheck**
 
@@ -555,9 +579,9 @@ Expected: succeeds, no TypeScript errors.
 
 - [ ] **Step 4: Manual reasoning check (no automated test — matches spec §8)**
 
-Confirm by reading the code you just wrote:
+Confirm by reading the code you just wrote (note: `App.tsx` already imports `useRef` at line 2, so `pendingPagesRef` needs no new import):
 - If `pendingPages` was `null`, it is now the shared images, and `App.tsx:892`'s `if (pendingPages)` block renders `ReviewScreen` unconditionally of `tab`/`view` — so the review screen opens.
-- If `pendingPages` already had pages (mid-review of an earlier scan), the shared images are appended, not replacing the array — no unsaved work is lost.
+- If `pendingPages` already had pages (mid-review of an earlier scan), the shared images are appended, not replacing the array — no unsaved work is lost. Specifically check: if the user was in the Pisah (split) screen with `splitting=true` and cuts already placed, the split-state setters are **not** called in this branch, so those cuts survive a share arriving mid-split. (This is the bug the ref-based branching in Step 2 exists to avoid — a naive version that always reset split state regardless of whether it was appending or starting fresh would silently discard an in-progress split, which is exactly the kind of unsaved-work loss this feature is supposed to prevent, not cause.)
 - An empty `images` array with `skippedCount === 0` (defensive case — native only sends the event when `uris` was non-empty, so this specific combination should not occur in practice) leaves `pendingPages` untouched and shows no toast, which is the safe default either way.
 
 This task's real verification is the device checklist in Task 4 / `TASKS.md`, not a unit test — this mirrors how `handleStartScan`/`handleAddPages` themselves have no component test today (checked: no `App.browser.test.tsx` exists).

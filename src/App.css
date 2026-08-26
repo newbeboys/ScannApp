@@ -872,13 +872,35 @@ body.scroll-locked .app__body {
   color: #fff;
   background: rgba(20, 24, 34, 0.94);
   padding: 11px 18px;
-  border-radius: 999px;
+  /*
+    20px, bukan 999px: dengan tinggi satu baris (~40px) hasilnya sama persis
+    dengan pill yang lama, tapi tidak berubah jadi kapsul aneh saat pesannya
+    memakan dua-tiga baris.
+  */
+  border-radius: 20px;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
   animation: toast-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
-  white-space: nowrap;
+  /*
+    Dulu `nowrap` + `text-overflow: ellipsis`. Itu memotong justru pesan yang
+    paling perlu dibaca: kegagalan ekspor sampai ke user sebagai
+    "'writeFile' failed with: /storage/emulated/0/Documen..." — nama berkas dan
+    sebab aslinya hilang persis di tempat kalimatnya mulai berguna
+    (dilaporkan dari HP, 26 Agustus 2026).
+  */
+  white-space: pre-wrap;
+  /* Path panjang tanpa spasi harus boleh patah, atau ia melebar melewati layar. */
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.4;
   max-width: 90vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /*
+    Membungkus tanpa batas tinggi cuma memindahkan masalahnya: toast ini
+    dijangkarkan dari bawah, jadi pesan native yang panjang bisa tumbuh
+    melewati tepi atas layar — paling parah di layar pendek/landscape, dan
+    bagian yang kepotong justru bagian awal kalimatnya.
+  */
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 @keyframes toast-in {

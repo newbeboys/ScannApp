@@ -7,6 +7,8 @@ import { ExportSheet } from './components/ExportSheet'
 import { CropIcon, ExportIcon } from './components/Icons'
 import { resetScanStreak } from './lib/ads/adFrequency'
 import { maybeShowInterstitial } from './lib/ads/adsService'
+import { shouldShowBanner } from './lib/ads/bannerGate'
+import { toastDurationMs } from './lib/toastDuration'
 import { useAdBanner } from './lib/ads/useAdBanner'
 import { useAppOpenAd } from './lib/ads/useAppOpenAd'
 import {
@@ -163,10 +165,37 @@ function App() {
   const isNative = Capacitor.isNativePlatform()
   const quotaBytes = quotaBytesFor(profile)
 
+  /**
+   * The document the export sheet is for, or null when it is closed.
+   *
+   * Resolved here rather than next to the sheet's JSX because the banner gate
+   * below has to agree with it: keying the gate off `exportTarget` instead
+   * would let the two drift, and an id left pointing at a document no longer in
+   * the list renders no sheet while still suppressing the banner — an ad that
+   * silently never comes back, with nothing on screen to explain it.
+   */
+  const exportDoc = documents.find((doc) => doc.id === exportTarget) ?? null
+
+  /**
+   * Every sheet that covers the tab screen must be listed here.
+   *
+   * A sheet opens *over* the tab screen without replacing it, so `view.kind`
+   * stays 'tabs' and a gate that only asks which screen is showing leaves the
+   * banner sitting on top of the sheet's own action button (Boss Ali, HP,
+   * 26 Agustus 2026). Adding a new bottom sheet without adding it here brings
+   * that bug straight back.
+   */
+  const sheetOpen = exportDoc !== null || batchOpen
+
   // Banner only on the tab screens — never over a scan review, editor, merge
   // or paywall, where it would sit in the middle of a task (spec Bagian 3.3).
   const bannerPx = useAdBanner(
-    status === 'signed-in' && view.kind === 'tabs' && pendingPages === null,
+    shouldShowBanner({
+      signedIn: status === 'signed-in',
+      onTabs: view.kind === 'tabs',
+      reviewingScan: pendingPages !== null,
+      sheetOpen,
+    }),
     tier,
   )
 
@@ -244,7 +273,7 @@ function App() {
 
   useEffect(() => {
     if (!toast) return
-    const timer = setTimeout(() => setToast(null), 2600)
+    const timer = setTimeout(() => setToast(null), toastDurationMs(toast))
     return () => clearTimeout(timer)
   }, [toast])
 
@@ -830,7 +859,6 @@ function App() {
     }
   }
 
-  const exportDoc = documents.find((doc) => doc.id === exportTarget) ?? null
   const exportSheet = exportDoc && (
     <ExportSheet
       pageCount={exportDoc.pageCount}

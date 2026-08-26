@@ -80,7 +80,14 @@ describe('summarizeBatchExport', () => {
     expect(message).toBe('3 dokumen diekspor ke folder Documents.')
   })
 
-  it('counts both sides when some failed', () => {
+  /**
+   * The reason travels with the count. Without it a batch that failed reports
+   * only *that* it failed, and the one thing that would explain why — the
+   * message already collected per document — is thrown away before it reaches
+   * anyone (Boss Ali dari HP, 26 Agustus 2026: tiga dokumen gagal terkirim
+   * tanpa jejak apa pun).
+   */
+  it('counts both sides and carries the reason when some failed', () => {
     const message = summarizeBatchExport({
       total: 5,
       saved: ['A.pdf', 'B.pdf', 'C.pdf', 'D.pdf'],
@@ -88,22 +95,38 @@ describe('summarizeBatchExport', () => {
       cancelled: false,
     })
 
-    expect(message).toBe('4 dokumen diekspor, 1 gagal. Coba lagi untuk sisanya.')
+    expect(message).toBe('4 dokumen diekspor, 1 gagal: Penyimpanan penuh.')
   })
 
-  it('says plainly when nothing landed', () => {
+  /** One shared cause is stated once, not repeated per document. */
+  it('states a shared cause once', () => {
     const message = summarizeBatchExport({
       total: 2,
       saved: [],
       failed: [
-        { title: 'A', message: 'x' },
-        { title: 'B', message: 'y' },
+        { title: 'A', message: 'Penyimpanan penuh.' },
+        { title: 'B', message: 'Penyimpanan penuh.' },
+      ],
+      cancelled: false,
+    })
+
+    expect(message).toBe('Tidak ada dokumen yang berhasil diekspor: Penyimpanan penuh.')
+  })
+
+  /** Different causes: the first is named, and the rest are acknowledged. */
+  it('names the first cause and flags that others differ', () => {
+    const message = summarizeBatchExport({
+      total: 2,
+      saved: [],
+      failed: [
+        { title: 'A', message: 'Berkas terkunci.' },
+        { title: 'B', message: 'Penyimpanan penuh.' },
       ],
       cancelled: false,
     })
 
     expect(message).toBe(
-      'Tidak ada dokumen yang berhasil diekspor. Periksa ruang penyimpanan lalu coba lagi.',
+      'Tidak ada dokumen yang berhasil diekspor: Berkas terkunci. (sebab lain juga muncul)',
     )
   })
 
@@ -123,6 +146,34 @@ describe('summarizeBatchExport', () => {
     const message = summarizeBatchExport({ total: 5, saved: [], failed: [], cancelled: true })
 
     expect(message).toBe('Dihentikan sebelum ada dokumen yang tersimpan.')
+  })
+
+  /**
+   * Stopping and failing are not alternatives — a run can do both. Reporting
+   * only the stop would drop the cause on exactly the run that has one.
+   */
+  it('keeps the reason when a run both failed and was stopped', () => {
+    const message = summarizeBatchExport({
+      total: 3,
+      saved: ['B.pdf'],
+      failed: [{ title: 'A', message: 'Penyimpanan penuh.' }],
+      cancelled: true,
+    })
+
+    expect(message).toBe('Dihentikan — 1 dari 3 dokumen tersimpan. 1 gagal: Penyimpanan penuh.')
+  })
+
+  it('keeps the reason when a stopped run saved nothing', () => {
+    const message = summarizeBatchExport({
+      total: 3,
+      saved: [],
+      failed: [{ title: 'A', message: 'Penyimpanan penuh.' }],
+      cancelled: true,
+    })
+
+    expect(message).toBe(
+      'Dihentikan sebelum ada dokumen yang tersimpan. 1 gagal: Penyimpanan penuh.',
+    )
   })
 })
 
@@ -181,7 +232,8 @@ describe('exportDocumentsBatch', () => {
 
     expect(result.saved).toEqual(['A.pdf', 'C.pdf'])
     expect(result.failed).toEqual([{ title: 'B', message: 'Penyimpanan penuh.' }])
-    expect(result.message).toBe('2 dokumen diekspor, 1 gagal. Coba lagi untuk sisanya.')
+    // The cause reaches the user, not just the count — see `describeFailures`.
+    expect(result.message).toBe('2 dokumen diekspor, 1 gagal: Penyimpanan penuh.')
   })
 
   it('shares only the documents that made it', async () => {

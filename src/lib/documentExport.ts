@@ -81,22 +81,51 @@ export function summarizeBatchExport(result: Omit<BatchExportResult, 'message'>)
   const failed = result.failed.length
 
   if (result.cancelled) {
-    return saved === 0
-      ? 'Dihentikan sebelum ada dokumen yang tersimpan.'
-      : `Dihentikan — ${saved} dari ${result.total} dokumen tersimpan.`
+    const stopped =
+      saved === 0
+        ? 'Dihentikan sebelum ada dokumen yang tersimpan.'
+        : `Dihentikan — ${saved} dari ${result.total} dokumen tersimpan.`
+
+    // Stopping and failing are not alternatives: a run can hit an unwritable
+    // document and *then* be stopped. Reporting only the stop would drop the
+    // cause on exactly the run that has one to report.
+    return failed === 0 ? stopped : `${stopped} ${failed} gagal: ${describeFailures(result.failed)}`
   }
 
   if (saved === 0) {
     return failed === 0
       ? 'Tidak ada dokumen yang diekspor.'
-      : 'Tidak ada dokumen yang berhasil diekspor. Periksa ruang penyimpanan lalu coba lagi.'
+      : `Tidak ada dokumen yang berhasil diekspor: ${describeFailures(result.failed)}`
   }
 
   if (failed > 0) {
-    return `${saved} dokumen diekspor, ${failed} gagal. Coba lagi untuk sisanya.`
+    return `${saved} dokumen diekspor, ${failed} gagal: ${describeFailures(result.failed)}`
   }
 
   return `${saved} dokumen diekspor ke folder Documents.`
+}
+
+/**
+ * The reason a batch lost documents, in one clause.
+ *
+ * The run already records a message per failed document, but the summary used
+ * to end at the count and say "coba lagi" — so a batch that failed for a reason
+ * the user could act on (storage full, a file that cannot be overwritten)
+ * reported only that it had failed. Boss Ali hit exactly that from the phone on
+ * 26 Agustus 2026: three documents did not arrive and nothing on screen said
+ * why, which left the actual cause invisible to the one person who could see it
+ * happen.
+ *
+ * One cause is stated once however many documents share it; when they differ,
+ * the first is named and the rest are acknowledged rather than concatenated
+ * into a paragraph nobody reads off a toast.
+ */
+function describeFailures(failed: readonly { title: string; message: string }[]): string {
+  const [first] = failed
+  if (!first) return ''
+
+  const mixed = failed.some((entry) => entry.message !== first.message)
+  return mixed ? `${first.message} (sebab lain juga muncul)` : first.message
 }
 
 /** Re-encodes every page at one level. The only place export bytes are produced. */

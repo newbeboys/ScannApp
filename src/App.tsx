@@ -221,12 +221,14 @@ function App() {
         } else {
           // Nothing in progress: same as handleStartScan -- a fresh review
           // session, so stale state from whatever came before is cleared.
+          // Calls exitSplit() itself rather than repeating its reset list,
+          // specifically so this can never drift out of sync with it again
+          // (an earlier draft of this effect hand-copied four of exitSplit's
+          // five resets and missed setSplitSaved(0) -- caught in review).
           setPendingPages(images)
+          setCurrentPage(0)
           setReviewPreview(null)
-          setSplitting(false)
-          setSplitCuts([])
-          setSplitName('')
-          setSplitProgress(null)
+          exitSplit()
         }
       }
 

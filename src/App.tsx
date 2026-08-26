@@ -35,6 +35,7 @@ import { readExportLevel, writeExportLevel } from './lib/exportPreference'
 import type { CompressionLevel } from './lib/exportLimits'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
+import { onSharedFilesReceived } from './lib/sharedImport'
 import { describeOcrOutcome, recognizeDocument, type OcrProgress } from './lib/ocr'
 import {
   boundaryCuts,
@@ -89,6 +90,15 @@ function App() {
   const [view, setView] = useState<View>({ kind: 'tabs' })
   const [documents, setDocuments] = useState<LocalScanDocument[]>([])
   const [pendingPages, setPendingPages] = useState<string[] | null>(null)
+  // Lets the effect below read the *current* pendingPages without adding it
+  // to the effect's dependency array (which would tear down and rebuild the
+  // native listener subscription on every single page added or removed --
+  // wasteful, and a real risk of missing a share that arrives in the gap
+  // between unsubscribe and resubscribe, since the unsubscribe itself is
+  // async). Assigning during render is the standard way to keep a ref
+  // current without an extra effect.
+  const pendingPagesRef = useRef(pendingPages)
+  pendingPagesRef.current = pendingPages
   const [currentPage, setCurrentPage] = useState(0)
   /** Which freshly-scanned page is open full-screen, if any. */
   const [reviewPreview, setReviewPreview] = useState<number | null>(null)
@@ -198,6 +208,37 @@ function App() {
     refreshDocuments()
     refreshBackupState()
   }, [refreshDocuments, refreshBackupState, status])
+
+  useEffect(() => {
+    return onSharedFilesReceived(({ images, skippedCount }) => {
+      if (images.length > 0) {
+        if (pendingPagesRef.current) {
+          // Mid-review already: same as handleAddPages -- append only.
+          // Deliberately does NOT touch split state: if the user is in the
+          // middle of the Pisah screen with cuts already placed, a share
+          // arriving must not silently discard that unsaved work.
+          setPendingPages((existing) => [...(existing ?? []), ...images])
+        } else {
+          // Nothing in progress: same as handleStartScan -- a fresh review
+          // session, so stale state from whatever came before is cleared.
+          setPendingPages(images)
+          setReviewPreview(null)
+          setSplitting(false)
+          setSplitCuts([])
+          setSplitName('')
+          setSplitProgress(null)
+        }
+      }
+
+      if (skippedCount > 0) {
+        setToast(
+          images.length > 0
+            ? 'Sebagian file tidak bisa diimpor.'
+            : 'Tidak ada file yang bisa diimpor.',
+        )
+      }
+    })
+  }, [])
 
   useEffect(() => {
     if (!toast) return

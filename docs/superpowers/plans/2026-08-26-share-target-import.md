@@ -612,15 +612,16 @@ Jalankan `/security-review` sebelum commit terakhir (CLAUDE.md 9.1). Fitur ini m
 
 - [ ] **Step 3: Verifikasi akhir**
 
-Jalankan urutan penuh sebelum commit terakhir:
+Jalankan urutan penuh sebelum commit terakhir. JDK 17 dan 21 serta Android SDK minimal sudah terpasang di mesin dev ini (dipasang selama Task 1 dengan izin Boss Ali) — `capacitor-android` butuh JDK 21 spesifik untuk compile, jadi set `JAVA_HOME` ke JDK 21 untuk perintah gradle:
 
-```
+```powershell
 npm run test:node
 npm run build
+$env:JAVA_HOME = "$env:LOCALAPPDATA\Programs\Eclipse Adoptium\jdk-21.0.12.1-hotspot"
 cd android; .\gradlew.bat assembleDebug
 ```
 
-Ketiganya harus lolos. Catat hasil aktualnya (jumlah test, exit code build) di langkah berikutnya — bukan diasumsikan lolos.
+Ketiganya harus lolos — `gradlew.bat assembleDebug` kali ini bukan cuma typecheck, harus benar-benar `BUILD SUCCESSFUL` (sudah terbukti lolos di Task 1 round 2, jadi seharusnya lolos lagi di sini kecuali perubahan Task 3 memecahkan sesuatu). Catat hasil aktualnya (jumlah test, exit code build) di langkah berikutnya — bukan diasumsikan lolos.
 
 - [ ] **Step 4: Update `TASKS.md`**
 
@@ -640,7 +641,11 @@ memang belum pernah dibangun. Desain: `docs/superpowers/specs/2026-08-26-share-t
 - [x] **Masuk lewat `pendingPages` yang sudah ada, tanpa layar baru** — append kalau user sedang di tengah review lain, replace kalau kosong; tidak pernah menimpa kerja yang belum disimpan
 - [x] **Ditunda ke spec terpisah: `.docx` sebagai lampiran.** `LocalScanDocument` strict berbentuk `pages: ScanPage[]`, dipakai di 31 berkas — kind dokumen baru tanpa pages itu subsistem sendiri, bukan bagian kecil dari fitur ini
 - [x] **Test node: 647 → 653** (6 test baru di `sharedImport.test.ts`, Task 2; ganti angka ini kalau hasil `npm run test:node` di Step 3 ternyata beda)
-- [x] **Dua temuan review ditutup di Task 1** (round 1/5, kode plan sendiri yang salah, bukan implementer): `resolver.getType(uri)` sempat di luar try/catch per-item — satu file rusak bisa menggagalkan `notifyListeners` untuk seluruh share, bukan cuma file itu; dan `handleOnNewIntent` sempat memproses semua file secara sinkron di main thread (risiko ANR untuk PDF banyak halaman) — dipindah ke `ExecutorService` satu thread
+- [x] **Build native sungguhan lolos**, bukan cuma typecheck: `gradlew.bat assembleDebug` → `BUILD SUCCESSFUL`, dexing termasuk. Sempat mentok tiga lapis environment mesin dev ini (tidak ada JDK, tidak ada Android SDK, lalu modul `capacitor-android` butuh JDK 21 spesifik sementara modul lain butuh 17) sebelum ketiganya beres — dicatat sebagai infrastruktur di memory harness, bukan di sini
+- [x] **Tiga temuan review ditutup, semuanya kode yang saya (plan) tulis sendiri yang salah — bukan kesalahan implementer transkripsi:**
+  - Task 1, round 1/5: `resolver.getType(uri)` sempat di luar try/catch per-item — satu file rusak bisa menggagalkan `notifyListeners` untuk seluruh share, bukan cuma file itu; dan `handleOnNewIntent` sempat memproses semua file secara sinkron di main thread (risiko ANR untuk PDF banyak halaman) — dipindah ke `ExecutorService` satu thread
+  - Task 2: ditemukan sendiri sebelum dispatch (bukan lewat review) — `handlePromise` dari `addListener()` yang reject tanpa pernah di-unsubscribe (kasus normal `App.tsx`) akan jadi unhandled rejection; `.catch()` dipasang segera saat promise dibuat, bukan cuma di closure unsubscribe
+  - Task 3, round 1/5: cabang fresh-start efek share menyalin ulang 4 dari 5 reset milik `exitSplit()` dan lupa `setSplitSaved(0)` — lewat `handleRemovePage` yang mengosongkan `pendingPages` tanpa memanggil `exitSplit()`, nomor dokumen hasil pisah berikutnya bisa mulai dari angka sisa yang salah. Diperbaiki dengan memanggil `exitSplit()` langsung alih-alih menyalin daftar reset-nya
 
 **Belum diverifikasi di device fisik** (butuh Boss Ali — disalin dari spec §9):
 

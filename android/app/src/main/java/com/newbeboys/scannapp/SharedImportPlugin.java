@@ -88,9 +88,13 @@ public class SharedImportPlugin extends Plugin {
                         // SEND_MULTIPLE that slipped through.
                         skippedCount++;
                     }
-                } catch (Exception e) {
+                } catch (Exception | OutOfMemoryError e) {
                     // A corrupt or unreadable file must not take the rest of the
-                    // share down with it.
+                    // share down with it. OutOfMemoryError is caught explicitly
+                    // (it is an Error, not an Exception) because PDF rasterization
+                    // allocates a full ARGB_8888 bitmap per page -- large enough on
+                    // a phone already under memory pressure to throw one instead of
+                    // an ordinary exception, code-review round 1.
                     skippedCount++;
                 }
             }
@@ -102,7 +106,15 @@ public class SharedImportPlugin extends Plugin {
             JSObject data = new JSObject();
             data.put("paths", paths);
             data.put("skippedCount", skippedCount);
-            notifyListeners(EVENT_NAME, data, true);
+            // Plugin.eventListeners / retainedEventArguments are plain
+            // HashMaps with no internal synchronization. addListener() from
+            // JS runs on the Bridge's own "CapacitorPlugins" handler thread,
+            // not this importExecutor thread -- calling notifyListeners()
+            // directly here would race that thread on the exact cold-launch
+            // path this plugin exists for (JS calling addListener() while a
+            // share is still being processed). execute() hands this back to
+            // that same handler thread, code-review round 1.
+            execute(() -> notifyListeners(EVENT_NAME, data, true));
         });
     }
 
@@ -123,9 +135,12 @@ public class SharedImportPlugin extends Plugin {
     }
 
     /**
-     * Copies a shared image into the app's own cache. The content:// read
-     * permission granted by a share is only valid while it is being handled,
-     * so this has to happen synchronously and immediately.
+     * Copies a shared image into the app's own cache, so the rest of the app
+     * only ever deals with a file:// path it owns instead of a content://
+     * grant from another app (which, in practice, outlives this call for the
+     * life of the receiving Activity -- copying immediately here is just
+     * conservative, not a race against that grant expiring mid-copy,
+     * corrected during review; the original comment overstated the risk).
      */
     private String copyImageToCache(Uri uri, ContentResolver resolver) throws IOException {
         File dir = new File(getContext().getCacheDir(), CACHE_SUBDIR);
@@ -141,6 +156,11 @@ public class SharedImportPlugin extends Plugin {
                     fos.write(buffer, 0, read);
                 }
             }
+        } catch (IOException e) {
+            // Don't leave a truncated JPEG behind in our own cache dir if the
+            // copy failed partway through (e.g. disk full).
+            out.delete();
+            throw e;
         }
         return "file://" + out.getAbsolutePath();
     }

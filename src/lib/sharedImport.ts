@@ -56,6 +56,11 @@ export function onSharedFilesReceived(
   handlePromise.catch(() => {})
 
   return () => {
-    void handlePromise.then((handle) => handle.remove())
+    // .then() here creates its own promise, separate from handlePromise --
+    // the .catch() above only marks handlePromise itself as handled, so this
+    // needs its own rejection handler too, or a native registration failure
+    // becomes a second unhandled rejection the moment unsubscribe runs
+    // (React StrictMode's mount/unmount/remount in dev), caught in review.
+    void handlePromise.then((handle) => handle.remove()).catch(() => {})
   }
 }

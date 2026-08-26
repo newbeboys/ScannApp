@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Catches files shared in from other apps (WPS Office, CamScanner, etc.) via
@@ -38,66 +40,70 @@ public class SharedImportPlugin extends Plugin {
     private static final int MAX_PDF_PAGES = 50;
     private static final int PDF_RENDER_TARGET_PX = 2400;
 
+    private final ExecutorService importExecutor = Executors.newSingleThreadExecutor();
+
     @Override
     protected void handleOnNewIntent(Intent intent) {
         super.handleOnNewIntent(intent);
         if (intent == null) return;
 
-        List<Uri> uris = new ArrayList<>();
-        String action = intent.getAction();
-        if (Intent.ACTION_SEND.equals(action)) {
-            Uri single = getStreamExtra(intent);
-            if (single != null) uris.add(single);
-        } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
-            ArrayList<Uri> many = getStreamExtraList(intent);
-            if (many != null) uris.addAll(many);
-        } else {
-            return;
-        }
-        if (uris.isEmpty()) return;
+        importExecutor.execute(() -> {
+            List<Uri> uris = new ArrayList<>();
+            String action = intent.getAction();
+            if (Intent.ACTION_SEND.equals(action)) {
+                Uri single = getStreamExtra(intent);
+                if (single != null) uris.add(single);
+            } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+                ArrayList<Uri> many = getStreamExtraList(intent);
+                if (many != null) uris.addAll(many);
+            } else {
+                return;
+            }
+            if (uris.isEmpty()) return;
 
-        List<String> outputPaths = new ArrayList<>();
-        int skippedCount = 0;
-        ContentResolver resolver = getContext().getContentResolver();
+            List<String> outputPaths = new ArrayList<>();
+            int skippedCount = 0;
+            ContentResolver resolver = getContext().getContentResolver();
 
-        for (Uri uri : uris) {
-            String mimeType = resolver.getType(uri);
-            try {
-                if (mimeType != null && mimeType.startsWith("image/")) {
-                    String path = copyImageToCache(uri, resolver);
-                    if (path != null) {
-                        outputPaths.add(path);
+            for (Uri uri : uris) {
+                try {
+                    String mimeType = resolver.getType(uri);
+                    if (mimeType != null && mimeType.startsWith("image/")) {
+                        String path = copyImageToCache(uri, resolver);
+                        if (path != null) {
+                            outputPaths.add(path);
+                        } else {
+                            skippedCount++;
+                        }
+                    } else if ("application/pdf".equals(mimeType)) {
+                        List<String> pages = rasterizePdfToCache(uri, resolver);
+                        if (pages.isEmpty()) {
+                            skippedCount++;
+                        } else {
+                            outputPaths.addAll(pages);
+                        }
                     } else {
+                        // The manifest already restricts what reaches ScannApp as a
+                        // share target; this branch only matters for a mixed-type
+                        // SEND_MULTIPLE that slipped through.
                         skippedCount++;
                     }
-                } else if ("application/pdf".equals(mimeType)) {
-                    List<String> pages = rasterizePdfToCache(uri, resolver);
-                    if (pages.isEmpty()) {
-                        skippedCount++;
-                    } else {
-                        outputPaths.addAll(pages);
-                    }
-                } else {
-                    // The manifest already restricts what reaches ScannApp as a
-                    // share target; this branch only matters for a mixed-type
-                    // SEND_MULTIPLE that slipped through.
+                } catch (Exception e) {
+                    // A corrupt or unreadable file must not take the rest of the
+                    // share down with it.
                     skippedCount++;
                 }
-            } catch (Exception e) {
-                // A corrupt or unreadable file must not take the rest of the
-                // share down with it.
-                skippedCount++;
             }
-        }
 
-        JSArray paths = new JSArray();
-        for (String path : outputPaths) {
-            paths.put(path);
-        }
-        JSObject data = new JSObject();
-        data.put("paths", paths);
-        data.put("skippedCount", skippedCount);
-        notifyListeners(EVENT_NAME, data, true);
+            JSArray paths = new JSArray();
+            for (String path : outputPaths) {
+                paths.put(path);
+            }
+            JSObject data = new JSObject();
+            data.put("paths", paths);
+            data.put("skippedCount", skippedCount);
+            notifyListeners(EVENT_NAME, data, true);
+        });
     }
 
     @SuppressWarnings("deprecation")

@@ -669,13 +669,15 @@ Tahap kedua dari potongan **D**, dan yang terakhir di Fase 6. Desain: `docs/supe
 
 **Menunggu keputusan Boss Ali:** keputusan 22 Agustus — "flow pembelian Pro tidak dibuka ke publik sebelum Fase 6 selesai" — **sudah tidak terhalang apa pun**. Kodenya siap dan sudah diuji sejak Fase 5; yang ditunda hanya pembukaannya ke user. Ini keputusan Boss Ali, bukan sesuatu yang diambil kode ini.
 
-**Belum diverifikasi di device fisik** (butuh Boss Ali):
+**Diverifikasi di device fisik 29 Agustus 2026** (Boss Ali):
 
-- [ ] **DOCX dibuka di WPS/Word di HP** — ini bukti yang sebenarnya; tiga pembaca di atas mesin dev, bukan Android
-- [ ] **Penggabungan baris dalam satu blok: cek di struk & formulir.** Titik keputusan yang sengaja ditunda sampai lihat keluaran ML Kit di dokumen Indonesia sungguhan — kalau hasilnya jelek, ganti ke satu paragraf per baris
-- [ ] Page break mendarat di tempat yang benar untuk dokumen banyak halaman
-- [ ] Ekspor banyak dokumen ke Word: dokumen yang belum dikenali dilaporkan gagal dengan pesannya, sisanya tetap tersimpan
-- [ ] Judul & tanggal dokumen terbaca benar di properti berkas Word
+- [x] **DOCX dibuka di WPS/Word di HP** — ini bukti yang sebenarnya; tiga pembaca di atas mesin dev, bukan Android
+- [x] **Penggabungan baris dalam satu blok: cek di struk & formulir.** Titik keputusan yang sengaja ditunda sampai lihat keluaran ML Kit di dokumen Indonesia sungguhan — kalau hasilnya jelek, ganti ke satu paragraf per baris
+- [x] Page break mendarat di tempat yang benar untuk dokumen banyak halaman
+- [x] Ekspor banyak dokumen ke Word: dokumen yang belum dikenali dilaporkan gagal dengan pesannya, sisanya tetap tersimpan
+- [x] Judul & tanggal dokumen terbaca benar di properti berkas Word
+
+Penggabungan baris per blok **dipertahankan** — titik keputusan yang ditunda di baris kedua di atas sekarang tertutup: keluaran ML Kit di dokumen Indonesia sungguhan cukup baik, jadi tidak jadi diganti ke satu paragraf per baris.
 
 ## Impor via Share Sheet Android — Gambar & PDF — 26 Agustus 2026
 
@@ -781,14 +783,14 @@ dihapus per dokumen → merah; `<w:sz>` dihapus → merah; `sectPr` dihapus → 
 `document.xml.rels` dihapus → merah; pembuang karakter kontrol dilepas → merah; batch
 dibuat melempar ulang kegagalan share → merah. Semua dikembalikan.
 
-**Belum diverifikasi di device fisik** (butuh Boss Ali):
+**Diverifikasi di device fisik 29 Agustus 2026** (Boss Ali):
 
-- [ ] Ekspor PDF dengan **Bagikan**, lalu **tutup share sheet** → toast "Ekspor dibatalkan", dan **tidak ada berkas baru** di file manager
-- [ ] Ekspor dokumen yang **namanya sudah pernah diekspor**, tujuan **Simpan ke HP** → berhasil, toast menyebut `(2)`, berkas lama tetap utuh
-- [ ] Ekspor 3 dokumen sekaligus dengan **Simpan ke HP** → ketiganya mendarat, tidak ada share sheet
-- [ ] Ekspor 3 dokumen dengan **Bagikan** → satu share sheet di akhir berisi ketiganya
-- [ ] Pilihan Tujuan masih sama setelah aplikasi ditutup dan dibuka lagi
-- [ ] **DOCX dibuka di WPS Office di HP** → teksnya terlihat, kertasnya A4
+- [x] Ekspor PDF dengan **Bagikan**, lalu **tutup share sheet** → toast "Ekspor dibatalkan", dan **tidak ada berkas baru** di file manager
+- [x] Ekspor dokumen yang **namanya sudah pernah diekspor**, tujuan **Simpan ke HP** → berhasil, toast menyebut `(2)`, berkas lama tetap utuh
+- [x] Ekspor 3 dokumen sekaligus dengan **Simpan ke HP** → ketiganya mendarat, tidak ada share sheet
+- [x] Ekspor 3 dokumen dengan **Bagikan** → satu share sheet di akhir berisi ketiganya
+- [x] Pilihan Tujuan masih sama setelah aplikasi ditutup dan dibuka lagi
+- [x] **DOCX dibuka di WPS Office di HP** → teksnya terlihat, kertasnya A4
 
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 

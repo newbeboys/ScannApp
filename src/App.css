@@ -15,6 +15,21 @@
   );
 }
 
+/*
+  Dipasang `useScrollLock` selama ada lembar/popup terbuka.
+
+  Backdrop `position: fixed` menutupi layar, tapi ia tidak memiliki gestur di
+  atasnya: jari yang menggeser di situ tetap menggulir wadah gulir terdekat,
+  jadi daftar dokumen ikut bergeser di belakang lembar yang terbuka (dilaporkan
+  dari HP, 25 Agustus 2026). Kedua wadah gulirnya disebut di sini —
+  `.app__body` di layar tab, dan viewport itu sendiri di layar alur penuh yang
+  menggulir `body`.
+*/
+body.scroll-locked,
+body.scroll-locked .app__body {
+  overflow: hidden;
+}
+
 .screen {
   padding: calc(20px + env(safe-area-inset-top, 0px)) 20px 24px;
   display: flex;
@@ -715,6 +730,18 @@
   padding: 15px;
   font-size: 16px;
   font-weight: 700;
+  /*
+    Warna dasar, bukan cuma bentuk.
+
+    Tanpa dua baris ini sebuah `.button` polos yang tidak duduk di dalam
+    `.editor-actions`/`.viewer__actions`/`.split-entry` jatuh ke tombol bawaan
+    browser: kotak putih dengan teks gelap, tidak terbaca di tema gelap. Itulah
+    tombol "Hentikan" di lembar Ekspor Banyak Dokumen (terlihat di tangkapan
+    layar HP, 25 Agustus 2026). Varian `--primary`, `--danger` dan `--upgrade`
+    menetapkan latar & warnanya sendiri, jadi tidak ada yang berubah di sana.
+  */
+  background: var(--chip);
+  color: var(--fg);
   transition:
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 160ms ease;
@@ -845,13 +872,35 @@
   color: #fff;
   background: rgba(20, 24, 34, 0.94);
   padding: 11px 18px;
-  border-radius: 999px;
+  /*
+    20px, bukan 999px: dengan tinggi satu baris (~40px) hasilnya sama persis
+    dengan pill yang lama, tapi tidak berubah jadi kapsul aneh saat pesannya
+    memakan dua-tiga baris.
+  */
+  border-radius: 20px;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
   animation: toast-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
-  white-space: nowrap;
+  /*
+    Dulu `nowrap` + `text-overflow: ellipsis`. Itu memotong justru pesan yang
+    paling perlu dibaca: kegagalan ekspor sampai ke user sebagai
+    "'writeFile' failed with: /storage/emulated/0/Documen..." — nama berkas dan
+    sebab aslinya hilang persis di tempat kalimatnya mulai berguna
+    (dilaporkan dari HP, 26 Agustus 2026).
+  */
+  white-space: pre-wrap;
+  /* Path panjang tanpa spasi harus boleh patah, atau ia melebar melewati layar. */
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.4;
   max-width: 90vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /*
+    Membungkus tanpa batas tinggi cuma memindahkan masalahnya: toast ini
+    dijangkarkan dari bawah, jadi pesan native yang panjang bisa tumbuh
+    melewati tepi atas layar — paling parah di layar pendek/landscape, dan
+    bagian yang kepotong justru bagian awal kalimatnya.
+  */
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 @keyframes toast-in {
@@ -1091,6 +1140,8 @@
   align-items: flex-end;
   justify-content: center;
   animation: fade-in 180ms ease;
+  /* Pelengkap kunci di body: gestur yang mulai di sini tidak merambat keluar. */
+  overscroll-behavior: contain;
 }
 
 @keyframes fade-in {
@@ -1118,6 +1169,15 @@
   gap: 12px;
   box-shadow: var(--shadow);
   animation: sheet-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  /*
+    Halaman di belakang dibekukan selama lembar ini terbuka, jadi lembarnya
+    sendiri harus bisa mencapai tombolnya di layar pendek — lembar Ekspor
+    dengan dua perkiraan ukuran dan baris progres lebih tinggi dari
+    kelihatannya.
+  */
+  max-height: 88vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @keyframes sheet-in {
@@ -1314,30 +1374,28 @@
   font-weight: 700;
 }
 
-.export-quality__hint {
+.export-quality__hint,
+.sheet-field__hint {
   font-size: 12px;
   color: var(--fg-dim);
   line-height: 1.45;
 }
 
-/* Basic sees the control it does not have yet, not a blank space. */
-.export-quality__lock {
+/*
+  Satu baris kontrol di dalam lembar: label, kontrolnya, lalu keterangan.
+  Dipakai bersama oleh sakelar Tujuan dan sakelar Format supaya dua kontrol
+  yang bertumpuk tidak berdiri tanpa nama.
+*/
+.sheet-field {
   display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 2px;
-  padding: 10px 12px;
-  border-radius: 13px;
-  border: 1px solid var(--upgrade-soft);
-  background: var(--upgrade-soft);
-  color: var(--upgrade);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: left;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.export-quality__lock .pro-badge {
-  align-self: center;
+.sheet-field__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
 }
 
 /* ---------- merge ---------- */
@@ -1590,7 +1648,13 @@
   Cakupan dipisah dari daftar filternya supaya jelas: chip yang sama berarti
   dua hal berbeda tergantung tombol mana yang aktif di sini.
 */
-.filter-scope {
+/*
+  Dipakai dua tempat: cakupan filter di editor, dan pilihan format di lembar
+  Ekspor Banyak Dokumen. Selektornya digabung, bukan disalin — dua salinan
+  aturan yang sama pasti berbeda cepat atau lambat.
+*/
+.filter-scope,
+.format-switch {
   display: flex;
   gap: 4px;
   padding: 4px;
@@ -1599,7 +1663,8 @@
   border: 1px solid var(--chip-border);
 }
 
-.filter-scope__option {
+.filter-scope__option,
+.format-switch__option {
   flex: 1 1 0;
   padding: 9px 8px;
   border: none;
@@ -1611,13 +1676,15 @@
   transition: background 160ms ease, color 160ms ease;
 }
 
-.filter-scope__option--active {
+.filter-scope__option--active,
+.format-switch__option--active {
   background: var(--surface);
   color: var(--fg);
   box-shadow: var(--shadow);
 }
 
-.filter-scope__option:disabled {
+.filter-scope__option:disabled,
+.format-switch__option:disabled {
   opacity: 0.6;
 }
 
@@ -2100,4 +2167,295 @@
   background: var(--chip);
   touch-action: none;
   cursor: crosshair;
+}
+
+/* Batch export sheet
+   ------------------------------------------------------------------ */
+
+.batch-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+
+.batch-progress {
+  margin-bottom: 14px;
+}
+
+.batch-progress__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+/* Long titles must not push the counter off the row. */
+.batch-progress__head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-progress__head span {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.batch-progress__track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--chip-border);
+  overflow: hidden;
+}
+
+.batch-progress__fill {
+  display: block;
+  height: 100%;
+  background: var(--acc);
+  transition: width 180ms ease-out;
+}
+
+/* Select mode in the documents tab
+   ------------------------------------------------------------------ */
+
+.select-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 2px solid var(--chip-border);
+  border-radius: 50%;
+  color: #fff;
+}
+
+.select-check--on {
+  border-color: var(--acc);
+  background: var(--acc);
+}
+
+/* A cloud row cannot join a bulk action, and should not look as if it could. */
+.doc-row--muted {
+  opacity: 0.45;
+}
+
+/*
+  Bilahnya `position: fixed`, jadi ia menutupi ujung daftar alih-alih
+  mendorongnya naik: dokumen terakhir terpotong separuh di HP (dilaporkan
+  25 Agustus 2026). Layar menyisakan ruang setinggi bilah itu selama ia tampil.
+*/
+.screen--select-bar {
+  padding-bottom: calc(24px + var(--select-bar-height));
+}
+
+/*
+  Sits above the bottom nav, and above the ad banner the tab reserves room for
+  — the bar is the only way out of a selection, so nothing may cover it.
+*/
+.select-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--nav-height) + var(--ad-banner-height) + env(safe-area-inset-bottom, 0px));
+  z-index: 12;
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--surface-solid);
+  border-top: 1px solid var(--chip-border);
+}
+
+.select-bar .button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.select-bar .button .pro-badge {
+  align-self: center;
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
+.button--danger {
+  background: #e5484d;
+  color: #fff;
+}
+
+/* ---------- layar Pisah Hasil Pindai (Fase 6 C2) ---------- */
+
+.split-name {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.split-name input {
+  border: 1px solid var(--chip-border);
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+}
+
+/*
+  Hanya muncul saat memisah dokumen yang sudah tersimpan: hasil pindai yang
+  belum disimpan tidak punya "asli" untuk dihapus.
+*/
+.split-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.split-option input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: var(--acc);
+}
+
+.split-patterns {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 2px 12px;
+  scrollbar-width: none;
+}
+
+.split-patterns::-webkit-scrollbar {
+  display: none;
+}
+
+.split-chip {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--chip-border);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.split-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.split-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.split-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.split-group__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--acc);
+  margin: 4px 0 0;
+}
+
+.split-page {
+  position: relative;
+  border: 1px solid var(--chip-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  height: 92px;
+}
+
+.split-page .page-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.split-page__number {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg);
+  background: var(--chip);
+  border-radius: 7px;
+  padding: 2px 7px;
+}
+
+/* A tap target, not a hairline: this is the control the whole screen is about. */
+.split-cut {
+  width: 100%;
+  padding: 9px;
+  margin: 4px 0;
+  border: 1px dashed var(--chip-border);
+  border-radius: 10px;
+  background: none;
+  color: var(--fg-dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.split-cut--on {
+  border-style: solid;
+  border-color: var(--acc);
+  background: var(--acc-soft);
+  color: var(--acc);
+}
+
+/*
+  Penutup daftar, bukan hiasan: tanpa baris ini ujung daftar terlihat seperti
+  terpotong tombol di bawahnya (dilaporkan dari HP, 25 Agustus 2026).
+*/
+.split-end {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-dim);
+  text-align: center;
+  margin: 0;
+  padding: 0 12px;
+}
+
+.split-progress {
+  font-size: 12.5px;
+  color: var(--fg-dim);
+  text-align: center;
+  margin: 0 0 8px;
+}
+
+.split-entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 13px;
+  font-size: 14.5px;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+  color: var(--fg);
 }

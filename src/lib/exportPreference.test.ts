@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { readExportLevel, writeExportLevel } from './exportPreference'
+import {
+  readExportDestination,
+  readExportLevel,
+  writeExportDestination,
+  writeExportLevel,
+} from './exportPreference'
 
 /** A Storage stand-in; setting `fail` makes it throw like a locked-down WebView. */
 function fakeStorage(seed: Record<string, string> = {}): Storage & { fail?: 'get' | 'set' } {
@@ -58,5 +63,51 @@ describe('writeExportLevel', () => {
     storage.fail = 'set'
 
     expect(() => writeExportLevel('max', storage)).not.toThrow()
+  })
+})
+
+describe('readExportDestination', () => {
+  /**
+   * Sharing is what the Ekspor button has always done, and it is the one
+   * destination that cannot leave a file behind when the user changes their
+   * mind halfway.
+   */
+  it('defaults to sharing when nothing has been chosen', () => {
+    expect(readExportDestination(fakeStorage())).toBe('share')
+  })
+
+  it('gives back what was chosen', () => {
+    expect(readExportDestination(fakeStorage({ 'scannapp.export.destination': 'device' }))).toBe(
+      'device',
+    )
+  })
+
+  it('falls back to sharing for a value it does not recognise', () => {
+    expect(readExportDestination(fakeStorage({ 'scannapp.export.destination': 'sdcard' }))).toBe(
+      'share',
+    )
+  })
+
+  it('falls back to sharing when storage refuses to be read', () => {
+    const storage = fakeStorage()
+    storage.fail = 'get'
+
+    expect(readExportDestination(storage)).toBe('share')
+  })
+})
+
+describe('writeExportDestination', () => {
+  it('round-trips through storage', () => {
+    const storage = fakeStorage()
+    writeExportDestination('device', storage)
+
+    expect(readExportDestination(storage)).toBe('device')
+  })
+
+  it('never throws when storage refuses to be written', () => {
+    const storage = fakeStorage()
+    storage.fail = 'set'
+
+    expect(() => writeExportDestination('device', storage)).not.toThrow()
   })
 })

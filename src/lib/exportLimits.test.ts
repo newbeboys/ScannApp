@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canChooseCompression,
   checkMergeAllowed,
   COMPRESSION_LABELS,
   COMPRESSION_LEVELS,
@@ -100,29 +99,20 @@ describe('COMPRESSION_PRESETS', () => {
 })
 
 describe('resolveCompressionLevel', () => {
-  it('gives Pro the level it asked for', () => {
-    expect(resolveCompressionLevel('pro', 'small')).toBe('small')
-    expect(resolveCompressionLevel('pro', 'max')).toBe('max')
+  it('gives back every level it recognises, unchanged', () => {
+    for (const level of COMPRESSION_LEVELS) {
+      expect(resolveCompressionLevel(level)).toBe(level)
+    }
   })
 
   /**
-   * Enforced here rather than only in the sheet: hiding the control in the UI
-   * is not the same as refusing it, and Fase 6 bagian 1 already produced one
-   * review finding for exactly that mistake.
+   * The reason this function still exists now that the Pro gate is gone
+   * (25 Agustus 2026): the level comes back from `localStorage`, so it can be
+   * anything — a value written by a future build, or a corrupted string. Left
+   * unchecked it reaches `COMPRESSION_PRESETS` as `undefined` and the export
+   * encodes at `quality: undefined`.
    */
-  it('pins Basic to standard however it asks', () => {
-    expect(resolveCompressionLevel('basic', 'max')).toBe('standard')
-    expect(resolveCompressionLevel('basic', 'small')).toBe('standard')
-  })
-
   it('falls back to standard for a level it does not recognise', () => {
-    expect(resolveCompressionLevel('pro', 'enormous' as CompressionLevel)).toBe('standard')
-  })
-})
-
-describe('canChooseCompression', () => {
-  it('is a Pro control (PRD Bagian 3)', () => {
-    expect(canChooseCompression('pro')).toBe(true)
-    expect(canChooseCompression('basic')).toBe(false)
+    expect(resolveCompressionLevel('enormous' as CompressionLevel)).toBe('standard')
   })
 })

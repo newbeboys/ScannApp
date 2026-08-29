@@ -216,16 +216,17 @@ Empat temuan code-review ditutup sebelum commit, semuanya di kode iklan baru:
 
 Desain: `docs/superpowers/specs/2026-08-23-fase6-reorder-filter-design.md`
 
-- [ ] Integrasi OCR (searchable PDF)
-- [x] Annotate (coret/tulis di atas dokumen) — **Pro**, lihat bagian 3 di bawah
-- [x] Tanda tangan digital — **Pro**, lihat bagian 3 di bawah
+- [x] Integrasi OCR (searchable PDF) — **Pro** (bersama DOCX; kontradiksi tier di dokumen ditutup Boss Ali 25 Agustus 2026 malam). Lihat bagian 8. DOCX-nya menyusul di D2
+- [x] Annotate (coret/tulis di atas dokumen) — ~~**Pro**~~ **semua tier sejak 25 Agustus 2026**, lihat bagian 3 & bagian 6 di bawah
+- [x] Tanda tangan digital — ~~**Pro**~~ **semua tier sejak 25 Agustus 2026**, lihat bagian 3 & bagian 6 di bawah
 - [x] Reorder halaman — tombol geser kiri/kanan (bukan seret-lepas, lihat spec Bagian 2.6). **Semua tier**
 - [x] Filter lanjutan — **5 filter** (Boss Ali menaikkan dari 2 di PRD Bagian 3): Magic Color, Cerah, Abu-abu, Hitam-Putih (ambang adaptif lokal), Hemat Tinta. Berlaku untuk seluruh dokumen, bisa dikecualikan per halaman. **Semua tier**
-- [x] Export tambahan: **PNG** — **semua tier** (lihat catatan di bawah). DOCX belum: tanpa OCR isinya cuma gambar tertempel, jadi dipindah ke potongan yang sama dengan OCR
-- [x] Kontrol level kompresi manual (slider kualitas vs ukuran) — **4 takik**, tetap Pro
-- [ ] Batch scan/export
+- [x] Export tambahan: **PNG** — **semua tier** (lihat catatan di bawah) dan **DOCX** — **Pro**, dibuat bersama OCR di potongan D2 (lihat bagian 9)
+- [x] Kontrol level kompresi manual (slider kualitas vs ukuran) — **4 takik**, ~~tetap Pro~~ **semua tier sejak 25 Agustus 2026** (bagian 6)
+- [x] Batch scan/export — C1 & C2 selesai (lihat bagian 4 & 5 di bawah). ~~Ekspor banyak dokumen Pro~~ → **semua tier sejak 25 Agustus 2026**, lihat bagian 6
+- [x] Pisah dokumen yang **sudah tersimpan** (kebalikan merge) — di luar daftar asli, diminta Boss Ali 25 Agustus 2026, lihat bagian 6
 
-**Diubah 23 Agustus 2026 (keputusan Boss Ali):** reorder halaman & filter dokumen semula Pro-exclusive, sekarang **tersedia untuk Basic maupun Pro** — bukan cuma akun Pro. Menggantikan baris di PRD Bagian 3 dan CLAUDE.md Bagian 6; lihat catatan di kedua file itu. Annotate dan tanda tangan digital di daftar di atas tetap Pro-exclusive (belum dikerjakan).
+**Diubah 23 Agustus 2026 (keputusan Boss Ali):** reorder halaman & filter dokumen semula Pro-exclusive, sekarang **tersedia untuk Basic maupun Pro** — bukan cuma akun Pro. Menggantikan baris di PRD Bagian 3 dan CLAUDE.md Bagian 6; lihat catatan di kedua file itu. ~~Annotate dan tanda tangan digital di daftar di atas tetap Pro-exclusive (belum dikerjakan).~~ — **dibatalkan 25 Agustus 2026**, keduanya ikut pindah ke semua tier (bagian 6).
 
 Catatan tambahan di luar daftar asli (lihat spec Bagian 2 & 3):
 
@@ -249,11 +250,11 @@ Sisa Fase 6 dipecah jadi empat potongan yang bisa jalan sendiri-sendiri; ini yan
 Pengelompokan `Export tambahan: DOCX, PNG` di daftar asli dipecah: PNG masuk ke potongan ini (cuma varian encoder dari export JPG yang sudah ada), DOCX ikut OCR karena DOCX tanpa lapisan teks isinya hanya gambar tertempel.
 
 - [x] **Export PNG — semua tier.** PNG diturunkan langsung dari halaman hasil `resolvePage()`, hanya lewat bagian perkecilan dari level yang dipilih, lalu di-encode `image/png`. **Tidak pernah** lewat encoder JPEG dulu: PNG dari hasil JPEG adalah salinan lossless dari piksel yang sudah lossy — berkasnya membengkak tanpa satu piksel pun jadi lebih baik
-- [x] **Slider kompresi manual (Pro) — 4 takik**, bukan 0–100 bebas. Mata tidak membedakan q=0.72 dari q=0.75, jadi slider bebas menjanjikan presisi yang tidak ada dan memaksa encode ulang tiap geseran. Standar = 0.75/2400px, identik dengan nilai Basic yang lama
-- [x] Gerbang Pro ditegakkan di `resolveCompressionLevel()`, bukan cuma di UI — Basic yang meminta level apa pun tetap dapat Standar
+- [x] **Slider kompresi manual — 4 takik** (~~Pro~~ **semua tier sejak 25 Agustus 2026**, bagian 6), bukan 0–100 bebas. Mata tidak membedakan q=0.72 dari q=0.75, jadi slider bebas menjanjikan presisi yang tidak ada dan memaksa encode ulang tiap geseran. Standar = 0.75/2400px, identik dengan nilai Basic yang lama
+- [x] ~~Gerbang Pro ditegakkan di `resolveCompressionLevel()`, bukan cuma di UI — Basic yang meminta level apa pun tetap dapat Standar~~ — **dicabut 25 Agustus 2026** (bagian 6). Fungsinya tetap ada, tapi tugasnya sekarang cuma menjaga nilai rusak dari `localStorage`
 - [x] Pilihan level diingat di `localStorage`; nilai rusak/hilang/storage terkunci semuanya jatuh ke Standar tanpa melempar error
 - [x] **Perkiraan ukuran per format** di lembar Ekspor (`≈ 2,3 MB` / `≈ 17 MB`) — halaman pertama saja yang di-encode lalu dikali jumlah halaman, supaya menggeser slider di dokumen 30 halaman tidak makan waktu. Angka PNG yang jauh lebih besar jadi terlihat sendiri, tidak perlu kalimat peringatan
-- [x] Perkiraannya memakai tier yang sama dengan ekspor sungguhan, jadi Basic tidak pernah diperlihatkan ukuran yang tidak bisa ia dapatkan
+- [x] ~~Perkiraannya memakai tier yang sama dengan ekspor sungguhan, jadi Basic tidak pernah diperlihatkan ukuran yang tidak bisa ia dapatkan~~ — tier tidak lagi menyentuh perkiraan sejak 25 Agustus 2026; yang tetap berlaku: perkiraan melewati resolver yang sama dengan ekspor, jadi level asing jatuh ke Standar di kedua tempat
 - [x] Test bertambah 31 (total 308)
 
 **Cadangan cloud sengaja tidak ikut level ini** (keputusan Boss Ali): `buildPdfFile()` dipaku ke Standar. Kalau ikut, satu pilihan di lembar Ekspor diam-diam menentukan berapa kuota R2 yang dimakan sebuah cadangan dan mutu maksimal yang bisa dikembalikan `cloudRestore` — dua hal yang tidak sedang dipikirkan user saat menekan tombol ekspor.
@@ -276,9 +277,9 @@ Temuan keempat (**file filter yatim kalau `applyDocumentFilter` gagal di tengah*
 - **Jebakan PNG-dari-JPEG terbukti nyata:** PNG dari halaman asli 102 KB, PNG dari hasil JPEG 191 KB — 87% lebih berat tanpa satu piksel pun membaik
 - **PNG vs JPEG sangat bergantung isi halaman:** scan kamera ber-noise 11,3× lebih besar; bercahaya rata 13,8× lebih besar; setelah filter Hitam-Putih justru **4× lebih kecil**. Rentang ini yang membuat perkiraan ukuran harus **diukur dari halamannya**, bukan ditebak dengan rumus — dan yang membenarkan teks "pas untuk Hitam-Putih" di lembar Ekspor
 
-### Fase 6 bagian 3 — Anotasi & Tanda Tangan (Pro) — 24 Agustus 2026
+### Fase 6 bagian 3 — Anotasi & Tanda Tangan — 24 Agustus 2026
 
-Potongan **B** dari empat sisa Fase 6. Tetap **Pro-exclusive** — dua baris ini tidak ikut dipindahkan Boss Ali ke "semua tier" seperti reorder/filter/PNG.
+Potongan **B** dari empat sisa Fase 6. ~~Tetap **Pro-exclusive** — dua baris ini tidak ikut dipindahkan Boss Ali ke "semua tier" seperti reorder/filter/PNG.~~ — **dibatalkan 25 Agustus 2026**: keduanya menyusul ke semua tier, lihat bagian 6.
 
 Desain: `docs/superpowers/specs/2026-08-24-fase6-annotate-tandatangan-design.md`
 
@@ -289,7 +290,7 @@ Desain: `docs/superpowers/specs/2026-08-24-fase6-annotate-tandatangan-design.md`
 - [x] **4 warna tinta, semuanya sudah ada di kode**: `#1b2740` (`--fg` terang), `#2563eb` (primary), `#e5484d` (danger), `#f5c443` (`--pro-gold`). Tidak ada warna baru (CLAUDE.md 9.2), dan ada test yang menjaganya
 - [x] **Tanda tangan digambar di kotak selebar layar**, bukan langsung di halaman. Menandatangani di kotak kecil di sudut halaman menghasilkan coretan besar dan gemetar; hasilnya dipangkas ke kotak tinta-nya sendiri (`trimToInk`) supaya stempelnya bukan sebagian besar ruang kosong
 - [x] Berkas tanda tangan bernama `signature-<cap waktu>.png`, bukan nama tetap: menggambar ulang tidak boleh diam-diam mengganti tanda tangan di dokumen yang **sudah** ditandatangani, termasuk yang sudah dicadangkan
-- [x] **Gerbang Pro ditegakkan di library** (`setPageMarks`), bukan cuma menyembunyikan tombol — pelajaran yang sama dengan `resolveCompressionLevel`
+- [x] ~~**Gerbang Pro ditegakkan di library** (`setPageMarks`)~~ — **dicabut 25 Agustus 2026** (bagian 6). Waktu masih ada, ia ditegakkan di library, bukan cuma menyembunyikan tombol — pelajaran yang sama dengan `resolveCompressionLevel`
 - [x] Goresan hidup di draft memori sampai ditekan Simpan. Menulis per goresan berarti meng-encode ulang JPEG 12 MP tiap kali jari diangkat
 - [x] Test bertambah 74 (total 453 — 418 node + 35 browser), termasuk 10 test `renderMarks` di **Chromium sungguhan**: tinta mendarat di piksel yang dituju, mata pena ikut skala halaman, stabilo membiarkan teks di bawahnya tetap hitam, stempel tanda tangan pas di kotaknya, dan merender goresan yang sama dua kali **tidak** menebalkannya
 - [x] **Test-nya dibuktikan menggigit:** `multiply` dilepas → test stabilo merah; faktor lebar stabilo dilepas → test lebar merah; sumber render tinta diubah jadi berkas hasilnya sendiri → 2 test penumpukan merah. Semua dikembalikan setelah itu
@@ -315,7 +316,7 @@ Desain: `docs/superpowers/specs/2026-08-24-fase6-annotate-tandatangan-design.md`
 - [ ] **Putar halaman yang sudah dianotasi** — tinta ikut berputar
 - [ ] **Ganti filter dokumen setelah menandatangani** — tanda tangan biru harus tetap biru, tidak ikut jadi hitam pekat, dan tidak menghilang
 - [ ] Ekspor PDF & cadangkan ke cloud — tinta ikut ke dua-duanya
-- [ ] Akun **Basic**: tombol "Anotasi & Tanda Tangan" berlencana Pro dan membuka paywall, bukan editornya
+- [x] ~~Akun **Basic**: tombol "Anotasi & Tanda Tangan" berlencana Pro dan membuka paywall~~ — **tidak berlaku lagi** sejak 25 Agustus 2026, anotasi & tanda tangan jadi semua tier (bagian 6)
 - [ ] Tekan tombol kembali dengan coretan belum disimpan — muncul konfirmasi, bukan hilang diam-diam
 
 ### Temuan uji device pertama — 24 Agustus 2026
@@ -402,8 +403,394 @@ Total test 308 → **329** (295 node + 14 browser).
 - [ ] Perkiraan ukuran muncul dalam waktu wajar untuk dokumen 15+ halaman, dan tidak membuat lembar Ekspor terasa macet saat slider digeser cepat
 - [ ] Ekspor PNG dari akun **Basic** berhasil — tidak ada paywall yang menghadang
 - [ ] Bandingkan ukuran berkas sungguhan dengan angka perkiraan; kalau melenceng jauh, `PDF_STRUCTURE_BYTES_PER_PAGE` perlu disetel ulang
-- [ ] Akun Basic: slider terkunci di Standar & baris "Pro" membuka paywall
+- [x] ~~Akun Basic: slider terkunci di Standar & baris "Pro" membuka paywall~~ — **tidak berlaku lagi** sejak 25 Agustus 2026. Yang perlu diuji sekarang: slidernya bisa digeser penuh oleh Basic dan **tidak ada** baris "Pro" di bawahnya
 - [ ] Cadangkan dokumen setelah memilih level Maksimal — ukuran di layar Cadangan **tidak boleh** ikut membengkak (bukti cadangan tetap Standar)
+
+### Fase 6 bagian 4 — Mode Pilih & Batch Export (C1) — 25 Agustus 2026
+
+Potongan **C** dari empat sisa Fase 6 (yang pertama dari dua: **C1** mode pilih + batch export atas dokumen yang sudah ada, **C2** pisah satu sesi pindai jadi banyak dokumen — menyusul).
+
+Desain: `docs/superpowers/specs/2026-08-25-fase6-batch-scan-export-design.md`
+
+- [x] **Mode pilih di tab Dokumen** — tekan lama sebuah dokumen untuk masuk, atau tombol "Pilih" di header untuk masuk tanpa mencentang apa pun. Baris cloud tidak bisa dipilih (belum ada berkasnya di HP) dan menampilkan toast alih-alih diam saja
+- [x] **Tekan lama + penelan klik.** `click` asli yang menyusul tekan lama dari jari yang sama ditelan (`swallowClick`), supaya memilih dokumen tidak sekaligus membukanya. Jari yang bergeser lebih dari `LONG_PRESS_MOVE_PX` membatalkan tekanan (dianggap menggulir, bukan menahan)
+- [x] **Ekspor banyak dokumen sebagai PDF** — ~~Pro~~ **semua tier sejak 25 Agustus 2026** (bagian 6). Satu dokumen jadi satu berkas PDF, berurutan (bukan paralel — lihat catatan memori di potongan sebelumnya soal beban RAM), lembar berbagi terbuka sekali di akhir dengan apa pun yang berhasil ditulis
+- [x] **Hapus banyak dokumen — semua tier.** Tidak ada gerbang tier: merapikan dokumen sendiri bukan sesuatu yang harus dibeli
+- [x] **Tabrakan nama berkas** dalam satu batch ditangani lebih dulu (`uniqueExportNames`) — dokumen kedua berjudul sama persis jadi `… (2)`, tidak menimpa yang pertama
+- [x] ~~**Gerbang Pro ditegakkan di `exportDocumentsBatch()` (library)**~~ — **dicabut 25 Agustus 2026** (bagian 6). Waktu masih ada, ia ditegakkan di library, bukan cuma di bilah aksi — pelajaran yang sama dengan `resolveCompressionLevel` dan `setPageMarks`. Diverifikasi ulang setelah pemasangan: akun Basic yang menekan "Ekspor PDF" di bilah aksi diarahkan ke `onUpgrade()` dan tidak pernah memanggil `onBatchExport()`, dan `exportDocumentsBatch()` sendiri melempar kalau tetap dipanggil untuk Basic
+- [x] **Tombol Hentikan** di tengah batch — berhenti setelah dokumen yang sedang berjalan selesai (tidak pernah di tengah penulisan satu PDF), toast melaporkan berapa yang sempat tersimpan
+- [x] **Kegagalan sebagian tidak menggagalkan semuanya.** Satu dokumen yang gagal diekspor/dihapus dihitung lewat selisih, sisanya tetap jalan. Seleksi **dipertahankan** kalau ekspor berhenti atau ada yang gagal (supaya sisanya bisa dicoba lagi tanpa mencentang ulang dari nol), dan **dikosongkan** hanya kalau semuanya berhasil tanpa dihentikan
+- [x] `pruneUnusedSignatures()` dipanggil **sekali** di akhir hapus massal, bukan per dokumen — sama seperti alasannya di potongan anotasi: tanda tangan dipakai lintas dokumen, menyapunya di tengah loop bisa menghapus berkas yang masih dirujuk dokumen yang belum sempat dihapus
+- [x] Mode pilih otomatis keluar kalau tab Dokumen ditinggalkan — bilah aksi yang masih menggantung di tab lain adalah keadaan yang tidak bisa dijelaskan
+- [x] Test bertambah 12 (total 508 → **520** — 466 node + 54 browser), termasuk `DocumentsScreen.browser.test.tsx` di **Chromium sungguhan**: tekan lama masuk mode pilih, klik yang menyusulnya ditelan, tap biasa tetap membuka dokumen, baris cloud melapor lewat toast, bilah aksi menghitung dengan benar, Basic diarahkan ke paywall bukan mengekspor, Basic tetap bisa menghapus, Batal keluar dari mode pilih, timer tekan lama tidak menembak `onEnterSelect` kalau layarnya sudah dilepas duluan (temuan review 25 Agustus, lihat laporan)
+- [x] **Test-nya dibuktikan menggigit:** blok penelan klik dilepas → test "swallows the click" merah; gerbang Pro di bilah aksi diganti pemanggilan langsung → test "sends Basic to the paywall" merah; cabang `isSelectable` di pewaktu tekan lama dihapus → test baris cloud merah. Semua dikembalikan setelah itu
+
+**Catatan token & lencana tier:**
+
+- [x] Baris tier di header tab Dokumen tadinya **dipatok** ke teks "Basic" apa pun tier akunnya — sudah tersentuh karena `tier` baru masuk sebagai prop di potongan ini, jadi diperbaiki sekalian: sekarang mengikuti `tier` sungguhan (Pro/Basic)
+- [x] Token CSS di rencana kerja awal ternyata tidak semuanya ada di `App.css` (`--primary`, `--border`, `--bottom-nav-height`, `.button--ghost`) — dipetakan ke token yang sudah ada (`--acc`, `--chip-border`, `--nav-height`, `.link-button`). `.button--danger` baru ditambahkan, memakai warna `#e5484d` yang sudah dipakai `.icon-button--danger` — tidak ada warna atau token baru (CLAUDE.md 9.2)
+
+**Dua temuan review ditutup sebelum lanjut (25 Agustus 2026, rinciannya di laporan sesi):**
+
+- [x] **Timer tekan lama bisa menembak setelah layar dilepas.** `DocumentsScreen` tidak membersihkan `pressTimer` saat unmount — pindah tab di tengah tekan lama membiarkan `setTimeout` tetap berbunyi dan memanggil `onEnterSelect`/`onNotice` **setelah** `App.tsx` sudah menutup mode pilih lewat efek pindah tab, diam-diam membukanya lagi. Ditambahkan `useEffect` pembersih yang membatalkan timer saat unmount, dengan test regresi baru
+- [x] **`handleBatchDelete` bisa macet permanen kalau `pruneUnusedSignatures()`/`refreshDocuments()` gagal.** Keduanya berjalan tanpa penangkap di blok `finally`, jadi kalau salah satunya melempar, `setIsBatchBusy(false)` dan `exitSelect()` (baris setelahnya, di blok yang sama) tidak pernah tereksekusi — tombol bilah aksi tetap `disabled` selamanya walau dokumennya sudah terhapus. Sekarang dibungkus try/catch sendiri di dalam `finally`, supaya kedua reset state itu tidak bersyarat pada berhasilnya langkah pembersihan
+
+**Terverifikasi di device fisik — Boss Ali, 25 Agustus 2026.** Seluruh daftar uji di bawah dijalankan di HP dan hasilnya sesuai:
+
+- [x] Tekan lama sebuah dokumen — masuk mode pilih, dan dokumennya tidak ikut terbuka
+- [x] Tekan lama baris dokumen cloud — muncul toast, bukan diam saja
+- [x] Pilih 3 dokumen → Ekspor PDF → 3 berkas di folder Documents, nama sesuai judulnya
+- [x] Dua dokumen berjudul sama persis → berkas kedua jadi `… (2)`, tidak menimpa yang pertama
+- [x] Ekspor 10+ dokumen — share sheet Android sanggup atau tidak
+- [x] Tekan Hentikan di tengah — berhenti setelah dokumen yang sedang jalan, jumlahnya sesuai toast
+- [x] Hapus 3 dokumen sekaligus — konfirmasi muncul, cadangan cloud tetap ada
+- [x] Akun Basic: tombol Ekspor berlencana Pro dan membuka paywall; Hapus tetap bisa dipakai
+
+### Fase 6 bagian 5 — Pisah Hasil Pindai (C2) — 25 Agustus 2026
+
+Potongan **C** yang kedua, penutup potongan C. Satu sesi pindai (mis. 30 kwitansi sekali jalan) bisa dipecah jadi beberapa dokumen tanpa memindai ulang.
+
+Desain: `docs/superpowers/specs/2026-08-25-fase6-batch-scan-export-design.md` Bagian 4
+Rencana kerja: `docs/superpowers/plans/2026-08-25-fase6-c2-pisah-hasil-pindai.md`
+
+- [x] **Satu himpunan angka jadi sumber kebenarannya.** Seluruh keadaan layar Pisah adalah himpunan posisi gunting; `planSplit()` di `src/lib/scanSplit.ts` menerjemahkannya jadi kelompok halaman dan layar hanya menggambar hasilnya. Gunting kembar, gunting di posisi 0, dan gunting di luar jangkauan dibuang — bukan kehati-hatian berlebih, karena simpan yang gagal sebagian memang membuat daftar halaman menyusut di bawah gunting yang sudah terpasang
+- [x] **Layar tersendiri, bukan penanda di strip thumbnail layar Tinjau.** Strip itu horizontal dan sudah penuh untuk lima halaman; tiga puluh halaman dengan pemisah di antaranya jadi lorong panjang yang harus digeser jauh cuma untuk melihat sudah terbagi berapa
+- [x] **Pola siap pakai + gunting manual, bukan dua mode terpisah.** "Tiap 1 halaman" (setumpuk kwitansi/KTP — kasus utamanya), "Tiap 2 halaman" (bolak-balik), "Bersihkan pemisah". Pola cuma mengisi guntingnya; setelah itu tiap pemisah tetap bisa diketuk satu-satu. Pemisahnya tombol setinggi jempol, bukan garis rambut
+- [x] **Satu kolom Nama untuk seluruh batch** → `Nama (1)`, `Nama (2)`, … Dikosongkan pun aman: jatuh ke nama bawaan `Scan <tanggal>` seperti menyimpan biasa. Tanpa kolom ini, memindai tiga puluh kwitansi berarti tiga puluh dokumen yang identik kecuali detiknya, lalu tiga puluh kali ubah nama
+- [x] ~~**Gerbang Pro ditegakkan di `saveSplitScan()` (library), dan syaratnya "lebih dari satu dokumen butuh Pro"**~~ — **dicabut 25 Agustus 2026** (bagian 6). Waktu masih ada, syaratnya — bukan "fitur ini Pro". Memisah jadi 1 dokumen identik dengan tombol Simpan di sebelahnya yang sudah gratis untuk semua tier; menolaknya berarti menolak sesuatu yang sudah gratis lewat pintu sebelah. Akun Basic yang menekan tombolnya dapat paywall, bukan layar mati
+- [x] **Kalau menyimpan gagal di tengah, halamannya tidak hilang.** Kelompok yang berhasil pergi, kelompok yang gagal tetap tinggal di layar dengan guntingnya disusun ulang (`boundaryCuts()`), dan toast-nya berkata berapa yang tersimpan. Membatalkan semuanya akan membuang dokumen yang sudah aman; menutup layarnya akan membawa kelompok sisanya ikut hilang bersama sesi pindainya — dan hasil pindai yang hilang tidak bisa dipulihkan dari mana pun. Menekan Simpan lagi tidak menghasilkan duplikat karena yang berhasil sudah tidak ada di layar
+- [x] **Penomoran lanjut setelah gagal sebagian** (`Kwitansi (6)`, bukan `Kwitansi (1)` lagi) — supaya percobaan kedua tidak menabrak judul yang sudah tersimpan di ronde pertama
+- [x] **Interstitial `scan-saved` dipanggil sekali untuk seluruh sesi pisah**, bukan per dokumen. Praktisnya tidak pernah tampil (ini Pro-only), tapi kalau ditulis per dokumen, langganan yang habis di kemudian hari akan meledakkan delapan interstitial beruntun
+- [x] **Gotcha di `App.tsx` yang ditemukan saat menyambungkan:** blok `if (pendingPages)` mengembalikan layar Tinjau **sebelum** `if (view.kind === 'upgrade')` sempat dibaca, jadi paywall dari tombol Pisah tidak akan tampil sama sekali dan tombolnya terlihat mati untuk akun Basic. Blok paywall dipindahkan ke atas blok `pendingPages`; menutupnya mengembalikan user ke layar Tinjau karena `pendingPages` tidak disentuh
+- [x] Test bertambah 55 (total 520 → **575** — 505 node + 70 browser), termasuk `SplitScanScreen.browser.test.tsx` (12) dan `ReviewScreen.browser.test.tsx` (4) di **Chromium sungguhan**
+- [x] **Test-nya dibuktikan menggigit:** gerbang Pro dipatok ke 2 → test pengecualian 1 kelompok merah; `remaining.push` diganti `throw` → dua test kegagalan sebagian merah; filter jangkauan gunting dilepas → test gunting di luar jangkauan merah; `onSave` diganti mengirim seluruh halaman sebagai satu kelompok → test kelompok merah; `disabled={isBusy}` dilepas → test tombol terkunci merah; `startAt` dilepas dari `splitTitles` di layar → test penomoran lanjutan merah. Semua dikembalikan setelah itu
+
+**Tiga temuan review ditutup sebelum lanjut (25 Agustus 2026):**
+
+- [x] **Penomoran lanjutan hilang saat masuk ulang ke layar Pisah.** `handleStartSplit` mereset `splitSaved` dan `splitName` tiap kali layar dibuka, termasuk saat sesi yang sama masih hidup: 3 dokumen tersimpan, 2 gagal → tekan Kembali → tekan Pisah lagi → percobaan kedua menyimpan `Kwitansi (1)` yang menabrak judul ronde pertama, dan nama yang sudah diketik ikut hilang. Sekarang gunting bawaan hanya dipasang kalau sesi ini belum punya gunting sendiri; `exitSplit()` tetap membersihkan semuanya di titik yang memang akhir sesi (pindai baru, simpan biasa, batal dari layar Tinjau)
+- [x] **Pratinjau nama di layar Pisah berbohong setelah gagal sebagian.** Header memanggil `splitTitles` tanpa `startAt`, jadi tertulis "Dokumen 1 — Kwitansi (1)" padahal yang benar-benar disimpan "Kwitansi (4)". `startAt` kini prop, dan nomor "Dokumen N" ikut dihitung dari situ supaya dua bagian barisnya tidak bisa berbeda
+- [x] **Judul hasil pisah tidak lewat `normalizeDocumentTitle`** (ditemukan saat security review). Kolom Nama adalah tempat pertama judul ketikan user masuk ke `saveScanDocument`, dan fungsi itu menyimpan apa adanya — tidak seperti `renameScanDocument`. Nama berspasi ganda atau lebih dari 200 karakter jadi tersimpan beda antara HP dan cloud begitu dicadangkan, persis hal yang normalizer bersama itu ada untuk mencegah. `splitTitles` kini memakai normalizer yang sama, dengan sisa ruang untuk ` (n)` supaya nomornya tidak ikut terpotong
+
+**Security review: nihil temuan.** Judul tidak pernah jadi path berkas (berkas halaman memakai id dokumen, nama ekspor lewat `toSafeFilename`), tidak ada `dangerouslySetInnerHTML`, dan C2 tidak menyentuh Supabase, R2, maupun signed URL.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali — walkthrough browser belum dijalankan lagi sesi ini karena app tetap mensyaratkan login Supabase dan tidak ada akun uji/dev bypass; kebenarannya sejauh ini dari 575 test otomatis, termasuk 16 test layar di Chromium sungguhan):
+
+- [ ] Pindai 10 kwitansi sekali jalan → "Tiap 1 halaman" → 10 dokumen, urutannya benar
+- [ ] Isi kolom Nama → semua dokumen bernama `Nama (1..10)`
+- [ ] Kosongkan Nama → jatuh ke nama bawaan, tidak error
+- [ ] Atur gunting sendiri di dokumen 30 halaman — layarnya masih enak digulir, thumbnail tidak membuat HP tersendat
+- [x] ~~Akun Basic: tombol Pisah berlencana Pro dan membuka paywall…~~ — **tidak berlaku lagi** sejak 25 Agustus 2026, Pisah jadi semua tier (bagian 6). Yang perlu diuji sekarang: tombolnya **tanpa** lencana dan langsung membuka layar Pisah
+- [ ] Simpan hasil pisah, lalu langsung batch-export semuanya — nama berkasnya tidak bertabrakan (pertemuan C1 & C2)
+
+### Fase 6 bagian 6 — Temuan Uji Device Kedua & Pembukaan Gerbang Pro — 25 Agustus 2026
+
+Boss Ali menguji C1 & C2 di Xiaomi T15 dan melaporkan lima hal sekaligus, empat di antaranya bug tampilan/performa dan satu permintaan fitur. Di penutup laporannya ia juga **mencabut gerbang Pro** untuk semua fitur yang disebut di situ.
+
+**Keputusan tier (mengganti PRD Bagian 3 & CLAUDE.md Bagian 6):** anotasi, tanda tangan digital, pisah dokumen, dan ekspor banyak dokumen sekaligus jadi **semua tier**. Ini pembatalan ketiga dengan pola yang sama seperti dua sebelumnya (reorder/filter, lalu PNG): **yang mendasar untuk semua, Pro untuk kendali & mutu**. Yang tetap Pro dari Fase 6: kontrol level kompresi manual, ekspor DOCX, bebas iklan, tanpa watermark, merge tanpa batas halaman, kuota storage lebih besar.
+
+- [x] **Gerbangnya dilepas dari library, bukan cuma dari UI** — `canBatchExport()` dan `canSplitScan()` dihapus seluruhnya (bukan diubah jadi `return true`, yang cuma menyisakan abstraksi bohong), parameter `tier` ikut hilang dari `saveSplitScan()` dan `setPageMarks()` karena tidak ada lagi yang membacanya. Lencana "Pro" dan cabang `onUpgrade()` hilang dari layar Dokumen, Tinjau, dan Editor
+- [x] **Test gerbang tidak dihapus, dibalik** — tier yang dulu ditolak sekarang diuji berhasil (`exports for Basic too`, `splits into several documents for Basic too`, `lets Basic export in bulk`). Menghapusnya akan membuat regresi ke perilaku lama lewat tanpa suara
+- [x] **Konsekuensi yang ikut ketahuan:** baris terkunci "Atur sendiri kualitas & ukuran berkas" di lembar Ekspor Banyak Dokumen dulu cuma **menutup lembarnya**, dengan alasan tertulis bahwa tombol yang membukanya Pro-only sehingga akun Basic tidak akan pernah sampai ke sana. Alasan itu mati bersama gerbangnya. Sekarang ia membuka paywall seperti di lembar satu dokumen — kontrol kualitasnya sendiri **tetap Pro**
+
+**Susulan beberapa jam kemudian — kontrol level kompresi & DOCX ikut dibuka.** Boss Ali menutup laporan berikutnya dengan meminta dua sisa Pro dari daftar di atas ikut dibuka.
+
+- [x] `canChooseCompression()` dihapus; `resolveCompressionLevel()` **tidak lagi menerima `tier`**. Fungsinya tidak ikut dihapus karena separuh tugasnya tidak pernah soal tier: level datang dari `localStorage`, jadi bisa berupa nilai yang build ini tidak kenal, dan tanpa penjagaan itu ia sampai ke `COMPRESSION_PRESETS` sebagai `undefined` lalu meng-encode di `quality: undefined`
+- [x] `BASIC_COMPRESSION` diganti nama jadi `STANDARD_COMPRESSION` — "yang selalu didapat Basic" sudah tidak berarti apa-apa, dan nama yang berkata sebaliknya adalah komentar yang berbohong di tiap berkas yang memakainya. Dua pemakainya tetap: cadangan cloud (`buildPdfFile`, sengaja dipaku ke Standar) dan bawaan `compressImage`
+- [x] `estimateExportSizes()` kehilangan parameter `tier`-nya — dulu ada semata karena tier bisa mengubah level yang diminta jadi level lain
+- [x] Baris terkunci "Atur sendiri kualitas & ukuran berkas" **hilang seluruhnya**, bersama prop `tier`/`onUpgrade` di `CompressionField` yang cuma ada untuk menggambarnya, prop `onUpgrade` di kedua lembar ekspor, dan CSS `.export-quality__lock`. Termasuk `onUpgrade` yang baru saja ditambahkan beberapa jam sebelumnya di lembar Ekspor Banyak — umurnya satu commit
+- [x] **DOCX belum ada kodenya sama sekali** (`ExportFormat` masih `'pdf' | 'jpg' | 'png'`), jadi tidak ada gerbang untuk dicabut. Keputusannya dicatat untuk nanti: saat DOCX dibuat bersama OCR, langsung semua tier
+- [x] **Yang masih dijual Pro setelah ini:** bebas iklan, tanpa watermark, merge tanpa batas halaman, kuota storage, dan nanti OCR. Itu persis empat baris yang sudah ditampilkan `UpgradeScreen`, jadi paywall-nya **tidak perlu diubah** — ia memang tidak pernah menjual kontrol kualitas. Satu-satunya tempat tier masih menyentuh jalur ekspor: `shouldWatermark()`
+- [x] **Cadangan cloud tidak ikut terpengaruh.** `buildPdfFile()` tetap dipaku ke Standar, jadi Basic yang memilih Maksimal tidak diam-diam menghabiskan kuota R2-nya lebih cepat — keputusan Boss Ali 23 Agustus 2026 masih berlaku dan justru jadi lebih penting sekarang
+
+**1. Layar di belakang popup masih bisa digulir.** Backdrop `position: fixed` menutupi layar tapi tidak memiliki gestur di atasnya: jari yang menggeser di atasnya tetap menggulir wadah gulir terdekat, jadi daftar dokumen ikut bergeser di belakang lembar Ekspor yang sedang jalan.
+
+- [x] `useScrollLock()` — hook yang memasang kelas di `document.body` selama komponennya hidup, dipakai oleh **ketiga** lembar (`ExportSheet`, `BatchExportSheet`, `SignaturePad`), jadi ini bukan tambalan satu layar
+- [x] **Dihitung, bukan bendera** — lembar bisa bertumpuk (papan tanda tangan terbuka di atas alat anotasi), dan bendera akan melepas kunci begitu yang dalam ditutup padahal yang luar masih menutupi layar. Ada test regresinya di Chromium sungguhan
+- [x] CSS menyebut **kedua** wadah gulirnya: `.app__body` di layar tab, dan viewport itu sendiri di layar alur penuh yang menggulir `body`
+- [x] `.sheet` dapat `max-height: 88vh; overflow-y: auto` — begitu halaman di belakangnya dibekukan, lembarnya sendiri harus bisa mencapai tombolnya di layar pendek
+
+**2. Tidak ada tombol "Semua" di mode pilih.** Memilih sepuluh dokumen berarti sepuluh ketukan.
+
+- [x] Satu tombol yang labelnya mengikuti keadaan — **Semua** → **Kosongkan** — bukan dua tombol dengan salah satunya selalu mati. Logikanya di `documentSelection.ts` (`selectableIds`, `isAllSelected`, `toggleSelectAll`), jadi bisa diuji tanpa DOM
+- [x] Baris cloud **tidak** ikut dihitung: ia tidak punya berkas halaman di HP ini, jadi tidak akan pernah bisa dicentang. Menghitungnya akan membuat "Semua" mengaku masih ada yang tersisa padahal semua yang bisa dicentang sudah tercentang
+
+**3. Dokumen terakhir terpotong bilah Ekspor/Hapus.** Bilahnya `position: fixed`, jadi ia menutupi ujung daftar alih-alih mendorongnya naik.
+
+- [x] `.screen--select-bar` menyisakan tinggi bilah (`--select-bar-height`) selama bilah itu tampil. Kondisinya (`showSelectBar`) dipakai bersama oleh padding dan bilahnya sendiri, supaya keduanya tidak bisa berbeda pendapat
+
+**4. Tombol "Hentikan" putih tidak terbaca** (terlihat di tangkapan layar Boss Ali). Ditemukan saat menelusuri laporan pertama, bukan dilaporkan terpisah.
+
+- [x] `.button` polos ternyata tidak pernah menetapkan latar & warna sama sekali — yang selama ini menyelamatkannya adalah `.editor-actions .button`, `.viewer__actions .button`, dan `.split-entry`. Tombol "Hentikan" di lembar Ekspor Banyak Dokumen tidak duduk di salah satunya, jadi ia jatuh ke tombol bawaan browser: kotak putih dengan teks gelap di atas tema gelap. Latar & warna dasar kini ada di `.button` sendiri; varian `--primary`/`--danger`/`--upgrade` menetapkan miliknya sendiri jadi tidak ada yang berubah di sana
+
+**5. Tidak ada cara memisah dokumen yang sudah tersimpan.** Merge sepuluh dokumen jadi satu tidak punya kebalikan — merge yang salah cuma bisa dibatalkan dengan memindai ulang semuanya.
+
+- [x] **`splitDocument()` di `documentSplit.ts`**, memakai kembali seluruh geometri gunting milik `scanSplit` (`planSplit`, `toggleCut`, `everyNCuts`, `splitTitles`). Yang berbeda cuma dari mana halamannya datang dan apa yang terjadi pada asalnya
+- [x] **Halaman disalin lewat `resolvePage()`**, persis seperti merge — jadi tiap dokumen baru membawa halaman yang dilihat user (sudah dipotong, difilter, dianotasi), bukan hasil pindai mentah di bawahnya
+- [x] **Hasil pisah tidak ditandai sebagai gabungan.** `createDocumentFromPages` dulu selalu menulis `sourceDocumentIds`; array kosong itu *truthy*, jadi layar detail akan menulis "Hasil gabungan dari 0 dokumen". Parameternya kini opsional dan hanya ditulis kalau berisi
+- [x] **Dokumen asli tidak dihapus kecuali dicentang**, dan **tidak pernah** dihapus kalau ada kelompok yang gagal dibuat — halaman kelompok itu belum ada di tempat lain, jadi menghapus asalnya berarti menghilangkannya. Centangnya juga selalu mulai dari mati tiap kali layar dibuka
+- [x] **Cadangan cloud yang selamat ikut dikatakan** — sama seperti `handleDelete`, kalau tidak, dokumen asli terlihat "hidup lagi" sebagai baris Di cloud beberapa saat kemudian
+- [x] **Gagal sebagian tidak menyuruh "coba lagi"** seperti pisah hasil pindai. Di sana kelompok yang berhasil pergi dari layar; di sini dokumen asalnya masih memegang semua halaman, jadi menekan Pisah lagi akan menduplikasi kelompok yang sudah jadi. Pesannya menyuruh membereskan hasil yang sudah jadi dulu
+- [x] `SplitScanScreen` dipakai bersama kedua alur (`raw`, `heading`, `saveLabel`, `busyLabel`, `options`) dan `onSave` kini menyerahkan **indeks halaman**, bukan halamannya — supaya layar itu tidak perlu tahu ia sedang memegang URI pemindai atau path tersimpan
+- [x] Ikon `SplitIcon` baru, cerminan `MergeIcon` di grid stroke yang sama, supaya keduanya terbaca sebagai lawan saat berdampingan
+
+**6. Ekspor 10 dokumen sangat lama & simpan anotasi sangat lambat.**
+
+- [x] **Izin storage diminta sekali per sesi, bukan sekali per berkas.** `writeExportFiles()` memanggil `checkPermissions()` + kadang `requestPermissions()` untuk **tiap** dokumen — batch 10 dokumen menjalankan pasangan itu sepuluh kali, dua-duanya menyeberangi jembatan Capacitor dan yang kedua bisa memunculkan dialog sistem. Ini kandidat terkuat penyebab "seperti menggantung"
+- [x] **Halaman diperkecil saat di-decode, bukan setelahnya.** Ukuran piksel dibaca dari header JPEG (`jpegSize.ts`, ~60 baris, diuji di suite node dengan berkas yang dirakit byte demi byte), lalu `createImageBitmap` diminta mengecilkan sekalian — bukan men-decode 12 MP utuh lalu membuang tiga perempatnya di kanvas sesaat kemudian. Ekspor membayar decode penuh itu sekali per halaman, dan batch 10 dokumen membayarnya sepuluh kali
+- [x] **Hanya satu dimensi yang diminta, rasio diserahkan ke browser.** Meminta keduanya akan **merusak bentuk** halaman ber-tag rotasi EXIF: `imageOrientation: 'from-image'` menukar sumbunya sementara ukuran dari header tidak, jadi keduanya jadi berbeda pendapat soal mana yang lebar. Dengan satu dimensi, hal terburuk yang bisa dilakukan rotasi adalah membatasi sisi pendek — hasilnya tetap lebih kecil dari aslinya, tetap berbentuk benar, dan `scaledCanvas` menyelesaikan sisanya
+- [x] **Mutu berkas turunan 0,95 → 0,90.** Berkas hasil filter & hasil tinta harus di-base64, diseberangkan lewat jembatan, ditulis Java, lalu dibaca & di-decode lagi untuk ditampilkan — ukurannya dibayar empat kali di HP. **Diukur di Chromium** pada halaman mirip-pindaian 3000×4200: **5,76 MB pada 0,95 → 3,96 MB pada 0,90, yaitu 31% lebih sedikit byte** untuk selisih yang tidak selamat sampai kertas. Ini angka teknis (CLAUDE.md Bagian 6), bukan angka bisnis — kalau di HP ternyata terlihat, boleh dinaikkan lagi
+- [x] **Test membuktikan jalur cepatnya benar-benar dipakai**, bukan cuma bahwa hasilnya benar — keluarannya identik dengan atau tanpa optimasi, jadi test kebenaran saja tidak akan menyadari jalur cepat itu hilang
+
+**Test: total 575 → 610 (531 node + 79 browser),** semuanya lulus (`npm test`). Angka bersihnya menutupi lebih banyak test baru dari yang terlihat: sepuluh test gerbang tier dihapus atau **dibalik** seiring gerbangnya dilepas.
+
+**Test-nya dibuktikan menggigit:** hitungan `useScrollLock` diganti bendera → test lembar bertumpuk merah; syarat `remaining.length === 0` dilepas dari penghapusan dokumen asli → test "kelompok gagal" merah; cabang orientasi `resizeWidth`/`resizeHeight` ditukar → test jalur cepat merah (dan test ukuran **tetap hijau**, yang justru membuktikan jaring pengaman `scaledCanvas` bekerja). Semua dikembalikan setelah itu.
+
+**Security review: nihil temuan.** Tidak menyentuh Supabase, R2, maupun signed URL. Dua permukaan baru diperiksa: `readJpegSize()` mengurai byte yang tidak dipercaya — semua akses indeks berpagar, dan `at += length` dengan `length >= 2` dijamin selalu maju sehingga tidak bisa berputar selamanya; `splitDocument()` menghapus dokumen lewat id dari index kita sendiri (UUID buatan sendiri), dan `deleteScanDocument` memastikan id-nya ada di index sebelum `rmdir` — tidak ada path yang berasal dari ketikan user.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Buka lembar Ekspor / Ekspor Banyak / Tanda Tangan → coba gulir layar di belakangnya: **tidak boleh bergerak sama sekali**
+- [ ] Lembar Ekspor di layar pendek — tombol formatnya masih bisa dicapai (lembarnya sendiri yang bergulir)
+- [ ] Tombol "Hentikan" saat batch berjalan sekarang terbaca (bukan kotak putih)
+- [ ] Mode pilih → **Semua** mencentang semua dokumen HP, baris "Di cloud" tetap tidak tercentang; tombolnya berubah jadi **Kosongkan**
+- [ ] Gulir ke bawah dengan bilah Ekspor/Hapus tampil — dokumen terakhir **utuh**, tidak terpotong
+- [ ] Ekspor 10 dokumen lagi — **berapa detik sekarang** dibanding sebelumnya? (angka sebelum/sesudah dari HP yang sama)
+- [ ] Simpan anotasi di halaman 12 MP — **berapa detik sekarang** dibanding sebelumnya?
+- [ ] Hasil anotasi & filter pada mutu 0,90 masih tajam saat dicetak/di-zoom — kalau tidak, angkanya boleh dinaikkan lagi
+- [ ] Gabung 10 dokumen → buka detailnya → **Pisah jadi Beberapa Dokumen** → "Tiap 1 halaman" → 10 dokumen kembali, isinya benar & urutannya benar
+- [ ] Pisah **tanpa** mencentang hapus asli — dokumen asli masih ada
+- [ ] Pisah **dengan** mencentang hapus asli — dokumen asli hilang dari HP; kalau ia punya cadangan, toast-nya menyebut cadangan cloud tetap ada
+- [ ] Pisah dokumen yang halamannya sudah difilter/dipotong/dianotasi — hasilnya membawa halaman yang **terlihat**, bukan pindaian mentah
+- [ ] Akun **Basic**: tombol Anotasi & Tanda Tangan, Pisah, dan Ekspor PDF banyak dokumen **tanpa lencana Pro** dan langsung bisa dipakai
+
+### Fase 6 bagian 7 — Temuan Uji Device Ketiga — 25 Agustus 2026
+
+Boss Ali menguji lagi di Xiaomi T15 dan melaporkan dua hal. Yang pertama **tidak bisa diperbaiki dari kode kita** dan butuh keputusannya; yang kedua ternyata bukan bug tampilan seperti dugaannya, tapi tetap ada yang salah dan sudah diperbaiki.
+
+**1. Pemindai selalu terbuka di "Ambil otomatis", diminta bawaannya "Manual".** Auto-capture menjepret sebelum dokumen siap.
+
+- [x] **Terhalang di sisi Google, bukan di sisi kita — perlu keputusan Boss Ali.** `GmsDocumentScannerOptions.Builder` hanya punya empat setter: `setGalleryImportAllowed`, `setPageLimit`, `setResultFormats`, `setScannerMode`. Tidak ada `setCaptureMode`. Konstanta `CAPTURE_MODE_AUTO`/`CAPTURE_MODE_MANUAL` **ada** di kelas itu tapi tidak pernah bisa diserahkan ke method publik manapun — itu persis isi bug report [googlesamples/mlkit#846](https://github.com/googlesamples/mlkit/issues/846), yang pelapornya menyerahkannya ke `setScannerMode()` dan diam-diam mendapat `SCANNER_MODE_BASE_WITH_FILTER` karena kebetulan keduanya bernilai `2`. Layar pemindainya milik Google Play services, bukan layar kita, jadi tidak ada CSS/prop yang bisa mengubahnya
+- [x] **Diputuskan Boss Ali 25 Agustus 2026: (A) terima apa adanya.** Tidak ada perubahan kode — toggle "Manual" di layar pemindai Google tetap sekali ketuk per sesi pindai. Pilihannya cuma dua: **(A)** terima — toggle "Manual" tetap ada di layar itu, sekali ketuk; atau **(B)** ganti mesin pindai dengan kamera sendiri, yang berarti membuat ulang deteksi tepi, koreksi perspektif, dan pembersihan noda dari nol (ganti stack — CLAUDE.md Bagian 2). Rekomendasi: **(A)**
+
+**2. Di layar Pisah Dokumen, halaman terakhir tidak punya "Dokumen baru mulai di sini" — diduga tertutup tombol simpan.**
+
+- [x] **Dugaan "tertutup" dibuktikan salah.** Struktur DOM & CSS layar itu direproduksi persis di Chromium 412x870 dan diukur: `.flow-footer` itu `margin-top: auto` di aliran normal, bukan `fixed` seperti `.select-bar` yang memang menutupi daftar di temuan kemarin. Kartu halaman terakhir berakhir di 1996px, tombolnya mulai di 2018px — tidak bersentuhan, dan tangkapan layar reproduksinya sama persis dengan tangkapan layar dari HP
+- [x] **Yang sebenarnya salah: daftarnya berhenti tanpa berkata apa-apa.** Pemisah memang tidak ada setelah halaman terakhir — pemisah di situ akan melahirkan dokumen tanpa halaman, dan `planSplit()` memang membuang cut `>= pageCount`. Tapi irama "halaman - pemisah - halaman - pemisah" putus begitu saja di ujung, jadi pembacanya menyimpulkan ada yang hilang. Perbaikannya menjawab pertanyaan itu langsung: baris penutup **"Halaman terakhir. Pemisah hanya bisa dipasang di antara dua halaman."**
+- [x] Test regresinya memeriksa **dua-duanya** — baris penutupnya ada, *dan* pemisahnya benar-benar cuma `pages.length - 1` buah. Tanpa bagian kedua, test itu masih hijau seandainya suatu saat ada pemisah nyasar di ujung daftar
+
+**Test: 610 -> 611,** semuanya lulus (`npm test`).
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Layar Pisah Dokumen digulir sampai mentok — baris "Halaman terakhir..." terbaca utuh di atas tombol, dan kartu halaman terakhir tidak terpotong
+
+### Fase 6 bagian 8 — OCR on-device & PDF Bisa Dicari (D1) — 25 Agustus 2026
+
+Potongan **D** dari empat sisa Fase 6, tahap pertama dari dua. Desain: `docs/superpowers/specs/2026-08-25-fase6-ocr-docx-design.md`.
+
+**Kontradiksi tier ditutup dulu sebelum kode ditulis.** CLAUDE.md Bagian 6 menulis dua baris yang tidak bisa keduanya benar: OCR sebagai nilai jual Pro, tapi DOCX "langsung semua tier" — padahal DOCX yang berguna isinya hasil OCR. **Keputusan Boss Ali: keduanya Pro.** Ini membalik arah tiga pembatalan gerbang Pro sebelumnya dan itu disengaja — reorder, filter, PNG, anotasi, dan pisah dokumen soal **akses ke dokumen sendiri**; OCR adalah **mesin baru** yang mengubah gambar jadi teks. Baris yang bertabrakan sudah dikoreksi di `CLAUDE.md` Bagian 6 dan PRD Bagian 3.
+
+- [x] **Engine: `@capacitor-mlkit/text-recognition` 8.2.0** — sekeluarga dengan pemindai yang sudah dipakai, on-device, model dibundel di APK jadi **tidak pernah butuh jaringan**. Tesseract.js ditolak (data latih ±25 MB, puluhan detik per halaman 12 MP di HP kelas menengah, memori WASM gampang membunuh WebView); cloud OCR ditolak (Aturan Keras #4)
+- [x] **±8,6 MB model skrip non-Latin dibuang dari APK** lewat `exclude` di `android/app/build.gradle`. Ukurannya diukur langsung dari Maven Google, bukan ditebak: Latin 1,38 MB, Mandarin 2,04, Devanagari 2,02, Jepang 2,63, Korea 1,90. Aman karena pemilih skrip di plugin cuma `switch` biasa dan adapter kita memaku `Script.Latin` — cabang yang tidak pernah dieksekusi tidak pernah memuat kelasnya. `-dontwarn` ditulis sekarang meski `minifyEnabled` masih false, supaya menyalakan minify nanti tidak berubah jadi build gagal yang sebabnya tidak ada yang ingat
+- [x] Model halaman naik ke **`schemaVersion: 5`** — `text` berisi **path** ke JSON, bukan tata letaknya. Satu halaman padat ±500 kata; menaruhnya di index berarti ratusan KB yang di-parse tiap aplikasi dibuka cuma untuk menggambar daftar dokumen. Nama berkasnya diturunkan dari `original`, jadi reorder halaman tidak menabrakkan berkas antar halaman
+- [x] **Koordinat dinormalisasi 0..1**, konvensi yang sama dengan `Mark` — ekspor memperkecil halaman menurut level kompresi (1600px sampai 4000px), jadi koordinat piksel akan menggeser tiap kata begitu levelnya diganti
+- [x] **Crop & putar membuang hasil OCR halaman itu; ganti filter & menggambar tidak.** Beda perlakuan dari goresan tinta yang justru dipetakan ulang: goresan tidak bisa dibuat ulang oleh mesin, hasil OCR bisa — dan hasil OCR di halaman yang sudah dicrop justru lebih baik daripada hasil lama yang dipetakan ulang. Membiarkannya berarti salah tempat yang **tidak akan pernah terlihat** siapa pun karena teksnya memang tak terlihat; ia cuma diam-diam merusak salin-tempel dan pencarian
+- [x] Sumber gambar OCR = `annotationSource(page)` yang sudah ada — halaman **tanpa tintanya** tapi **dengan filternya**. Dua-duanya disengaja: coretan pena dan tanda tangan di atas teks jadi sampah huruf, sedangkan Hitam-Putih dan Magic Color justru menaikkan akurasi
+- [x] **Lapisan teks tak terlihat di PDF** lewat `pdf-lib` yang sudah terpasang: `3 Tr` (mode tak terlihat baku yang dipakai semua alat OCR, bukan `opacity: 0`) + `Tz` yang menyetel tiap kata **pas selebar kotaknya**. Tanpa `Tz`, menyorot satu kata di pembaca PDF akan menyorot separuh kalimat — keluhan yang orang laporkan sebagai "OCR-nya rusak". Nol dependency baru untuk bagian ini
+- [x] **Penyaring WinAnsi** sebelum `drawText`, yang **melempar error** pada karakter yang tidak bisa di-encode: satu glyph nyasar dari OCR akan menggagalkan ekspor dua puluh halaman. Tidak ada font yang dibenamkan — Helvetica ada di setiap pembaca PDF dan seluruh Bahasa Indonesia masuk WinAnsi
+- [x] **Cadangan cloud ikut membawa lapisan teksnya** — beda dari level kompresi yang sengaja tidak diikutkan. Beberapa KB, tidak menyentuh mutu gambar maupun kuota, dan `readBackup` tetap bekerja apa adanya karena ia mencari XObject gambar, bukan teks
+- [x] **Gerbang Pro ditegakkan di `recognizeDocument()`**, bukan di UI. Tapi teks yang **sudah** dikenali tetap dipakai saat ekspor walau tier turun ke Basic: gerbangnya di titik mesin dijalankan, bukan di titik data milik user sendiri dibaca
+- [x] Menyimpan **setelah tiap halaman**, beda dari filter dokumen yang menulis index sekali di akhir — memfilter 20 halaman itu hitungan detik, membacanya hitungan menit, dan user yang keluar di tengah tidak boleh kehilangan semuanya. Efek sampingnya: tombol yang sama sekaligus jadi "lanjutkan" dan "perbaiki halaman yang baru di-crop"
+- [x] Satu halaman gagal dibaca **tidak** membatalkan sisanya; jumlahnya dilaporkan di toast supaya tidak mengaku bersih
+- [x] Baris **"Teks Dokumen"** di layar detail dengan tiga keadaan jujur (belum dikenali / "X dari Y halaman dikenali" / "Teks dikenali · Y halaman") plus progress per halaman. Akun Basic melihatnya berlencana Pro dan diarahkan ke layar Upgrade, bukan tombol mati
+- [x] **Paywall bertambah baris kelima** ("Teks dokumen · PDF bisa dicari & Word"). `limitRows` di-export supaya ada test yang menahannya tetap jujur — tiga baris pernah **dihapus** dari ledger ini sepanjang Agustus saat gerbang Pro dicabut satu per satu, jadi ledger itu klaim tentang produk, bukan hiasan
+- [x] **Test 611 → 683**, semuanya lulus (`npm test`). Enam mutasi dijalankan untuk membuktikan test-nya menggigit: `Tz` dilepas → test lebar merah; baseline dipindah ke tepi atas kotak → test posisi merah; penyaring WinAnsi dilepas → test karakter merah; sumber OCR diganti jadi ikut tinta → merah; gerbang Pro dilepas → merah; lewati-halaman-sudah-ada dilepas → merah. Semua dikembalikan setelah itu
+- [x] Penyaring WinAnsi tidak diuji dengan tabel encoding yang disalin tangan: test-nya **menyapu seluruh rentang kode 0x00–0x2FFF plus emoji**, menyanitasi tiap karakter, lalu menyerahkan hasilnya ke `Helvetica` sungguhan dari pdf-lib. Ada juga ujian arah sebaliknya, supaya penyaring yang mengembalikan string kosong tidak lolos
+- [x] Satu bug lama ikut ketangkap: `scanStorage` membandingkan versi skema dengan angka **4** yang ditulis tangan terpisah dari migrasinya, jadi tiap kenaikan skema akan membuat index ditulis ulang di **setiap** pembacaan. Sekarang keduanya memakai `CURRENT_SCHEMA_VERSION`, dengan test yang menjaganya
+
+**Belum dikerjakan — D2 (ekspor DOCX):** penulis ZIP STORE + OOXML minimal, DOCX sebagai format keempat di lembar Ekspor. Rancangannya sudah lengkap di spec Bagian 6.
+
+**Konsekuensi yang perlu keputusan Boss Ali:** keputusan 22 Agustus — "flow pembelian Pro tidak dibuka ke publik sebelum Fase 6 selesai" — tinggal menunggu D2. Membukanya keputusan Boss Ali, bukan sesuatu yang diambil kode ini.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] "Kenali Teks" pada dokumen 10+ halaman selesai tanpa aplikasi terasa beku; progress-nya bergerak
+- [ ] PDF hasil ekspor dibuka di pembaca PDF HP → cari satu kata yang ada di dokumen, sorotannya **mendarat di kata yang benar**, bukan bergeser
+- [ ] Salin-tempel satu kalimat dari PDF itu ke aplikasi catatan — hasilnya terbaca, bukan huruf acak
+- [ ] Akurasi pada dokumen Indonesia sungguhan: kwitansi termal, surat ketikan, tulisan tangan (yang terakhir memang diharapkan jelek)
+- [ ] Halaman yang di-crop setelah OCR kehilangan teksnya, dan tombolnya berubah jadi "Kenali Sisanya"
+- [ ] Filter Hitam-Putih dulu lalu OCR → akurasinya naik atau setidaknya tidak turun
+- [ ] Akun Basic: baris "Teks Dokumen" berlencana Pro dan membuka layar Upgrade
+- [ ] **Ukuran APK rilis setelah `exclude`** — bertambah ±1,4 MB, bukan ±10 MB
+- [ ] **Build AAB di CI lolos** setelah plugin baru + `exclude`
+
+### Dua temuan code-review di kode C2 — ditutup 25 Agustus 2026
+
+Ketemu saat code-review menjelang commit D1. Keduanya di potongan C2 (pisah dokumen), bukan di OCR — tapi ditutup sekarang juga supaya tidak menumpuk lintas potongan.
+
+- [x] **Nama pisah yang dikosongkan melewati normalizer.** Mengosongkan kolom nama membuat `splitTitles` mengembalikan `undefined`, dan pemanggilnya menambal itu dengan template mentah `${doc.title} (n)` — lewat begitu saja dari normalizer bersama **dan** batas panjangnya. Judul 200 karakter (panjang yang memang bisa diketik lewat Ubah Nama) ditambah " (1)" jadi 204, lebih panjang dari yang diizinkan `confirm-upload`, jadi nama di HP dan di cloud berbeda begitu hasil pisahnya dicadangkan. Sekarang judul dokumen dipakai sebagai **base** yang masuk `splitTitles`, bukan sebagai tambalan di hilirnya
+- [x] **Pemisah bergeser diam-diam setelah halaman dihapus.** Keluar dari layar Pisah sengaja **menyimpan** cut-nya supaya percobaan ulang setelah simpan yang setengah berhasil tidak kehilangan penempatan — tapi layar Tinjau di baliknya masih bisa menghapus halaman. Masuk lagi ke layar Pisah lalu memakai cut lama terhadap daftar yang menyusut membuat tiap pemisah setelah halaman itu jatuh ke batas yang berbeda dari yang ditempatkan user. Ditutup dengan `remapCutsAfterRemoval()`: cut sesudah halaman yang dihapus turun satu, cut sebelumnya diam, dan pasangan yang mengapitnya melebur jadi satu — deduplikasinya di sini, bukan diserahkan ke `planSplit`, supaya yang digambar layar dan yang akan disimpan tidak bisa berbeda
+- [x] `limitRows` dipindah dari `UpgradeScreen.tsx` ke `src/lib/upgradeLedger.ts`. Meng-export fungsi dari berkas komponen memang mematahkan Fast Refresh untuk berkas itu, dan oxlint menegurnya — modul sendiri lebih tepat untuk data yang memang bukan komponen
+- [x] Test 683 → 694
+
+### Fase 6 bagian 9 — Ekspor DOCX (D2) — 25 Agustus 2026
+
+Tahap kedua dari potongan **D**, dan yang terakhir di Fase 6. Desain: `docs/superpowers/specs/2026-08-25-fase6-ocr-docx-design.md` Bagian 6.
+
+- [x] **Penulis ZIP sendiri (`zipWriter.ts`), nol dependency baru.** Metode **STORE**, tanpa kompresi: DOCX berisi teks saja itu puluhan KB, jadi deflate menghemat lebih sedikit daripada ongkos menambah dependency (`docx` menyeret jszip) atau menulis deflate sendiri — dan entry ber-STORE sah sepenuhnya menurut OPC. Tanpa zip64, tanpa data descriptor, nama entry ASCII saja, dan **menolak** nama non-ASCII alih-alih menulis mojibake
+- [x] **Cap waktu dari `createdAt` dokumen, bukan dari jam.** Itu yang membuat keluarannya **deterministik**: dokumen yang sama diekspor dua kali menghasilkan byte yang sama, dan tanpa itu tidak ada yang bisa dibandingkan persis di test
+- [x] **`docxExport.ts` — empat part OOXML minimal**: `[Content_Types].xml`, `_rels/.rels`, `word/document.xml`, `docProps/core.xml` (judul & tanggal, sejajar `setTitle`/`setCreationDate` di PDF)
+- [x] **Satu paragraf per blok OCR, baris di dalamnya digabung spasi** — itu yang membuat teksnya bisa di-reflow saat diedit, yang memang arti "ubah scan jadi Word". Risikonya diakui terang-terangan di komentarnya: untuk struk dan formulir, di mana tiap baris adalah butir sendiri, menggabungkan baris membaca lebih buruk. Masuk daftar uji device, dan gantinya satu baris kode
+- [x] **Escaping `& < > "` plus membuang karakter kontrol C0.** XML 1.0 menolak sebagian besar C0, dan satu byte nyasar dari OCR membuat Word menolak berkasnya sebagai "rusak" tanpa menyebut byte yang mana
+- [x] **DOCX membawa karakter yang justru dibuang lapisan teks PDF.** Body-nya UTF-8, jadi 名前 selamat di sini sementara di PDF ia harus dibuang karena Helvetica/WinAnsi tidak punya glyph-nya
+- [x] **Ekspor DOCX tidak menyentuh satu pun gambar halaman.** Itu intinya: menjalankan kompresor di jalur ini akan meng-encode ulang dua puluh JPEG 12 MP untuk membuat berkas yang tidak memuat satu pun dari mereka. Ada test yang menjaganya
+- [x] **Perkiraan ukuran DOCX bukan perkiraan.** Format gambar harus meng-encode satu halaman lalu dikali karena meng-encode tiga puluh halaman akan makan detik tiap geseran slider; DOCX cukup dibuat betulan (milidetik, tanpa gambar) lalu diukur. Ditampilkan **tanpa "≈"**, dan `null` — bukan nol — saat belum ada teks, supaya "belum dikenali" tidak terbaca sebagai "berkas kosong"
+- [x] **Baris Word di lembar Ekspor menawarkan pengenal teks saat belum ada teksnya**, bukan diam-diam mati. Baris mati terbaca sebagai aplikasi rusak, padahal jalan keluarnya satu layar saja
+- [x] **Ekspor banyak dokumen menerima Word** lewat pilihan PDF/Word di lembarnya. Kontrol mutu **disembunyikan** saat Word dipilih — tidak ada gambar untuk dikompresi, dan di lembar ini memang ada keadaan "terpilih" untuk ditanggapi (beda dari lembar satu-dokumen, di mana mengetuk format langsung mengekspor). Dokumen yang belum dikenali teksnya dilaporkan sebagai gagal dengan pesannya sendiri, bukan dilewati diam-diam — pemilihannya dilakukan di tab Dokumen, yang tidak tahu dokumen mana yang sudah dibaca
+- [x] **`exportDocumentsBatch` dirapikan jadi objek opsi** (`{ level, format, onProgress, signal }`). Menambahkan `format` sebagai argumen keenam setelah `signal` akan jadi tanda tangan yang beberapa bulan lagi terbaca sebagai kekeliruan
+- [x] **CSS kontrol segmented dipakai bersama, bukan disalin** — selektor `.filter-scope` di editor digabung dengan `.format-switch` yang baru. Dua salinan aturan yang sama pasti berbeda cepat atau lambat
+- [x] **Gerbang tier: tidak ada, dan itu disengaja.** DOCX itu Pro, tapi gerbangnya tetap satu — `recognizeDocument()`. Menambah cek tier di jalur ekspor akan menyandera teks yang sudah dibayar kalau langganan habis, persis yang sudah dihindari di lapisan teks PDF. Akun Basic tidak punya cara membuat teksnya, jadi DOCX praktis tetap Pro tanpa gerbang kedua
+- [x] **Test 694 → 756.** Lima mutasi dijalankan untuk membuktikan test-nya menggigit: metode STORE diganti deflate → merah; CRC dinolkan → merah; pembuang karakter kontrol dilepas → merah; page break dihapus → dua test merah; ekspor DOCX dibuat ikut meng-encode halaman → merah. Semua dikembalikan
+- [x] **CRC-32 diuji terhadap implementasi terpisah** yang dihitung bit-per-bit tanpa tabel, bukan terhadap angka emas — tabel yang disalin dari sumber yang sama dengan kode produksi akan setuju dengan kode itu meski dua-duanya salah
+- [x] **Kesahihan XML dibuktikan parser sungguhan** di suite browser (`DOMParser` Chromium), bukan cuma dengan mencocokkan string. Markup buatan tangan itu persis jenis hal yang terbaca benar tapi tetap gagal di-parse
+
+**Dua temuan code-review ditutup sebelum commit:**
+
+- [x] **Cap waktu ZIP bocor timezone device.** `dosDateTime` membaca `Date` dengan getter waktu lokal (`getHours`, `getDate`, dst.), padahal `createdAt` yang dibungkusnya adalah ISO UTC. Efeknya dua: klaim "diekspor dua kali menghasilkan byte yang sama" jadi bergantung timezone mesin yang mengekspor, dan cap ZIP bisa jatuh di hari yang beda dari `dcterms:created` (yang tetap string ISO asli) untuk device yang bukan UTC — termasuk WIB. Diganti ke getter `getUTC*`, dengan komentar yang menjelaskan kenapa. Test lama diam-diam lolos di kedua versi karena ia membaca ulang dengan getter lokal yang sama (mem-vonis mock, bukan perilaku); test baru menuliskan bagian tanggal/jam sebagai literal UTC dari `MODIFIED`, dan mutasi baliknya (kembali ke getter lokal) terbukti merah
+- [x] **Toast OCR menutupi halaman kosong.** `ocr.ts` sudah membedakan `empty` (mesin jalan, kertas kosong) dari `failed`, tapi `App.tsx` cuma mengecek `outcome.failed > 0` — dokumen yang semua halamannya kosong (foto, kertas polos) dilaporkan "Teks dokumen sudah dikenali." padahal `recognized` tetap 0 dan tombol Word tetap menolak dengan "belum ada teks yang dikenali", persis kontradiksi yang coba dihindari `ocr.ts`, cuma pindah satu lapisan ke atas. Ditambahkan `describeOcrOutcome()` di `ocr.ts` sebagai satu-satunya tempat yang tahu cara merangkai keempat angka jadi satu kalimat, dipakai `App.tsx` menggantikan ternary lama
+
+**Terverifikasi di luar kode kita** (sekali saat pengerjaan, seperti verifikasi Chromium waktu potongan kontrol export). Berkas `.docx` sungguhan dibuat lalu dibuka **tiga pembaca independen**:
+
+- **`tar.exe` bawaan Windows** (bsdtar) mengekstraknya bersih, keempat part keluar, exit code 0 — dan ekstraksinya memverifikasi CRC tiap entry
+- **.NET `System.IO.Compression.ZipFile`** membaca keempat entry dan isinya, lalu `XmlDocument` mem-parse `word/document.xml`: 4 paragraf, escaping `&amp;`/`&lt;` benar, baris yang terbungkus tergabung jadi satu paragraf seperti rancangannya
+- **.NET `System.IO.Packaging.Package`** — abstraksi OPC yang sama yang dipakai Word — membuka paketnya, mengenali kedua content type, dan menemukan kedua relationship
+
+**Fase 6 selesai** setelah ini.
+
+**Menunggu keputusan Boss Ali:** keputusan 22 Agustus — "flow pembelian Pro tidak dibuka ke publik sebelum Fase 6 selesai" — **sudah tidak terhalang apa pun**. Kodenya siap dan sudah diuji sejak Fase 5; yang ditunda hanya pembukaannya ke user. Ini keputusan Boss Ali, bukan sesuatu yang diambil kode ini.
+
+**Diverifikasi di device fisik 29 Agustus 2026** (Boss Ali):
+
+- [x] **DOCX dibuka di WPS/Word di HP** — ini bukti yang sebenarnya; tiga pembaca di atas mesin dev, bukan Android
+- [x] **Penggabungan baris dalam satu blok: cek di struk & formulir.** Titik keputusan yang sengaja ditunda sampai lihat keluaran ML Kit di dokumen Indonesia sungguhan — kalau hasilnya jelek, ganti ke satu paragraf per baris
+- [x] Page break mendarat di tempat yang benar untuk dokumen banyak halaman
+- [x] Ekspor banyak dokumen ke Word: dokumen yang belum dikenali dilaporkan gagal dengan pesannya, sisanya tetap tersimpan
+- [x] Judul & tanggal dokumen terbaca benar di properti berkas Word
+
+Penggabungan baris per blok **dipertahankan** — titik keputusan yang ditunda di baris kedua di atas sekarang tertutup: keluaran ML Kit di dokumen Indonesia sungguhan cukup baik, jadi tidak jadi diganti ke satu paragraf per baris.
+
+## Impor via Share Sheet Android — Gambar & PDF — 26 Agustus 2026
+
+Dipicu temuan Boss Ali: ScannApp tidak muncul di daftar "Bagikan ke..." saat berbagi
+dari WPS Office/CamScanner. Bukan soal Play Store — fitur penerimaan share intent
+memang belum pernah dibangun. Desain: `docs/superpowers/specs/2026-08-26-share-target-import-design.md`.
+
+- [x] **Plugin Capacitor native kecil (`SharedImportPlugin.java`), nol dependency baru.** Satu titik masuk, `handleOnNewIntent` — dikonfirmasi lewat pembacaan langsung `BridgeActivity.java` di node_modules bahwa `onCreate` sudah memutar ulang intent peluncuran lewat jalur yang sama, jadi kasus dingin dan hangat tidak perlu dua method terpisah
+- [x] **PDF pihak ketiga dirasterisasi lewat `PdfRenderer` bawaan Android**, bukan reuse `pdfImport.ts` — itu cuma jalan untuk PDF buatan ScannApp sendiri (satu JPEG mentah per halaman)
+- [x] **`retainUntilConsumed=true` bawaan Capacitor menggantikan kebutuhan method pull terpisah** — listener yang baru dipasang tetap menerima share yang tiba sebelum app selesai mount
+- [x] **Tier: semua tier, tanpa gerbang** — menerima file itu akses, bukan mesin baru (pola yang sama dengan reorder/filter/PNG/anotasi/pisah)
+- [x] **Masuk lewat `pendingPages` yang sudah ada, tanpa layar baru** — append kalau user sedang di tengah review lain, replace kalau kosong; tidak pernah menimpa kerja yang belum disimpan
+- [x] **Ditunda ke spec terpisah: `.docx` sebagai lampiran.** `LocalScanDocument` strict berbentuk `pages: ScanPage[]`, dipakai di 31 berkas — kind dokumen baru tanpa pages itu subsistem sendiri, bukan bagian kecil dari fitur ini
+- [x] **Test node: 647 → 653** (6 test baru di `sharedImport.test.ts`, Task 2; ganti angka ini kalau hasil `npm run test:node` di Step 3 ternyata beda)
+- [x] **Build native sungguhan lolos**, bukan cuma typecheck: `gradlew.bat assembleDebug` → `BUILD SUCCESSFUL`, dexing termasuk. Sempat mentok tiga lapis environment mesin dev ini (tidak ada JDK, tidak ada Android SDK, lalu modul `capacitor-android` butuh JDK 21 spesifik sementara modul lain butuh 17) sebelum ketiganya beres — dicatat sebagai infrastruktur di memory harness, bukan di sini
+- [x] **Tiga temuan review ditutup, semuanya kode yang saya (plan) tulis sendiri yang salah — bukan kesalahan implementer transkripsi:**
+  - Task 1, round 1/5: `resolver.getType(uri)` sempat di luar try/catch per-item — satu file rusak bisa menggagalkan `notifyListeners` untuk seluruh share, bukan cuma file itu; dan `handleOnNewIntent` sempat memproses semua file secara sinkron di main thread (risiko ANR untuk PDF banyak halaman) — dipindah ke `ExecutorService` satu thread
+  - Task 2: ditemukan sendiri sebelum dispatch (bukan lewat review) — `handlePromise` dari `addListener()` yang reject tanpa pernah di-unsubscribe (kasus normal `App.tsx`) akan jadi unhandled rejection; `.catch()` dipasang segera saat promise dibuat, bukan cuma di closure unsubscribe
+  - Task 3, round 1/5: cabang fresh-start efek share menyalin ulang 4 dari 5 reset milik `exitSplit()` dan lupa `setSplitSaved(0)` — lewat `handleRemovePage` yang mengosongkan `pendingPages` tanpa memanggil `exitSplit()`, nomor dokumen hasil pisah berikutnya bisa mulai dari angka sisa yang salah. Diperbaiki dengan memanggil `exitSplit()` langsung alih-alih menyalin daftar reset-nya
+- [x] **Task 4 (code-review + security-review): `/code-review` mengembalikan 9 temuan atas diff Task 1–3 (`b3a84a3..HEAD`) — 5 ditutup dengan fix nyata, 4 dijawab dan sengaja tidak diterapkan (bukan diam-diam diabaikan), semuanya diverifikasi ke kode Capacitor di `node_modules` dan ke spec, bukan diterima/ditolak mentah dari laporan skill:**
+  - **Ditutup (5), semua di `SharedImportPlugin.java`/`sharedImport.ts`:**
+    - `notifyListeners()` dipanggil langsung dari `importExecutor` (thread sendiri) sementara `addListener()` dari JS jalan di thread `taskHandler` milik Bridge ("CapacitorPlugins") — keduanya menulis ke `HashMap` yang sama di `Plugin` tanpa sinkronisasi, race persis di jalur cold-launch yang jadi alasan fitur ini ada. Diperbaiki dengan `execute(() -> notifyListeners(...))`, method bawaan `Plugin` yang mem-post balik ke thread `taskHandler` yang sama
+    - `catch (Exception e)` di loop per-file tidak menangkap `OutOfMemoryError` (dia `Error`, bukan `Exception`) — bitmap `ARGB_8888` penuh per halaman PDF bisa melempar itu di HP yang sudah tertekan memori, dan sebelumnya itu akan lolos dari loop lalu membatalkan `notifyListeners` untuk seluruh share. Diperbaiki jadi `catch (Exception | OutOfMemoryError e)`
+    - Closure unsubscribe di `sharedImport.ts` (`handlePromise.then((handle) => handle.remove())`) bikin promise baru yang terpisah dari `handlePromise` — `.catch()` yang sudah dipasang di Task 2 cuma menandai `handlePromise` sendiri sebagai "ditangani", bukan promise turunan dari `.then()` ini. Kalau `handlePromise` reject dan unsubscribe sempat dipanggil (mis. React StrictMode double-mount di dev), ini jadi unhandled rejection kedua — bug yang sama persis, tempat baru. Ditutup dengan `.catch(() => {})` tambahan di ujung chain
+    - `copyImageToCache` tidak membersihkan berkas JPEG setengah-tertulis kalau `fos.write` gagal di tengah jalan (mis. disk penuh) — file rusak itu tertinggal permanen di `cache/shared-import/`. Ditutup dengan `out.delete()` di catch block sebelum melempar ulang exception-nya
+    - Docstring `copyImageToCache` bilang harus sinkron karena grant `content://` "cuma valid selama diproses" — sudah tidak akurat sejak proses dipindah ke `ExecutorService` di Task 1 round 1 (jalan async), dan grant URI sebenarnya bertahan selama Activity penerima hidup. Diganti dengan penjelasan yang akurat
+  - **Dijawab, sengaja tidak diterapkan (4):** (1) PDF >50 halaman dipotong tanpa menambah `skippedCount` — sudah keputusan desain eksplisit di spec §9 tabel ("Dipotong di 50, tanpa gagal total"), bukan bug; (2) share masuk saat `status==='signed-out'` bisa hilang kalau proses Android direklaim — risiko arsitektur lama yang berlaku ke semua `pendingPages` in-memory di app ini, bukan regresi baru dari fitur ini; (3) App Open ad bisa muncul saat kembali dari share masuk — laporan itu salah kaitkan ke pengecualian "share sheet" di `appOpenGate.ts`, yang ternyata (diverifikasi ke `exportShare.ts`) soal share **keluar** ScannApp sendiri yang memicu `leaveForOwnFlow()`, bukan share **masuk** dari app lain; ScannApp tidak pernah memulai excursion itu jadi memang seharusnya kena App Open ad seperti resume biasa; (4) tidak ada intent-filter `SEND_MULTIPLE`+`application/pdf` di manifest — diverifikasi ke spec §3.1, cuma 3 kombinasi yang sengaja didaftarkan (`SEND+image/*`, `SEND+application/pdf`, `SEND_MULTIPLE+image/*`), cabang PDF di loop `SEND_MULTIPLE` di kode adalah defensive coding untuk kasus campuran yang lolos, bukan manifest yang lupa ditambah
+  - `/security-review` (fokus khusus path traversal nama berkas per brief task): dikonfirmasi **bukan** celah — nama berkas keluaran (`shared-<nanoTime>[-index].jpg`) murni dari `System.nanoTime()` dan index loop milik kode sendiri, tidak pernah disentuh data dari URI yang dibagikan. Nol temuan HIGH/MEDIUM lain di diff fitur ini
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali — disalin dari spec §9):
+
+- [ ] Share 1 foto dari galeri/app lain ke ScannApp saat app tertutup → app terbuka, langsung di layar review dengan foto itu
+- [ ] Share 1 foto saat ScannApp sedang di foreground (bukan di tengah review) → langsung ke review
+- [ ] Share saat sedang di tengah review scan lain yang belum disimpan → foto baru ditambahkan, bukan menimpa halaman yang sudah ada
+- [ ] Share beberapa foto sekaligus (pilih multi di galeri → share) → semua masuk sebagai halaman, urutannya sesuai
+- [ ] Share PDF dari WPS Office → tiap halaman PDF jadi halaman terpisah di review, kualitas gambar terbaca jelas
+- [ ] Share PDF hasil CamScanner → sama, dan pastikan bukan cuma halaman pertama yang muncul
+- [ ] Share file docx dari WPS Office → tidak muncul di daftar app (mime type tidak didaftarkan di manifest sesi ini) — perilaku yang diharapkan, bukan bug
+- [ ] Share PDF terenkripsi/rusak sengaja → toast error, app tidak crash
+- [ ] Ukuran APK & waktu build setelah plugin Java baru — tidak ada regresi mencolok
+
+## Tujuan Ekspor: Bagikan vs Simpan ke HP — 27 Agustus 2026
+
+Menutup **tiga sisa temuan uji device 26 Agustus** yang sengaja ditunda menunggu pesan
+error asli dari HP (lihat pesan commit `467361a`), plus satu bug baru yang Boss Ali
+temukan saat menguji ulang. Ketiga temuan lama ternyata **dua akar penyebab**, bukan tiga.
+
+**Akar penyebab 1 — scoped storage menolak menimpa berkas yang bukan milik install ini.**
+Ekspor menulis lewat path mentah ke `/storage/emulated/0/Documents`
+(`Environment.getExternalStoragePublicDirectory`). Sejak Android 11 aplikasi boleh
+**membuat** berkas di folder Documents bersama tapi hanya boleh **membuka ulang** yang
+masih miliknya, dan kepemilikan itu tidak selamat dari pemasangan ulang aplikasi — jadi
+dokumen yang diekspor build kemarin, bagi build hari ini, adalah berkas aplikasi lain.
+Pola tes Boss Ali sendiri yang membuktikannya: nama sama → gagal tiap kali, nama diganti
+→ berhasil, batch 3 dokumen → yang gagal cuma yang namanya sudah ada di folder itu.
+Temuan lama "batch multi-dokumen tidak terkirim" **sebab yang sama**: ketiganya gagal
+ditulis → `uris` kosong → `shareFiles` langsung `return`, share sheet tidak pernah
+terbuka dan tidak ada apa pun di layar yang menjelaskannya.
+
+**Akar penyebab 2 — "batal" tidak berarti batal.** `deliverExport()` menulis ke folder
+publik **dulu**, baru membuka share sheet, dengan komentar yang menyatakannya sebagai
+fitur: "kalau sheet ditutup, berkasnya tetap ada". Boss Ali menutup share sheet dan
+menemukan berkasnya sudah mendarat di file manager.
+
+**Keputusan Boss Ali 27 Agustus 2026: pisahkan tujuannya, jangan lakukan dua-duanya.**
+Lembar Ekspor dapat sakelar **Tujuan** di atas daftar format, sejajar kontrol Mutu yang
+sudah ada — pilihannya harus sudah dibuat sebelum format diketuk, karena mengetuk format
+langsung mengekspor. Bawaannya **Bagikan**, dan pilihannya diingat (`localStorage`,
+divalidasi terhadap daftar seperti level kompresi).
+
+- [x] **Bagikan: berkas ditulis ke cache privat aplikasi (`cache/exports/`), bukan ke folder publik.** Tidak butuh izin, scoped storage tidak ikut campur, dan `file_paths.xml` sudah mengekspos `cache-path` ke FileProvider yang dipakai plugin Share. Batal → folder staging dihapus, nol jejak di HP
+- [x] **Benarnya tidak bergantung pada deteksi "cancel".** Ini yang membuat rancangan ini dipilih dan bukan "tulis dulu, hapus kalau batal": sebagian OEM menghentikan Activity kita saat share sheet tampil, dan plugin Share lalu melapor sukses walau user membatalkan. Di rancangan ini kegagalan mendeteksi batal cuma membuat satu toast keliru — bukan berkas nyasar di HP
+- [x] **Simpan ke HP: tidak pernah membuka share sheet sama sekali**, dan **tidak pernah menimpa** berkas yang sudah ada di folder Documents — nama dinaikkan jadi `Dok agent (2).pdf`. Dua masalah dijawab satu perbaikan: EACCES hilang, dan ekspor kedua tidak lagi menghancurkan yang pertama
+- [x] **Ada percobaan ulang setelah tulis ditolak, bukan cuma cek `stat` di depan.** `stat` tidak selalu bisa melihat berkas yang bukan milik install ini, jadi nama yang ia laporkan kosong masih bisa ditolak `writeFile` sesudahnya. Dibatasi 3 percobaan supaya disk penuh tidak berubah jadi 99 penulisan sia-sia, dan error terakhir tetap sampai ke user apa adanya
+- [x] **Toast membaca nama dari yang benar-benar ditulis**, bukan dari yang diminta — menyebut `Nota.pdf` padahal yang mendarat `Nota (2).pdf` akan menyuruh user mencari berkas yang tidak ada
+- [x] **Share sheet yang gagal beneran dibedakan dari yang ditutup user.** Plugin menolak dengan string `"Share canceled"` saat ditutup; apa pun selain itu dilempar ulang. Menyamarkan kegagalan nyata jadi "user membatalkan" persis cara sebuah sebab hilang sebelum ada yang bisa menindaklanjutinya
+- [x] **Batch menyimpan catatannya saat share sheet gagal beneran** (temuan code-review): jalur batch sudah membangun apa yang bisa dibangun dan tahu dokumen mana yang hilang di jalan; melempar exception dari situ membuang semuanya dan menyisakan satu kalimat soal sheet. Jalur satu-dokumen tetap melempar — di sana tidak ada catatan yang perlu diselamatkan, jadi sebab aslinya memang seluruh ceritanya
+- [x] **Staging dihapus sekali per run, bukan per dokumen.** Menghapus di antara dokumen akan membuang dokumen yang sudah antre untuk satu share sheet di akhir — batch akan menyerahkan berkas terakhirnya dan kehilangan sisanya
+- [x] **Tier: tidak tersentuh.** Satu-satunya tempat tier masih menyentuh jalur ekspor tetap `shouldWatermark()`
+
+**DOCX kosong — paketnya kurang lengkap, penulisnya tidak rusak.** Diverifikasi dengan
+**Microsoft Word 16.0 sungguhan lewat COM** di mesin dev: berkas dari kode lama terbuka
+benar (6 paragraf, 2 halaman, escaping utuh), jadi masalahnya bukan XML-nya. Yang kurang
+adalah **default yang paketnya serahkan ke pembaca**: tanpa `word/styles.xml` tidak ada
+`docDefaults`, dan run tanpa `rPr` mewarisi dari sana — pembaca yang menyelesaikan
+ukuran font yang hilang jadi nol membuka berkas dengan sempurna dan tidak menampilkan
+apa pun. Tanpa `sectPr` tidak ada geometri halaman sama sekali.
+
+- [x] **Tiga part/elemen ditambahkan**: `word/styles.xml` (docDefaults: Calibri 11pt + jarak paragraf, plus style `Normal`), `word/_rels/document.xml.rels` (satu relasi, ke stylesheet), dan `<w:sectPr>` A4 2,54 cm yang menutup body. `[Content_Types].xml` ikut menyebut stylesheet-nya
+- [x] **Diverifikasi lagi di Word setelah perbaikan**: ukuran kertas **595,3 × 841,9 poin** (A4 — sebelumnya Word jatuh ke Letter 612), font bawaan **Calibri 11pt** kini datang dari stylesheet kita, teks & jumlah halaman tetap benar
+- [x] **Tetap belum terbukti di WPS Android** — itu pembaca yang sebenarnya bermasalah dan tidak ada di mesin dev. Yang bisa dinyatakan jujur: ketiga sebab yang diketahui bisa membuat pembaca yang taat menampilkan halaman kosong sudah tidak ada lagi. Masuk daftar uji device
+
+**Satu temuan dari probe keamanan sendiri** (bukan celah — judul dokumen berasal dari
+user yang sama, tidak ada batas hak akses yang dilewati):
+
+- [x] **`toSafeFilename` meloloskan karakter kontrol, NUL termasuk.** Pass `\s+` sudah menelan newline/tab/CR, tapi sisa C0 lolos dan akan diserahkan langsung ke `open()`, di mana nama berkas itu C string dan segalanya setelah NUL berhenti ada. Ditutup satu baris, dengan test yang juga menahan `../`, `..`, dan backslash tidak pernah bisa keluar dari foldernya
+
+**Test 775 → 825**, semuanya lulus (`npm test`), tsc & oxlint bersih. **Sebelas mutasi
+dijalankan** untuk membuktikan test-nya menggigit: cek nama-sudah-dipakai dilepas → merah;
+percobaan ulang dilepas → merah; staging tidak dihapus saat batal → merah; jalur Bagikan
+diarahkan ke folder publik → merah; `isDismissal` dibuat selalu benar → merah; staging
+dihapus per dokumen → merah; `<w:sz>` dihapus → merah; `sectPr` dihapus → merah;
+`document.xml.rels` dihapus → merah; pembuang karakter kontrol dilepas → merah; batch
+dibuat melempar ulang kegagalan share → merah. Semua dikembalikan.
+
+**Diverifikasi di device fisik 29 Agustus 2026** (Boss Ali):
+
+- [x] Ekspor PDF dengan **Bagikan**, lalu **tutup share sheet** → toast "Ekspor dibatalkan", dan **tidak ada berkas baru** di file manager
+- [x] Ekspor dokumen yang **namanya sudah pernah diekspor**, tujuan **Simpan ke HP** → berhasil, toast menyebut `(2)`, berkas lama tetap utuh
+- [x] Ekspor 3 dokumen sekaligus dengan **Simpan ke HP** → ketiganya mendarat, tidak ada share sheet
+- [x] Ekspor 3 dokumen dengan **Bagikan** → satu share sheet di akhir berisi ketiganya
+- [x] Pilihan Tujuan masih sama setelah aplikasi ditutup dan dibuka lagi
+- [x] **DOCX dibuka di WPS Office di HP** → teksnya terlihat, kertasnya A4
 
 ## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
 

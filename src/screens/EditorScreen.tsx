@@ -38,17 +38,13 @@ import {
 } from '../lib/documentEditing'
 import type { CropRect } from '../lib/imageEditor'
 import { markCount, saveSignatureImage, type LocalScanDocument } from '../lib/scanStorage'
-import type { Tier } from '../lib/tier'
 import { useSignatureUris } from '../lib/useSignatureUris'
 
 interface EditorScreenProps {
   document: LocalScanDocument
-  tier: Tier
   onDocumentChange: (doc: LocalScanDocument) => void
   onClose: () => void
   onError: (message: string) => void
-  /** Opens the paywall when a Basic account reaches for annotate/signature. */
-  onUpgrade: () => void
 }
 
 const FULL_CROP: CropRect = { x: 0.05, y: 0.05, width: 0.9, height: 0.9 }
@@ -66,11 +62,9 @@ const TITLES: Record<Mode, string> = {
 
 export function EditorScreen({
   document: doc,
-  tier,
   onDocumentChange,
   onClose,
   onError,
-  onUpgrade,
 }: EditorScreenProps) {
   const [pageIndex, setPageIndex] = useState(0)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -194,18 +188,8 @@ export function EditorScreen({
     }
   }
 
-  /**
-   * Opens the annotate tools, or the paywall.
-   *
-   * The library refuses a Basic account outright (`setPageMarks`), so this is
-   * only about not walking someone into a screen that will reject them at the
-   * last step.
-   */
+  /** Opens the annotate tools. Every tier — see `setPageMarks`. */
   const startAnnotate = () => {
-    if (tier !== 'pro') {
-      onUpgrade()
-      return
-    }
     setDraftMarks(page?.marks ?? [])
     setSelectedMark(null)
     setTool('pen')
@@ -230,7 +214,7 @@ export function EditorScreen({
     if (draftMarks === null) return
     setIsBusy(true)
     try {
-      onDocumentChange(await setPageMarks(doc, pageIndex, draftMarks, tier))
+      onDocumentChange(await setPageMarks(doc, pageIndex, draftMarks))
       closeAnnotate()
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Gagal menyimpan anotasi.')
@@ -465,17 +449,11 @@ export function EditorScreen({
             </button>
           </div>
 
-          {/* Pro only — the one row in this editor that is (PRD Bagian 3). */}
+          {/* Semua tier sejak 25 Agustus 2026 — tidak ada lagi gerbang Pro di editor ini. */}
           <div className="editor-actions">
-            <button
-              type="button"
-              className="button button--pro"
-              onClick={startAnnotate}
-              disabled={isBusy}
-            >
+            <button type="button" className="button" onClick={startAnnotate} disabled={isBusy}>
               <SignatureIcon size={17} />
               <span>Anotasi & Tanda Tangan</span>
-              {tier !== 'pro' && <span className="pro-badge">Pro</span>}
             </button>
           </div>
 

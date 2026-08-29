@@ -52,14 +52,18 @@ Dokumen yang hanya ada di cloud tidak punya berkas halaman di HP — tidak ada y
 
 ### 3.3 Di mana state seleksi tinggal
 
-Mengikuti pola `MergeScreen` yang sudah ada: **daftar terpilih hidup di dalam `DocumentsScreen`**, bukan di `App.tsx`. Yang naik ke `App` hanya id-nya saat aksi ditekan.
+**Daftar terpilih hidup di `App.tsx`**, dan `DocumentsScreen` tetap presentasional murni seperti sekarang.
 
-Callback aksinya mengembalikan `Promise<boolean>`:
+Pola `MergeScreen` — yang memegang seleksinya sendiri — sempat jadi kandidat, tapi tidak cocok di sini: `MergeScreen` **hilang dari layar** begitu aksinya jalan, jadi state-nya ikut mati bersama layarnya. Tab Dokumen tetap terpasang selama lembar batch bekerja, jadi seleksinya harus dibereskan oleh pihak yang juga memiliki lembar itu. Menaruhnya di layar berarti `App` harus mengabari layar kapan harus mengosongkan diri — lewat prop kunci-reset atau `resolve` promise yang dititipkan di `ref`, dua-duanya lebih rumit daripada satu `useState` di tempat semua state lain sudah tinggal.
 
-- **berhasil** → layar keluar dari mode pilih sendiri
-- **gagal** → pilihannya **dipertahankan**, supaya user tidak mencentang ulang dua belas dokumen hanya untuk mencoba lagi
+Yang tetap di dalam komponen hanyalah pewaktu tekan lama dan penanda penelan klik — itu urusan DOM, bukan state aplikasi.
 
-Progres turun sebagai prop dari `App`. Logika himpunan pilihnya sendiri keluar ke `lib/documentSelection.ts` sebagai fungsi murni — centang/lepas, pilih semua, kosongkan, dan ringkasan "berapa dokumen, berapa halaman, mana yang benar-benar bisa diekspor". Itu bagian yang paling gampang salah dan paling mudah diuji tanpa DOM.
+Perilaku setelah aksi selesai:
+
+- **berhasil** → `App` mengosongkan seleksi dan keluar dari mode pilih
+- **gagal** → seleksinya **dipertahankan**, supaya user tidak mencentang ulang dua belas dokumen hanya untuk mencoba lagi
+
+Logika himpunan pilihnya keluar ke `lib/documentSelection.ts` sebagai fungsi murni — centang/lepas, pilih semua, kosongkan, dan ringkasan "berapa dokumen, berapa halaman, mana yang benar-benar bisa diekspor". Itu bagian yang paling gampang salah dan paling mudah diuji tanpa DOM.
 
 ### 3.4 Bilah aksi
 
@@ -141,7 +145,7 @@ export async function exportDocumentsBatch(
 
 Peluangnya kecil hari ini — nama bawaan memuat detik. Tapi **C2 justru pabriknya**: memisah satu sesi menghasilkan beberapa dokumen yang lahir bersamaan dengan nama berpola sama.
 
-`uniqueExportNames(names)` — fungsi murni yang menyisipkan ` (2)`, ` (3)` **sebelum** ekstensi. Tinggal di `exportShare.ts`, bersebelahan dengan `toSafeFilename` yang menciptakan masalahnya. Diuji di suite node, termasuk kasus judul berbeda yang jadi sama setelah dipotong 60 karakter.
+`uniqueExportNames(names)` — fungsi murni yang menyisipkan ` (2)`, ` (3)` **sebelum** ekstensi. Ia dan `toSafeFilename` pindah ke modul baru `lib/exportNames.ts`: keduanya matematika string murni, tapi `exportShare.ts` mengimpor Capacitor — selama mereka tinggal di sana, setiap test penamaan ikut menyeret tiruan plugin Filesystem & Share. Diuji di suite node, termasuk kasus judul berbeda yang jadi sama setelah dipotong 60 karakter.
 
 `exportDocumentsBatch` membangun tiap PDF lewat jalur internal yang **sama persis** dengan ekspor satuan (`exportPdf`), jadi watermark, judul, dan tanggal pindai di metadata berperilaku identik — tidak ada cabang kedua yang bisa menyimpang diam-diam.
 
@@ -335,7 +339,8 @@ Tekan lama itu urusan pointer event dan pewaktu — jenis kode yang test Node ti
 | Berkas | Perubahan |
 |---|---|
 | `src/lib/documentSelection.ts` | **baru** — logika himpunan pilih (murni) |
-| `src/lib/exportShare.ts` | pecah jadi `writeExportFiles` + `shareFiles`; `deliverExport` tetap; `uniqueExportNames` |
+| `src/lib/exportNames.ts` | **baru** — `toSafeFilename` (pindah) + `uniqueExportNames`, tanpa impor platform |
+| `src/lib/exportShare.ts` | pecah jadi `writeExportFiles` + `shareFiles`; `deliverExport` tetap |
 | `src/lib/documentExport.ts` | `exportDocumentsBatch`, `summarizeBatchExport` |
 | `src/lib/exportLimits.ts` | `canBatchExport(tier)` |
 | `src/screens/DocumentsScreen.tsx` | mode pilih, bilah aksi, tekan lama |

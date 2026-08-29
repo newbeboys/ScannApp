@@ -34,6 +34,8 @@ const {
   savePageEdit,
   pruneUnusedSignatures,
   savePageMarks,
+  savePageText,
+  readPageText,
   saveSignatureImage,
 } = await import(
   './scanStorage'
@@ -73,7 +75,7 @@ const markRender = async (source: Blob, marks: unknown[]): Promise<Blob> => {
 function seed(pages: Record<string, unknown>[], filter?: string) {
   const index = JSON.stringify([
     {
-      schemaVersion: 4,
+      schemaVersion: 5,
       id: DOC_ID,
       title: 'Kontrak',
       createdAt: '2026-08-23T00:00:00.000Z',
@@ -541,5 +543,132 @@ describe('pruneUnusedSignatures', () => {
 
     await expect(pruneUnusedSignatures()).resolves.toBeUndefined()
     expect(fs.deleteFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('recognised text and the edits around it', () => {
+  const INK = [{ kind: 'ink', tool: 'pen', color: '#1b2740', width: 0.004, points: [0, 0, 1, 1] }]
+
+  /** Every path the page carries, so a test can say which ones survived. */
+  function deleted(): string[] {
+    return fs.deleteFile.mock.calls.map((call) => call[0].path)
+  }
+
+  /**
+   * Geometry moves the paper underneath coordinates that were measured against
+   * the old shape. Because the text layer is *invisible*, a stale box never
+   * looks wrong to anyone — it only quietly makes copy-paste and search land
+   * somewhere else. Re-running OCR on the cropped page is both cheap and
+   * better, so the stale layout goes.
+   */
+  it('drops recognised text when a page is cropped', async () => {
+    seed([{ original: 'a.jpg', text: 'a-ocr.json' }])
+
+    const doc = await savePageEdit(DOC_ID, 0, new Blob(['a-cropped']))
+
+    expect(doc.pages[0].text).toBeUndefined()
+    expect(deleted()).toContain('a-ocr.json')
+  })
+
+  it('drops recognised text when a page is reset to the untouched scan', async () => {
+    seed([{ original: 'a.jpg', edited: 'a-edited.jpg', text: 'a-ocr.json' }])
+
+    const doc = await resetPageEdit(DOC_ID, 0)
+
+    expect(doc.pages[0].text).toBeUndefined()
+    expect(deleted()).toContain('a-ocr.json')
+  })
+
+  /**
+   * The other half of the contract, and the half a careless test would miss:
+   * colour and ink leave the paper exactly where it was, so throwing the
+   * layout away there would cost the user minutes of OCR for nothing.
+   */
+  it('keeps recognised text when the document filter changes', async () => {
+    seed([{ original: 'a.jpg', text: 'a-ocr.json' }])
+
+    const doc = await applyDocumentFilter(DOC_ID, 'bw', render, markRender)
+
+    expect(doc.pages[0].text).toBe('a-ocr.json')
+    expect(deleted()).not.toContain('a-ocr.json')
+  })
+
+  it('keeps recognised text when one page overrides the filter', async () => {
+    seed([{ original: 'a.jpg', text: 'a-ocr.json' }], 'bw')
+
+    const doc = await applyPageFilter(DOC_ID, 0, 'none', render, markRender)
+
+    expect(doc.pages[0].text).toBe('a-ocr.json')
+  })
+
+  it('keeps recognised text when the page is drawn on', async () => {
+    seed([{ original: 'a.jpg', text: 'a-ocr.json' }])
+
+    const doc = await savePageMarks(DOC_ID, 0, INK, markRender)
+
+    expect(doc.pages[0].text).toBe('a-ocr.json')
+  })
+})
+
+describe('savePageText & readPageText', () => {
+  const LAYOUT = {
+    blocks: [{ text: 'Kwitansi', lines: [{ text: 'Kwitansi', words: [] }] }],
+  }
+
+  /** What was written to a given path on the last call, if anything. */
+  function written(path: string) {
+    return fs.writeFile.mock.calls.filter((call) => call[0].path === path).at(-1)
+  }
+
+  /**
+   * Named from `original`, like every other derived file. Deriving it from the
+   * page's position instead would make a reordered page overwrite the layout
+   * of whichever page moved into its slot.
+   */
+  it('writes the layout beside the page it was read from', async () => {
+    seed([{ original: 'scans/doc-1/page-1.jpg' }])
+
+    const doc = await savePageText(DOC_ID, 0, LAYOUT)
+
+    expect(doc.pages[0].text).toBe('scans/doc-1/page-1-ocr.json')
+    expect(JSON.parse(written('scans/doc-1/page-1-ocr.json')![0].data)).toEqual(LAYOUT)
+  })
+
+  it('overwrites an earlier recognition instead of leaving two files', async () => {
+    seed([{ original: 'scans/doc-1/page-1.jpg', text: 'scans/doc-1/page-1-ocr.json' }])
+
+    const doc = await savePageText(DOC_ID, 0, LAYOUT)
+
+    expect(doc.pages[0].text).toBe('scans/doc-1/page-1-ocr.json')
+    expect(fs.writeFile.mock.calls.filter((call) => call[0].path.endsWith('-ocr.json'))).toHaveLength(1)
+  })
+
+  it('reads back what it stored', async () => {
+    fs.readFile.mockImplementation(async ({ path }: { path: string }) =>
+      path === 'a-ocr.json' ? { data: JSON.stringify(LAYOUT) } : { data: path },
+    )
+
+    expect(await readPageText({ original: 'a.jpg', text: 'a-ocr.json' })).toEqual(LAYOUT)
+  })
+
+  it('returns nothing for a page that was never recognised', async () => {
+    expect(await readPageText({ original: 'a.jpg' })).toBeNull()
+  })
+
+  /**
+   * The layer is invisible and optional. A file that went missing or came back
+   * as something other than JSON must cost the export its text layer, never
+   * the export itself.
+   */
+  it('returns nothing rather than throwing when the file is unreadable', async () => {
+    fs.readFile.mockRejectedValue(new Error('ENOENT'))
+
+    expect(await readPageText({ original: 'a.jpg', text: 'a-ocr.json' })).toBeNull()
+  })
+
+  it('returns nothing when the stored file is not JSON at all', async () => {
+    fs.readFile.mockImplementation(async () => ({ data: 'bukan json' }))
+
+    expect(await readPageText({ original: 'a.jpg', text: 'a-ocr.json' })).toBeNull()
   })
 })

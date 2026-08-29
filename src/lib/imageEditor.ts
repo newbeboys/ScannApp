@@ -1,7 +1,8 @@
 import { HIGHLIGHTER_ALPHA, strokeWidth, type Mark } from './annotations'
 import { applyFilter } from './filters'
+import { readJpegSize } from './jpegSize'
 import type { DocumentFilter } from './scanIndexMigration'
-import { BASIC_COMPRESSION, type CompressOptions } from './exportLimits'
+import { STANDARD_COMPRESSION, type CompressOptions } from './exportLimits'
 
 /** Crop area expressed as fractions of the source image (0..1), so it survives resizing. */
 export interface CropRect {
@@ -14,6 +15,35 @@ export interface CropRect {
 export type Rotation = 90 | 180 | 270
 
 const JPEG = 'image/jpeg'
+
+/**
+ * Quality for the files this module derives from a page — the filter render and
+ * the ink render.
+ *
+ * Higher than an ordinary edit because these are what the export and the cloud
+ * backup are built from, and JPEG artefacts around thresholded text compound
+ * badly through a second encode. Lower than the 0.95 it used to be: the file
+ * that comes out has to be base64-encoded, carried across the Capacitor bridge
+ * and written by Java, then read and decoded again to put it back on screen, so
+ * its size is paid for four times over on a phone. Measured in Chromium on a
+ * 3000x4200 scan-like page: 5.76 MB at 0.95 against 3.96 MB at 0.90 — 31% fewer
+ * bytes for a difference that does not survive being printed. Saving an
+ * annotated 12 MP page was the slowest thing in the editor (dilaporkan dari HP,
+ * 25 Agustus 2026).
+ *
+ * Technical, not a business number — see CLAUDE.md Bagian 6 on the compression
+ * presets; free to retune without asking.
+ */
+const DERIVED_QUALITY = 0.9
+
+/**
+ * How much of a file to read when only its header is wanted.
+ *
+ * The frame header sits within the first few hundred bytes of an ordinary JPEG,
+ * but a page carrying a large EXIF thumbnail can push it further back; 64 KB
+ * clears every scan this app produces while still being a slice, not a read.
+ */
+const HEADER_BYTES = 65_536
 
 /**
  * `from-image` makes the browser apply EXIF orientation while decoding, so
@@ -82,13 +112,13 @@ export async function cropImage(blob: Blob, rect: CropRect): Promise<Blob> {
 /**
  * Caps the long edge and re-encodes the page for export.
  *
- * Basic always arrives here with the standard preset; Pro can arrive with any
- * of the four levels (`COMPRESSION_PRESETS`). `mimeType` picks the encoder —
- * PNG exports run this same resize and then encode losslessly.
+ * Any of the four levels can arrive (`COMPRESSION_PRESETS`); the standard one
+ * is the default for callers that have no opinion. `mimeType` picks the encoder
+ * — PNG exports run this same resize and then encode losslessly.
  */
 export async function compressImage(
   blob: Blob,
-  options: CompressOptions = BASIC_COMPRESSION,
+  options: CompressOptions = STANDARD_COMPRESSION,
 ): Promise<Blob> {
   return toBlob(await scaledCanvas(blob, options.maxEdgePx), options.quality, options.mimeType)
 }
@@ -113,9 +143,57 @@ export async function compressImagePair(
   }
 }
 
-/** Decodes a page and redraws it no larger than `maxEdgePx` on its long side. */
+/**
+ * Decodes a page, asking the decoder to shrink it on the way out where it can.
+ *
+ * `createImageBitmap` can resize during decode, which is far cheaper than
+ * decoding a 12 MP scan in full and throwing three quarters of it away on a
+ * canvas a moment later — that full decode is the bulk of what an export spends
+ * per page, and a ten-document batch pays it ten times (dilaporkan dari HP,
+ * 25 Agustus 2026).
+ *
+ * Only *one* dimension is ever requested, and the aspect ratio is left to the
+ * browser. Passing both would silently distort a page tagged with an EXIF
+ * rotation: `imageOrientation: 'from-image'` swaps its axes while the size read
+ * from the header does not, so the two would disagree about which number is the
+ * width. With one dimension the worst that rotation can do is cap the short edge
+ * instead of the long one — the result is still smaller than the original, still
+ * correctly shaped, and `scaledCanvas` finishes the job from there.
+ */
+async function decodeCapped(blob: Blob, maxEdgePx: number): Promise<ImageBitmap> {
+  let stored: { width: number; height: number } | null = null
+  try {
+    stored = readJpegSize(new Uint8Array(await blob.slice(0, HEADER_BYTES).arrayBuffer()))
+  } catch {
+    // Unreadable header — a PNG, or a slice that failed. Plain decode below.
+  }
+
+  if (!stored || Math.max(stored.width, stored.height) <= maxEdgePx) return decode(blob)
+
+  try {
+    return await createImageBitmap(blob, {
+      imageOrientation: 'from-image',
+      resizeQuality: 'high',
+      ...(stored.width >= stored.height
+        ? { resizeWidth: maxEdgePx }
+        : { resizeHeight: maxEdgePx }),
+    })
+  } catch {
+    // Older WebViews ignore or reject the resize options rather than falling
+    // back themselves. A full decode is slower, not wrong.
+    return decode(blob)
+  }
+}
+
+/**
+ * Decodes a page and redraws it no larger than `maxEdgePx` on its long side.
+ *
+ * The scale below is still computed from the bitmap that came back, not from
+ * the size asked for: `decodeCapped` is allowed to hand back something larger
+ * than the cap when EXIF rotation got in the way, and this is what finishes it.
+ */
 async function scaledCanvas(blob: Blob, maxEdgePx: number): Promise<HTMLCanvasElement> {
-  const bitmap = await decode(blob)
+  const bitmap = await decodeCapped(blob, maxEdgePx)
   const longEdge = Math.max(bitmap.width, bitmap.height)
   const scale = longEdge > maxEdgePx ? maxEdgePx / longEdge : 1
 
@@ -132,9 +210,7 @@ async function scaledCanvas(blob: Blob, maxEdgePx: number): Promise<HTMLCanvasEl
  * Only the canvas work lives here — the pixel maths is in `filters.ts`, kept
  * free of the DOM so it can be tested against known pixels under Node.
  *
- * Encoded at a higher quality than an ordinary edit: a filtered page is what
- * the export and the backup are built from, and JPEG artefacts around
- * thresholded text compound badly through a second encode.
+ * Encoded at a higher quality than an ordinary edit — see `DERIVED_QUALITY`.
  */
 export async function filterImage(blob: Blob, filter: DocumentFilter): Promise<Blob> {
   const bitmap = await decode(blob)
@@ -146,7 +222,7 @@ export async function filterImage(blob: Blob, filter: DocumentFilter): Promise<B
   applyFilter(filter, image.data, canvas.width, canvas.height)
   ctx.putImageData(image, 0, 0)
 
-  return toBlob(canvas, 0.95)
+  return toBlob(canvas, DERIVED_QUALITY)
 }
 
 /**
@@ -162,7 +238,8 @@ export async function filterImage(blob: Blob, filter: DocumentFilter): Promise<B
  * module has no way to read a file.
  *
  * Encoded at the same quality as `filterImage`, and for the same reason: this
- * file is what the export and the cloud backup are built from.
+ * file is what the export and the cloud backup are built from — see
+ * `DERIVED_QUALITY`.
  */
 export async function renderMarks(
   blob: Blob,
@@ -214,7 +291,7 @@ export async function renderMarks(
     ctx.restore()
   }
 
-  return toBlob(canvas, 0.95)
+  return toBlob(canvas, DERIVED_QUALITY)
 }
 
 /** Natural pixel size of an image, used by the crop overlay to keep its aspect ratio honest. */

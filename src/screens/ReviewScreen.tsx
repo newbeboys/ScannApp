@@ -12,6 +12,8 @@ interface ReviewScreenProps {
   onAddPages: () => void
   onCancel: () => void
   onSave: () => void
+  /** Opens the split screen. Every tier — see `saveSplitScan`. */
+  onSplit: () => void
 }
 
 export function ReviewScreen({
@@ -24,6 +26,7 @@ export function ReviewScreen({
   onAddPages,
   onCancel,
   onSave,
+  onSplit,
 }: ReviewScreenProps) {
   const safeIndex = Math.min(currentIndex, pages.length - 1)
 
@@ -92,6 +95,18 @@ export function ReviewScreen({
         <button type="button" className="button button--primary" onClick={onSave} disabled={isBusy}>
           {isBusy ? 'Menyimpan…' : `Simpan Dokumen (${pages.length} halaman)`}
         </button>
+
+        {/* Hidden for a single page: there is nothing to split. Semua tier. */}
+        {pages.length > 1 && (
+          <button
+            type="button"
+            className="button split-entry"
+            onClick={onSplit}
+            disabled={isBusy}
+          >
+            <span>Pisah jadi Beberapa Dokumen</span>
+          </button>
+        )}
       </div>
     </div>
   )

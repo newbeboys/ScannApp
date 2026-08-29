@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { CheckIcon, CloseIcon, UndoIcon } from './Icons'
+import { useScrollLock } from '../lib/useScrollLock'
 
 interface SignaturePadProps {
   isBusy?: boolean
@@ -29,6 +30,7 @@ const TRIM_PADDING = 8
  * somewhere inside.
  */
 export function SignaturePad({ isBusy = false, onCancel, onSave }: SignaturePadProps) {
+  useScrollLock()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
   const [strokes, setStrokes] = useState<number[][]>([])

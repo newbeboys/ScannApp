@@ -167,6 +167,18 @@ export function MergeIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function SplitIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M3.5 12h4" />
+      <path d="M7.5 12a4 4 0 0 0 4-4h5" />
+      <path d="M7.5 12a4 4 0 0 1 4 4h5" />
+      <path d="m14 5.5 2.5 2.5L14 10.5" />
+      <path d="m14 13.5 2.5 2.5L14 18.5" />
+    </svg>
+  )
+}
+
 export function PdfIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">
@@ -253,6 +265,19 @@ export function SignatureIcon({ size = 24, className }: IconProps) {
     <svg {...base(size)} className={className} aria-hidden="true">
       <path d="M3.5 15c2.5 0 3-8 5-8s1.5 8 3.5 8 2-4 3.5-4 1.2 2.5 2.6 2.5" />
       <path d="M4 19.5h16" />
+    </svg>
+  )
+}
+
+/** A page with lines of type on it — recognised text, as opposed to a picture. */
+export function TextIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M14 3v4h4" />
+      <path d="M8.5 12h7" />
+      <path d="M8.5 15.5h7" />
+      <path d="M8.5 19h4" />
     </svg>
   )
 }

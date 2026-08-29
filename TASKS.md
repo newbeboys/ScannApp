@@ -792,7 +792,7 @@ dibuat melempar ulang kegagalan share → merah. Semua dikembalikan.
 - [x] Pilihan Tujuan masih sama setelah aplikasi ditutup dan dibuka lagi
 - [x] **DOCX dibuka di WPS Office di HP** → teksnya terlihat, kertasnya A4
 
-## Fase 7 — AI Enhance — subsistem paling berat
+## Fase 7 — Perbaikan Gambar ("Perbaiki Pencahayaan" klasik, "AI Enhance" model menyusul) — subsistem paling berat
 
 **Dipecah dua (29 Agustus 2026, saat brainstorm).** Baris lama menggabungkan dua
 subsistem yang tidak berbagi kode apa pun, sehingga tidak bisa dieksekusi bertahap:
@@ -828,12 +828,12 @@ klasik memenuhi alasan itu lebih baik lagi: nol biaya, nol jaringan, selamanya.
 Jalur TFLite tidak dibuang, ia jadi penggantian isi satu fungsi (`enhancePage()`)
 tanpa menyentuh schema, storage, atau UI. **PRD Bagian 4 perlu direvisi mengikuti ini.**
 
-### 7A — Rapikan cahaya & bayangan (v1)
+### 7A — Perbaiki Pencahayaan (v1, metode klasik, semua tier)
 
 Keputusan desain yang sudah diambil saat brainstorm:
 
 - [ ] **Tahap terpisah, bukan filter keenam.** Rantainya jadi
-  `original → edited → enhanced → filtered → annotated`, jadi AI Enhance bisa dipakai
+  `original → edited → enhanced → filtered → annotated`, jadi Perbaiki Pencahayaan bisa dipakai
   **bersamaan** dengan Hitam-Putih — dan justru di situ nilainya paling terasa, karena
   Hitam-Putih pada halaman berbayang sekarang menghasilkan bercak hitam pekat.
   `ScanPage.enhanced`, `LocalScanDocument.enhance`, `schemaVersion` **5 → 6**.
@@ -851,8 +851,18 @@ Keputusan desain yang sudah diambil saat brainstorm:
   saat simpan). Ini menggantikan butir lama "uji performa di device low-end" sebagai
   gerbang, bukan sebagai pemeriksaan di akhir.
 - [ ] Toggle on/off per dokumen
-- [ ] Tier & penamaan menunggu keputusan Boss Ali (PRD menulis Pro-exclusive; tapi
-  menyebut "AI" untuk matematika klasik adalah klaim yang perlu ia putuskan sendiri)
+- [x] **Tier & penamaan — final (Boss Ali, 29 Agustus 2026).** **Tier: semua tier**,
+  Basic maupun Pro, setara. Argumen paywall di PRD Bagian 4 berdiri di atas **biaya
+  cloud AI**, sementara metode klasik nol biaya marjinal — tidak ada yang dibiayai,
+  jadi tidak ada yang perlu ditahan. Status **Pro-exclusive baru berlaku khusus untuk
+  versi model TFLite** saat model itu selesai dilatih & diintegrasikan. Sampai itu
+  terjadi, jangan tulis satu pun cek tier di jalur ini. **Nama: "Perbaiki
+  Pencahayaan"** — **dilarang** menyebutnya "AI Enhance" di UI maupun copy mana pun,
+  karena isinya matematika deterministik dan klaim "AI" menyesatkan user. Nama "AI
+  Enhance" disimpan untuk versi model. Nama internal kode tetap netral
+  (`enhancePage()`, `ScanPage.enhanced`) supaya seam-nya bisa diisi model nanti tanpa
+  rename berantai. Sudah diterapkan ke PRD Bagian 4 & tabel tier, CLAUDE.md Bagian 2/3/6,
+  SYSTEM_DESIGN.md, dan komentar `filters.ts`
 
 **Known gap yang sengaja dikeluarkan dari v1 — jangan sampai baru ketahuan saat QA
 Fase 9:** PRD Bagian 4 menulis cakupan AI Enhance mencakup **noise reduction** dan

@@ -9,8 +9,10 @@ import type { DocumentFilter } from './scanIndexMigration'
  * encoding around them.
  *
  * All five are ordinary deterministic image processing — no model, no new
- * dependency. AI Enhance is Fase 7 and a different path entirely (CLAUDE.md
- * Bagian 2).
+ * dependency. So is "Perbaiki Pencahayaan" (Fase 7A): deterministic too, but a
+ * separate pipeline stage that runs before these rather than a sixth filter.
+ * The name "AI Enhance" is reserved for the TFLite version, and must not be
+ * used for the classical one in any UI or copy (CLAUDE.md Bagian 6).
  */
 
 /** Rec. 601 luma — how bright a pixel looks, not the plain channel average. */

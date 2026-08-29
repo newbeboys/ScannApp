@@ -792,13 +792,82 @@ dibuat melempar ulang kegagalan share → merah. Semua dikembalikan.
 - [x] Pilihan Tujuan masih sama setelah aplikasi ditutup dan dibuka lagi
 - [x] **DOCX dibuka di WPS Office di HP** → teksnya terlihat, kertasnya A4
 
-## Fase 7 — AI Enhance (Pro, on-device TFLite) — subsistem paling berat
+## Fase 7 — AI Enhance — subsistem paling berat
 
-- [ ] Riset & pilih model TFLite untuk image enhancement (cahaya/kontras/noise/ketajaman)
-- [ ] Integrasi model ke pipeline Android (via Capacitor plugin custom bila perlu)
-- [ ] Fitur auto-deskew + auto-crop presisi
-- [ ] Uji performa di device low-end (pastikan tidak terlalu berat/lambat)
-- [ ] Toggle on/off AI Enhance per dokumen
+**Dipecah dua (29 Agustus 2026, saat brainstorm).** Baris lama menggabungkan dua
+subsistem yang tidak berbagi kode apa pun, sehingga tidak bisa dieksekusi bertahap:
+
+- **7A — mutu gambar:** cahaya/bayangan, dan nanti noise/ketajaman.
+- **7B — geometri:** auto-deskew + auto-crop presisi. Perlu dicatat bahwa pemindai
+  sudah jalan di `scannerMode: 'FULL'`, jadi ML Kit **sudah** melakukan deteksi sudut
+  dan koreksi perspektif untuk halaman yang masuk lewat pemindai. Yang benar-benar
+  telanjang adalah **jalur impor** — foto share sheet dan hasil rasterisasi PDF masuk
+  ke `pendingPages` tanpa deteksi tepi sama sekali. Itu lubang yang sebenarnya.
+
+### Hasil riset model TFLite (29 Agustus 2026) — tidak ada yang siap pakai
+
+Butir "riset & pilih model" **sudah dikerjakan**, dan hasilnya negatif:
+
+- [x] **Tidak ada model shadow-removal dokumen yang bisa langsung dipasang di HP.**
+  `LP-IOANet` (ICASSP 2023) satu-satunya yang dirancang real-time di HP — **tidak pernah
+  merilis kode maupun bobot**. Kaggle Models & MediaPipe tidak punya model untuk tugas ini.
+- [x] **Yang tersedia & berlisensi MIT terlalu besar 30–100×.** `DocShadow/FSENet`
+  (ICCV 2023, ada ekspor ONNX MIT) **29,34 juta parameter**, **7,93 detik per halaman
+  resolusi penuh di GPU desktop**; penulisnya sendiri menulis model itu tidak bisa jalan
+  di perangkat tepi seperti HP. Int8 pun ±29 MB, di APK yang sudah dipangkas 8,6 MB
+  demi ukuran.
+- [x] **Melatih sendiri tidak bisa di mesin ini.** Dataset SD7K (7.000+ pasang, MIT)
+  tersedia, tapi mesin dev punya RAM **3,4 GB** dan GPU AMD terintegrasi 512 MB.
+  Pelatihan harus di notebook GPU luar — berminggu-minggu, dengan risiko hasil di
+  bawah baseline klasik.
+
+**Keputusan Boss Ali 29 Agustus 2026: klasik dulu, seam untuk model.** PRD Bagian 4
+menulis AI Enhance **wajib** TFLite; alasan yang PRD tulis untuk mandat itu adalah
+**menolak cloud AI** ("free tier rawan dipangkas, biaya tak terduga") — dan metode
+klasik memenuhi alasan itu lebih baik lagi: nol biaya, nol jaringan, selamanya.
+Jalur TFLite tidak dibuang, ia jadi penggantian isi satu fungsi (`enhancePage()`)
+tanpa menyentuh schema, storage, atau UI. **PRD Bagian 4 perlu direvisi mengikuti ini.**
+
+### 7A — Rapikan cahaya & bayangan (v1)
+
+Keputusan desain yang sudah diambil saat brainstorm:
+
+- [ ] **Tahap terpisah, bukan filter keenam.** Rantainya jadi
+  `original → edited → enhanced → filtered → annotated`, jadi AI Enhance bisa dipakai
+  **bersamaan** dengan Hitam-Putih — dan justru di situ nilainya paling terasa, karena
+  Hitam-Putih pada halaman berbayang sekarang menghasilkan bercak hitam pekat.
+  `ScanPage.enhanced`, `LocalScanDocument.enhance`, `schemaVersion` **5 → 6**.
+- [ ] **Algoritma:** kisi 16×16 ubin di citra kerja ±256 px, persentil ke-95 per ubin,
+  penolakan pencilan **lokal** (median + MAD jendela 5×5, `σ̂ = max(1,4826 × MAD, 4)`,
+  tolak bila `p_i < m − 3σ̂`), tambal dari tetangga, katup batal >50% ubin ditolak,
+  batas penguatan 2,5×. Latar **tidak pernah dimaterialisasi** seukuran halaman —
+  diinterpolasi bilinear langsung dari kisi (halaman 12 MP = buffer 50 MB).
+- [ ] **Batch dengan `signal`, bukan on-demand.** `applyDocumentFilter` yang ada
+  punya `onProgress` tapi **tidak punya pembatalan**; enhance harus punya, karena
+  Basic mentok 20 halaman tapi **Pro tidak terbatas**.
+- [ ] **Ukur sebelum merancang UI progres.** `enhancePage()` dulu, ukur di Chromium
+  pada halaman 12 MP sungguhan, kalikan 4 untuk mid-range. **Kalau proyeksi 20 halaman
+  melewati ±30 detik, rancangannya berubah** (resolusi kerja lebih kecil, atau hanya
+  saat simpan). Ini menggantikan butir lama "uji performa di device low-end" sebagai
+  gerbang, bukan sebagai pemeriksaan di akhir.
+- [ ] Toggle on/off per dokumen
+- [ ] Tier & penamaan menunggu keputusan Boss Ali (PRD menulis Pro-exclusive; tapi
+  menyebut "AI" untuk matematika klasik adalah klaim yang perlu ia putuskan sendiri)
+
+**Known gap yang sengaja dikeluarkan dari v1 — jangan sampai baru ketahuan saat QA
+Fase 9:** PRD Bagian 4 menulis cakupan AI Enhance mencakup **noise reduction** dan
+**peningkatan ketajaman**. Keduanya **tidak** ada di 7A v1. Alasannya: denoise dan
+sharpening adalah dua operasi yang berlawanan dan setengah matang hasilnya lebih buruk
+daripada tidak sama sekali; keluhan "berbintik" pada dokumen sebagian besar sebenarnya
+bayangan belang, yang justru diselesaikan 7A; dan noise/ketajaman persis wilayah di mana
+model belajar mengalahkan matematika klasik — jadi itu muatan pertama yang masuk akal
+untuk seam TFLite, bukan tambalan konvolusi hari ini.
+
+### 7B — Auto-deskew & auto-crop presisi (menyusul)
+
+- [ ] Deteksi tepi & koreksi perspektif untuk gambar yang **bukan** dari pemindai
+  (share sheet, halaman PDF pihak ketiga)
+- [ ] Belum di-brainstorm; spec sendiri saat 7A selesai
 
 ## Fase 8 — Program Referral
 

@@ -1,5 +1,5 @@
 import { HIGHLIGHTER_ALPHA, strokeWidth, type Mark } from './annotations'
-import { correctLighting, estimateLightGrid, WORK_EDGE } from './enhance'
+import { correctLighting, ENHANCED_EDGE, estimateLightGrid, WORK_EDGE } from './enhance'
 import { applyFilter } from './filters'
 import { readJpegSize } from './jpegSize'
 import type { DocumentFilter } from './scanIndexMigration'
@@ -121,7 +121,9 @@ export async function compressImage(
   blob: Blob,
   options: CompressOptions = STANDARD_COMPRESSION,
 ): Promise<Blob> {
-  return toBlob(await scaledCanvas(blob, options.maxEdgePx), options.quality, options.mimeType)
+  const [canvas] = await scaledCanvas(blob, options.maxEdgePx)
+
+  return toBlob(canvas, options.quality, options.mimeType)
 }
 
 /**
@@ -136,12 +138,32 @@ export async function compressImagePair(
   blob: Blob,
   options: CompressOptions,
 ): Promise<{ jpeg: Blob; png: Blob }> {
-  const canvas = await scaledCanvas(blob, options.maxEdgePx)
+  const [canvas] = await scaledCanvas(blob, options.maxEdgePx)
 
   return {
     jpeg: await toBlob(canvas, options.quality, JPEG),
     png: await toBlob(canvas, options.quality, 'image/png'),
   }
+}
+
+/**
+ * How to resample a page on the way down.
+ *
+ * Not a rounding error: getting a 12 MP JPEG into a 2400px buffer costs
+ * 305-357 ms with the high-quality resampler and 135-163 ms with plain bilinear
+ * (Chromium, diukur 30 Agustus 2026), and that gap — not the decode, which is
+ * about 65 ms — was what kept Perbaiki Pencahayaan outside its twenty-page
+ * budget. Where the resize happens makes no difference; asking for it during
+ * the decode costs the same as drawing it onto a smaller canvas.
+ *
+ * Bilinear reads a 2x2 neighbourhood, so it still sees every source pixel while
+ * the reduction stays under half, and starts skipping them past that. Measured
+ * against the high-quality result on a page of body text and hairlines: 1.34
+ * levels of mean difference at 0.6x, 3.43 at 0.45x, 6.72 at 0.3x — where whole
+ * hairlines drop out. So: cheap above half size, careful below it.
+ */
+function resamplerFor(longEdge: number, maxEdgePx: number): ImageSmoothingQuality {
+  return longEdge < maxEdgePx * 2 ? 'low' : 'high'
 }
 
 /**
@@ -174,7 +196,7 @@ async function decodeCapped(blob: Blob, maxEdgePx: number): Promise<ImageBitmap>
   try {
     return await createImageBitmap(blob, {
       imageOrientation: 'from-image',
-      resizeQuality: 'high',
+      resizeQuality: resamplerFor(Math.max(stored.width, stored.height), maxEdgePx),
       ...(stored.width >= stored.height
         ? { resizeWidth: maxEdgePx }
         : { resizeHeight: maxEdgePx }),
@@ -192,17 +214,28 @@ async function decodeCapped(blob: Blob, maxEdgePx: number): Promise<ImageBitmap>
  * The scale below is still computed from the bitmap that came back, not from
  * the size asked for: `decodeCapped` is allowed to hand back something larger
  * than the cap when EXIF rotation got in the way, and this is what finishes it.
+ *
+ * The context comes back beside the canvas for the sake of `enhancePage`, which
+ * reads the pixels again instead of encoding them straight away. Callers that
+ * only encode destructure the canvas and ignore it.
  */
-async function scaledCanvas(blob: Blob, maxEdgePx: number): Promise<HTMLCanvasElement> {
+async function scaledCanvas(
+  blob: Blob,
+  maxEdgePx: number,
+): Promise<[HTMLCanvasElement, CanvasRenderingContext2D]> {
   const bitmap = await decodeCapped(blob, maxEdgePx)
   const longEdge = Math.max(bitmap.width, bitmap.height)
   const scale = longEdge > maxEdgePx ? maxEdgePx / longEdge : 1
 
   const [canvas, ctx] = draw(bitmap.width * scale, bitmap.height * scale)
+
+  // Matters most on the WebViews that reject the resize options above: there
+  // the whole reduction happens here, and it would cost triple at 'high'.
+  ctx.imageSmoothingQuality = resamplerFor(longEdge, maxEdgePx)
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
   bitmap.close()
 
-  return canvas
+  return [canvas, ctx]
 }
 
 /**
@@ -220,22 +253,25 @@ async function scaledCanvas(blob: Blob, maxEdgePx: number): Promise<HTMLCanvasEl
  * The caller must then leave the page exactly as it was; a page divided by a
  * guessed light map is worse than an untouched one.
  *
+ * What comes back is never longer than `ENHANCED_EDGE` on its long side, and the
+ * cap is applied during the decode rather than after the correction: correcting
+ * twelve million pixels and then throwing three quarters of them away would pay
+ * the whole cost first.
+ *
  * Deterministic maths, no model. The name "AI Enhance" is reserved for the
  * TFLite version, which will replace the body of this function and nothing
  * else (CLAUDE.md Bagian 6).
  */
 export async function enhancePage(blob: Blob): Promise<Blob | null> {
-  const bitmap = await decode(blob)
-  const [canvas, ctx] = draw(bitmap.width, bitmap.height)
-  ctx.drawImage(bitmap, 0, 0)
+  const [canvas, ctx] = await scaledCanvas(blob, ENHANCED_EDGE)
 
-  // Estimated from a small copy, corrected at full size. Lighting is a
-  // low-frequency signal: 65k pixels answer the question as well as 12 million,
-  // and the map is 256 numbers either way (design doc, Bagian 4.1).
-  const scale = Math.min(1, WORK_EDGE / Math.max(bitmap.width, bitmap.height))
-  const [work, workCtx] = draw(bitmap.width * scale, bitmap.height * scale)
-  workCtx.drawImage(bitmap, 0, 0, work.width, work.height)
-  bitmap.close()
+  // Estimated from a small copy of the capped page, corrected at that page's
+  // own size. Lighting is a low-frequency signal: 65k pixels answer the
+  // question as well as several million, and the map is 256 numbers either way
+  // (design doc, Bagian 4.1).
+  const scale = Math.min(1, WORK_EDGE / Math.max(canvas.width, canvas.height))
+  const [work, workCtx] = draw(canvas.width * scale, canvas.height * scale)
+  workCtx.drawImage(canvas, 0, 0, work.width, work.height)
 
   const sample = workCtx.getImageData(0, 0, work.width, work.height)
   const grid = estimateLightGrid(sample.data, work.width, work.height)

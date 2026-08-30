@@ -118,10 +118,14 @@ Di `imageEditor.ts`, mengikuti pola `filterImage`: modul ini yang punya kanvas, 
 export async function enhancePage(blob: Blob): Promise<Blob | null>
 ```
 
-1. Decode halaman → kanvas ukuran penuh → `getImageData`.
-2. Gambar bitmap yang sama ke kanvas kerja (sisi panjang 256) → `getImageData` → `estimateLightGrid`.
+1. Decode halaman **dengan batas sisi panjang `ENHANCED_EDGE` (2400 px)** lewat `scaledCanvas`/`decodeCapped` yang sudah dipakai jalur ekspor → `getImageData`.
+2. Gambar kanvas yang sama ke kanvas kerja (sisi panjang 256) → `getImageData` → `estimateLightGrid`.
 3. `null` dari estimator → kembalikan `null` (halaman dibiarkan; lihat 4.3).
-4. `correctLighting` di buffer resolusi penuh → `putImageData` → encode `DERIVED_QUALITY` (0,9), sama dengan `filterImage` dan `renderMarks`, dan untuk alasan yang sama: berkas ini yang dibaca ekspor dan cadangan cloud.
+4. `correctLighting` di buffer yang sudah dibatasi itu → `putImageData` → encode `DERIVED_QUALITY` (0,9), sama dengan `filterImage` dan `renderMarks`, dan untuk alasan yang sama: berkas ini yang dibaca ekspor dan cadangan cloud.
+
+**Batas 2400 px ditambahkan 30 Agustus 2026**, setelah gerbang Bagian 8 tidak lolos — keputusan Boss Ali. Ia bukan sekadar "biar cepat": jalur ekspor **sudah** membatasi di 2400 px pada preset Standar, dan cadangan cloud **selalu** Standar, jadi halaman yang diratakan pada ukuran ini sama besarnya dengan yang pernah diminta keduanya. Yang berkurang hanya ekspor Tinggi & Maksimal, dan hanya selama sakelarnya menyala — `original` tidak pernah disentuh.
+
+Batas itu **sendirian tidak cukup**: yang mahal ternyata resampler kualitas tinggi (305–357 ms untuk 12 MP → 4,3 MP), bukan decode (±65 ms). Karena itu `resamplerFor()` memilih bilinear selama penyusutan belum melewati setengah, dan resampler mahal di bawah itu — angkanya di Bagian 8.
 
 Nama `enhancePage` (bukan `enhanceImage`) dipakai sesuai keputusan yang sudah tercatat: inilah seam yang isinya diganti model TFLite nanti.
 
@@ -217,6 +221,18 @@ Setelah `enhancePage()` ada (Task 2) dan **sebelum** UI dibuat (Task 7), ukur di
 - **Lebih dari itu** → **berhenti dan lapor ke Boss Ali**. Dua arah yang sudah dipikirkan: turunkan resolusi kerja koreksi (koreksi di citra setengah lalu upsample gain-nya), atau jalankan hanya saat menyimpan/ekspor, bukan saat sakelar dinyalakan. Keduanya mengubah rancangan UI, jadi tidak boleh diputuskan setelah UI-nya jadi.
 
 Angkanya dicatat di `TASKS.md` Fase 7A, bukan hanya di transcript.
+
+### 8.1 Hasilnya (30 Agustus 2026)
+
+**Gerbangnya tidak lolos pada percobaan pertama** — 437 ms/halaman, proyeksi 35 detik — dan tetap tidak lolos setelah loop koreksinya dioptimasi. Yang menutupnya adalah dua perubahan yang dilaporkan ke Boss Ali dan disetujui:
+
+| | per halaman | proyeksi 20 halaman |
+|---|---|---|
+| resolusi penuh | 397–543 ms (median 437) | 32–43 detik |
+| batas 2400 saja | 427–523 ms | 34–42 detik |
+| **batas 2400 + resampler menurut rasio** | **243–339 ms (median 265)** | **19–27 detik** |
+
+Dua arah cadangan yang ditulis di atas — koreksi di citra setengah lalu upsample gain, dan "hanya saat simpan/ekspor" — **tidak jadi dipakai**; keduanya mengubah rancangan UI, dan tidak diperlukan setelah angkanya masuk. Rincian lengkap beserta pengukuran mutu bilinear ada di `TASKS.md` Fase 7A.
 
 ## 9. Sengaja di luar versi pertama
 

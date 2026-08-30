@@ -20,6 +20,26 @@ export const GRID = 16
 export const WORK_EDGE = 256
 
 /**
+ * Long edge of the page the correction is actually rendered onto.
+ *
+ * The one lever that brought this stage inside its own budget. The correction
+ * runs per pixel, so a 12 MP page costs three times a 4 MP one, and twenty of
+ * them projected to 35 seconds on a mid-range phone against a gate of 30 —
+ * with the inner loop already optimised and decode plus encode alone accounting
+ * for 23 of those seconds (TASKS.md Fase 7A, diukur 30 Agustus 2026).
+ *
+ * 2400 rather than a number invented for this stage, because the export path
+ * already caps there: Standar is the default preset and the cloud backup is
+ * *always* Standar (CLAUDE.md Bagian 6), so a page flattened at this size is as
+ * large as either of those ever asks for. Only a Tinggi or Maksimal export sees
+ * fewer pixels than it would have, and only while the switch is on — the
+ * original file is never touched, so turning it off gives full resolution back.
+ *
+ * Technical, not a business number; free to retune.
+ */
+export const ENHANCED_EDGE = 2400
+
+/**
  * Most a pixel may be multiplied by.
  *
  * Without it a near-black corner asks for a gain of twenty, and what comes back

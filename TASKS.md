@@ -910,6 +910,49 @@ Keputusan desain yang sudah diambil saat brainstorm:
   di jenis tepi yang fitur ini ada untuk menghilangkannya. Tiap 16 piksel masih
   meleset 5 level; tiap 4 piksel meleset 1–2 level di halaman ukuran penuh.
   Dijaga tes `correctLighting against the exact division` di `enhance.test.ts`.
+
+- [x] **Batas 2400 px + resampler menurut rasio — gerbang LOLOS** (keputusan Boss
+  Ali 30 Agustus 2026). Sisi panjang hasil koreksi dibatasi **2400 px**
+  (`ENHANCED_EDGE` di `enhance.ts`), sama dengan preset Standar.
+
+  **Batasnya sendiri hampir tidak menolong.** Diukur setelah dipasang: 427–523 ms
+  per halaman, dari 397–543 ms sebelumnya — proyeksi tetap 34–42 detik. Biayanya
+  **pindah, bukan hilang**: menyusutkan 12 MP jadi 4,3 MP dengan resampler kualitas
+  tinggi memakan **305–357 ms**, dan sama mahalnya di mana pun dikerjakan — lewat
+  `createImageBitmap({ resizeQuality })` saat decode maupun lewat `drawImage` ke
+  kanvas yang lebih kecil. Decode-nya sendiri cuma ±65 ms; **resampler-nya yang
+  mahal**, bukan decode seperti yang diduga sebelumnya.
+
+  **Yang menyelesaikannya: pilih resampler menurut rasio penyusutan**
+  (`resamplerFor()` di `imageEditor.ts`). Bilinear membaca tetangga 2×2, jadi ia
+  masih melihat setiap piksel sumber selama penyusutan belum melewati setengah,
+  dan baru mulai melewatkan piksel di bawah itu. Diukur pada halaman berisi teks
+  badan + garis rambut, dibandingkan hasil resampler kualitas tinggi: beda
+  rata-rata **1,34 level di 0,6×** — dan 0,6× justru persis kasus kita (12 MP →
+  2400) — lalu 3,43 level di 0,45×, dan 6,72 level di 0,3× dengan garis rambut
+  hilang seluruhnya. Aturannya jadi: **murah di atas setengah, hati-hati di
+  bawahnya.**
+
+  | | per halaman | proyeksi 20 halaman |
+  |---|---|---|
+  | sebelum (12 MP, resolusi penuh) | 397–543 ms (median 437) | 32–43 detik |
+  | batas 2400 saja, resampler tinggi | 427–523 ms | 34–42 detik |
+  | **batas 2400 + resampler menurut rasio** | **243–339 ms (median 265)** | **19–27 detik** |
+
+  Rincian per tahap sesudahnya: decode+getImageData 131 ms, estimasi 14 ms,
+  koreksi 44 ms, `putImageData` 5 ms, encode 36 ms. Gerbang ±30 detik: **LOLOS**,
+  jadi rancangan UI di spec Bagian 7 tetap berlaku dan Task 4 boleh jalan.
+
+  **Ekspor ikut kena, dan itu disengaja.** `compressImage` memakai `decodeCapped`
+  yang sama, jadi ekspor Standar dari halaman 3000 px (rasio 1,25×) sekarang juga
+  memakai bilinear dan juga lebih cepat. Ekspor Kecil dari halaman 4000 px (rasio
+  2,5×) tetap memakai resampler kualitas tinggi seperti sebelumnya.
+
+  **Yang hilang, dan kenapa dianggap murah:** ekspor Tinggi & Maksimal tidak lagi
+  bisa melampaui 2400 px **selama sakelarnya menyala**. Berkas `original` tidak
+  pernah disentuh, jadi mematikan sakelar mengembalikan resolusi penuh. Ekspor
+  bawaan (Standar) dan cadangan cloud — yang **selalu** Standar, `CLAUDE.md`
+  Bagian 6 — tidak berubah sama sekali.
 - [ ] Toggle on/off per dokumen
 - [x] **Tier & penamaan — final (Boss Ali, 29 Agustus 2026).** **Tier: semua tier**,
   Basic maupun Pro, setara. Argumen paywall di PRD Bagian 4 berdiri di atas **biaya

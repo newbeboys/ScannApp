@@ -7,6 +7,7 @@ import {
   getImageSize,
   rotateImage,
 } from './imageEditor'
+import { ENHANCED_EDGE } from './enhance'
 import { COMPRESSION_PRESETS } from './exportLimits'
 
 /**
@@ -374,7 +375,7 @@ describe('enhancePage', () => {
     expect([head[0], head[1], head[2]]).toEqual([0xff, 0xd8, 0xff])
   })
 
-  it('keeps the page the same size', async () => {
+  it('leaves a page already under the cap at its own size', async () => {
     const enhanced = (await enhancePage(await shadowedScan(400, 500)))!
 
     expect(await getImageSize(enhanced)).toEqual({ width: 400, height: 500 })
@@ -391,5 +392,18 @@ describe('enhancePage', () => {
     )
 
     expect(await enhancePage(tiny)).toBeNull()
+  })
+
+  /**
+   * What got the twenty-page projection under the gate (TASKS.md Fase 7A).
+   *
+   * The correction runs per pixel, so the page size *is* the cost. Nothing is
+   * lost permanently: `original` is never touched, so turning the switch back
+   * off returns the page at its full resolution.
+   */
+  it('caps the long edge of what it renders', async () => {
+    const enhanced = (await enhancePage(await shadowedScan(3000, 2000)))!
+
+    expect(await getImageSize(enhanced)).toEqual({ width: ENHANCED_EDGE, height: 1600 })
   })
 })

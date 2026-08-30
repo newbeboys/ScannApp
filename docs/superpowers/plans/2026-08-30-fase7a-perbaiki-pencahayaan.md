@@ -839,19 +839,22 @@ describe('enhancePage cost on a 12 MP page', () => {
 })
 ```
 
-- [ ] **Step 2: Jalankan dan baca angkanya**
+- [x] **Step 2: Jalankan dan baca angkanya**
 
 Run: `npm run test:browser -- enhanceBench`
 Expected: PASS, dan satu baris `[bench] …` di keluarannya. **Catat keempat angka dan proyeksinya.**
 
-- [ ] **Step 3: Terapkan gerbangnya**
+- [x] **Step 3: Terapkan gerbangnya** — tidak lolos (35 detik), dilaporkan ke Boss
+  Ali, dan ditutup dengan batas `ENHANCED_EDGE` 2400 px + `resamplerFor()`:
+  **265 ms/halaman, proyeksi 21 detik, LOLOS.** Rinciannya di `TASKS.md` Fase 7A
+  dan spec Bagian 8.1. Task 4 boleh jalan.
 
 Hitung: `proyeksi = total_ms × 4 × 20 / 1000` detik.
 
 - **≤ ±30 detik** → lanjut ke Task 4. Tulis angkanya di `TASKS.md` (Step 4) dan teruskan.
 - **> ±30 detik** → **BERHENTI. Jangan kerjakan Task 4–8.** Laporkan ke Boss Ali dalam Bahasa Indonesia, isinya: keempat angka terukur, proyeksinya, dan mana yang mendominasi (kalau decode+encode yang mendominasi, mengecilkan resolusi kerja koreksi **tidak** akan menolong — itu fakta yang menentukan pilihan mana yang masuk akal). Dua arah yang sudah disebut Boss Ali saat brainstorm: (a) resolusi kerja koreksi lebih kecil, (b) hanya dijalankan saat simpan/ekspor, bukan saat sakelar dinyalakan. Pilihannya milik Boss Ali, bukan milik eksekutor plan ini.
 
-- [ ] **Step 4: Catat angkanya di `TASKS.md`**
+- [x] **Step 4: Catat angkanya di `TASKS.md`**
 
 Di bawah butir "Ukur sebelum merancang UI progres" pada bagian **7A**, ganti `- [ ]` jadi `- [x]` dan tambahkan sub-baris hasil pengukurannya, format:
 
@@ -862,7 +865,7 @@ Di bawah butir "Ukur sebelum merancang UI progres" pada bagian **7A**, ganti `- 
   Gerbang ±30 detik: **<lolos / tidak lolos>**.
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/enhanceBench.browser.test.ts TASKS.md

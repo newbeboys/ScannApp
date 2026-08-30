@@ -2159,7 +2159,7 @@ EOF
 - Consumes: `setDocumentEnhance`, `describeEnhanceOutcome` (Task 6); `page.enhanced` & `doc.enhance` (Task 4).
 - Produces: mode `'enhance'` di `EditorScreen`, dan komponen `EnhancePanel` dengan props `{ enabled, enhancedCount, total, progress, isBusy, onToggle, onCancel }`.
 
-- [ ] **Step 1: Tulis tes komponennya dulu — `src/components/EnhancePanel.browser.test.tsx`**
+- [x] **Step 1: Tulis tes komponennya dulu — `src/components/EnhancePanel.browser.test.tsx`**
 
 ```tsx
 import { describe, expect, it, vi } from 'vitest'
@@ -2254,12 +2254,24 @@ describe('EnhancePanel', () => {
 })
 ```
 
-- [ ] **Step 2: Jalankan, pastikan gagal**
+- [x] **Step 2: Jalankan, pastikan gagal**
 
 Run: `npm run test:browser -- EnhancePanel`
 Expected: FAIL — modul `./EnhancePanel` tidak ada.
 
-- [ ] **Step 3: Tulis `src/components/EnhancePanel.tsx`**
+Hasil: gagal impor, persis sebab itu.
+
+- [x] **Step 3: Tulis `src/components/EnhancePanel.tsx`**
+
+**Dua koreksi dari kode di plan, keduanya karena tesnya sendiri gagal:**
+
+1. Tes "never presents itself as AI" memeriksa `container.textContent` memuat
+   "Perbaiki Pencahayaan", padahal di versi plan nama itu **hanya** ada di
+   `aria-label` — dan `aria-label` tidak ikut `textContent`. Kalimat penjelasnya
+   diubah supaya menyebut namanya: "Perbaiki Pencahayaan meratakan cahaya dan
+   menghapus bayangan sebelum filter diterapkan."
+2. `{progress && …}` ditulis dua kali berturut-turut di plan (satu untuk kalimat
+   progres, satu untuk tombol Batal). Digabung jadi satu `<>` — kondisinya sama.
 
 ```tsx
 interface EnhancePanelProps {
@@ -2356,7 +2368,7 @@ export function EnhancePanel({
 }
 ```
 
-- [ ] **Step 4: Tambahkan `SunIcon` di `src/components/Icons.tsx`**
+- [x] **Step 4: Tambahkan `SunIcon` di `src/components/Icons.tsx`**
 
 Berkas itu punya helper `base(size)` di atas yang memegang semua atribut bersama (`viewBox`, `fill`, `stroke`, `strokeWidth`, `strokeLinecap`, `strokeLinejoin`) — pakai itu, jangan menulis ulang atributnya satu per satu:
 
@@ -2378,7 +2390,13 @@ export function SunIcon({ size = 24, className }: IconProps) {
 }
 ```
 
-- [ ] **Step 5: Sambungkan di `src/screens/EditorScreen.tsx`**
+- [x] **Step 5: Sambungkan di `src/screens/EditorScreen.tsx`**
+
+Dua penyesuaian: `enhanceProgress` dan `enhanceRun` ditaruh bersama `useState` lain
+di atas komponen, bukan di tengah berkas seperti kata plan — enam belas state lain
+di berkas ini semuanya di sana. Dan komentar baris tombolnya tetap Bahasa Inggris,
+mengikuti kalimat yang sudah ada di situ (`CLAUDE.md` Bagian 4 melarang campur bahasa
+dalam satu berkas).
 
 **5a.** Import: tambahkan `useRef` ke import `react`; `EnhancePanel` dari `../components/EnhancePanel`; `SunIcon` ke import `../components/Icons`; `describeEnhanceOutcome, setDocumentEnhance` ke import `../lib/documentEditing`.
 
@@ -2486,7 +2504,7 @@ const TITLES: Record<Mode, string> = {
 
 **5g.** Tombol Kembali di header: mode `'enhance'` sudah tertangani cabang `else setMode('none')` yang ada — jangan tambah cabang baru, tapi **pastikan** tombolnya tetap `disabled={isBusy}` supaya user tidak bisa keluar di tengah jalan tanpa membatalkan.
 
-- [ ] **Step 6: Sambungkan prop barunya di `src/App.tsx`**
+- [x] **Step 6: Sambungkan prop barunya di `src/App.tsx`**
 
 Tambahkan satu baris di elemen `<EditorScreen …>`, tepat di bawah `onError={setToast}`:
 
@@ -2494,7 +2512,7 @@ Tambahkan satu baris di elemen `<EditorScreen …>`, tepat di bawah `onError={se
           onNotice={setToast}
 ```
 
-- [ ] **Step 7: CSS di `src/App.css`**
+- [x] **Step 7: CSS di `src/App.css`**
 
 Tambahkan `.enhance-switch` ke daftar selektor `.filter-scope, .format-switch` yang sudah ada (dua blok: wadah dan `__option`, plus varian `--active` dan `:disabled`), lalu satu aturan baru di dekat `.filter-progress`:
 
@@ -2508,17 +2526,25 @@ Tambahkan `.enhance-switch` ke daftar selektor `.filter-scope, .format-switch` y
 
 Jangan memperkenalkan warna atau font baru — token yang ada sudah final (CLAUDE.md Bagian 9.2).
 
-- [ ] **Step 8: Jalankan tesnya sampai hijau**
+- [x] **Step 8: Jalankan tesnya sampai hijau**
 
 Run: `npm run test:browser`
 Expected: PASS — 8 tes `EnhancePanel` hijau, dan tes browser lama tetap hijau.
 
-- [ ] **Step 9: Typecheck, lint, suite penuh**
+Hasil: 8 hijau, sesudah satu perbaikan di tesnya sendiri. Tiga tes gagal dengan
+`strict mode violation: resolved to 2 elements` — pencocokan nama peran itu
+**substring**, dan "Aktif" ada di dalam "Nonaktif". Ketiganya sekarang meminta
+`{ name: 'Aktif', exact: true }`, dengan komentar di atas `describe` supaya jebakan
+yang sama tidak menunggu tes berikutnya.
+
+- [x] **Step 9: Typecheck, lint, suite penuh**
 
 Run: `npm run build && npm run lint && npm test`
 Expected: bersih.
 
-- [ ] **Step 10: Commit**
+Hasil: bersih. **887 lolos / 64 berkas** (node 752, browser 135).
+
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/components/EnhancePanel.tsx src/components/EnhancePanel.browser.test.tsx src/components/Icons.tsx src/screens/EditorScreen.tsx src/App.tsx src/App.css

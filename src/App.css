@@ -1654,7 +1654,8 @@ body.scroll-locked .app__body {
   aturan yang sama pasti berbeda cepat atau lambat.
 */
 .filter-scope,
-.format-switch {
+.format-switch,
+.enhance-switch {
   display: flex;
   gap: 4px;
   padding: 4px;
@@ -1664,7 +1665,8 @@ body.scroll-locked .app__body {
 }
 
 .filter-scope__option,
-.format-switch__option {
+.format-switch__option,
+.enhance-switch__option {
   flex: 1 1 0;
   padding: 9px 8px;
   border: none;
@@ -1677,14 +1679,16 @@ body.scroll-locked .app__body {
 }
 
 .filter-scope__option--active,
-.format-switch__option--active {
+.format-switch__option--active,
+.enhance-switch__option--active {
   background: var(--surface);
   color: var(--fg);
   box-shadow: var(--shadow);
 }
 
 .filter-scope__option:disabled,
-.format-switch__option:disabled {
+.format-switch__option:disabled,
+.enhance-switch__option:disabled {
   opacity: 0.6;
 }
 
@@ -1733,6 +1737,13 @@ body.scroll-locked .app__body {
   font-size: 12px;
   color: var(--fg-dim);
   text-align: center;
+}
+
+/* Satu kalimat penjelas di atas sakelarnya: tahap ini tidak menggantikan filter. */
+.enhance-note {
+  font-size: 13px;
+  color: var(--fg-dim);
+  line-height: 1.5;
 }
 
 .reorder {

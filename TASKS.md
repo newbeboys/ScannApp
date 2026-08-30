@@ -975,7 +975,16 @@ Keputusan desain yang sudah diambil saat brainstorm:
   pernah disentuh, jadi mematikan sakelar mengembalikan resolusi penuh. Ekspor
   bawaan (Standar) dan cadangan cloud — yang **selalu** Standar, `CLAUDE.md`
   Bagian 6 — tidak berubah sama sekali.
-- [ ] Toggle on/off per dokumen
+- [x] Toggle on/off per dokumen — **selesai 30 Agustus 2026.** `EnhancePanel` di editor,
+  mode `'enhance'` di sebelah Filter. **Tiga keadaan diam, bukan dua:** mati,
+  hidup-dan-lengkap, dan hidup-tapi-baru-sebagian — yang tersisa setelah dibatalkan,
+  dan juga tempat berhenti permanen buat dokumen yang sebagian halamannya ditolak
+  estimator. Keadaan tengah menampilkan "12 dari 20 halaman diperbaiki" plus tombol
+  **Lanjutkan**; membulatkannya ke salah satu ujung membuat user tidak punya cara tahu
+  kenapa satu halaman masih tampak seperti semula. `AbortController` dipegang di
+  `useRef`, bukan state — membatalkan tidak boleh menunggu render ulang. Tanpa badge
+  Pro, tanpa jalur upgrade, dan **ada tes yang menjaga panel ini tidak pernah menyebut
+  dirinya "AI"**.
 - [x] **Tier & penamaan — final (Boss Ali, 29 Agustus 2026).** **Tier: semua tier**,
   Basic maupun Pro, setara. Argumen paywall di PRD Bagian 4 berdiri di atas **biaya
   cloud AI**, sementara metode klasik nol biaya marjinal — tidak ada yang dibiayai,

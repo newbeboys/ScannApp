@@ -238,6 +238,22 @@ export function LogoutIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function SunIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2" />
+      <path d="M12 19v2" />
+      <path d="M3 12h2" />
+      <path d="M19 12h2" />
+      <path d="m5.6 5.6 1.4 1.4" />
+      <path d="m17 17 1.4 1.4" />
+      <path d="m18.4 5.6-1.4 1.4" />
+      <path d="m7 17-1.4 1.4" />
+    </svg>
+  )
+}
+
 export function ImageIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">

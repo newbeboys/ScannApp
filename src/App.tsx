@@ -1186,6 +1186,7 @@ function App() {
             void maybeShowInterstitial('document-edited', tier)
           }}
           onError={setToast}
+          onNotice={setToast}
         />
         {toast && <p className="toast">{toast}</p>}
       </div>

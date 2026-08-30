@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AnnotateOverlay, type AnnotateTool } from '../components/AnnotateOverlay'
 import { AnnotateToolbar } from '../components/AnnotateToolbar'
 import { CropOverlay } from '../components/CropOverlay'
+import { EnhancePanel } from '../components/EnhancePanel'
 import { FilterPicker } from '../components/FilterPicker'
 import { SignaturePad } from '../components/SignaturePad'
 import { activeChip, pickToChoice, type FilterScope } from '../lib/filterChoice'
@@ -14,6 +15,7 @@ import {
   MergeIcon,
   RotateIcon,
   SignatureIcon,
+  SunIcon,
   UndoIcon,
 } from '../components/Icons'
 import { PageReorder } from '../components/PageReorder'
@@ -27,11 +29,13 @@ import {
 } from '../lib/annotations'
 import {
   cropPage,
+  describeEnhanceOutcome,
   loadAnnotationBase,
   loadPageBlob,
   movePage,
   revertPage,
   rotatePage,
+  setDocumentEnhance,
   setDocumentFilter,
   setPageFilter,
   setPageMarks,
@@ -45,17 +49,20 @@ interface EditorScreenProps {
   onDocumentChange: (doc: LocalScanDocument) => void
   onClose: () => void
   onError: (message: string) => void
+  /** An ordinary message, not a failure — `onError` already covers those. */
+  onNotice: (message: string) => void
 }
 
 const FULL_CROP: CropRect = { x: 0.05, y: 0.05, width: 0.9, height: 0.9 }
 
 /** Which tool is open. Only one at a time — they all want the whole screen. */
-type Mode = 'none' | 'crop' | 'filter' | 'reorder' | 'annotate'
+type Mode = 'none' | 'crop' | 'filter' | 'enhance' | 'reorder' | 'annotate'
 
 const TITLES: Record<Mode, string> = {
   none: 'Edit Halaman',
   crop: 'Potong Halaman',
   filter: 'Filter Dokumen',
+  enhance: 'Perbaiki Pencahayaan',
   reorder: 'Urutkan Halaman',
   annotate: 'Anotasi & Tanda Tangan',
 }
@@ -65,6 +72,7 @@ export function EditorScreen({
   onDocumentChange,
   onClose,
   onError,
+  onNotice,
 }: EditorScreenProps) {
   const [pageIndex, setPageIndex] = useState(0)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -74,6 +82,11 @@ export function EditorScreen({
   const [isBusy, setIsBusy] = useState(false)
   const [scope, setScope] = useState<FilterScope>('document')
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [enhanceProgress, setEnhanceProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  )
+  /** Held in a ref, not state: cancelling must not wait for a re-render. */
+  const enhanceRun = useRef<AbortController | null>(null)
 
   /**
    * The ink being worked on, held in memory until the user saves.
@@ -184,6 +197,30 @@ export function EditorScreen({
       onError(error instanceof Error ? error.message : 'Gagal menerapkan filter.')
     } finally {
       setProgress(null)
+      setIsBusy(false)
+    }
+  }
+
+  const enhancedCount = doc.pages.filter((entry) => entry.enhanced).length
+
+  const handleEnhanceToggle = async (next: boolean) => {
+    const controller = new AbortController()
+    enhanceRun.current = controller
+
+    setIsBusy(true)
+    setEnhanceProgress({ done: 0, total: doc.pages.length })
+    try {
+      const { document: updated, outcome } = await setDocumentEnhance(doc, next, {
+        onProgress: (done, total) => setEnhanceProgress({ done, total }),
+        signal: controller.signal,
+      })
+      onDocumentChange(updated)
+      onNotice(describeEnhanceOutcome(outcome, next))
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Gagal memperbaiki pencahayaan.')
+    } finally {
+      enhanceRun.current = null
+      setEnhanceProgress(null)
       setIsBusy(false)
     }
   }
@@ -359,6 +396,18 @@ export function EditorScreen({
         />
       )}
 
+      {mode === 'enhance' && (
+        <EnhancePanel
+          enabled={doc.enhance === true}
+          enhancedCount={enhancedCount}
+          total={doc.pages.length}
+          progress={enhanceProgress}
+          isBusy={isBusy}
+          onToggle={(next) => void handleEnhanceToggle(next)}
+          onCancel={() => enhanceRun.current?.abort()}
+        />
+      )}
+
       {mode === 'annotate' && (
         <AnnotateToolbar
           tool={tool}
@@ -427,7 +476,7 @@ export function EditorScreen({
             </button>
           </div>
 
-          {/* The whole document — filter and reorder, open to every tier. */}
+          {/* The whole document — filter, lighting and reorder, open to every tier. */}
           <div className="editor-actions">
             <button
               type="button"
@@ -437,6 +486,15 @@ export function EditorScreen({
             >
               <ImageIcon size={17} />
               <span>Filter</span>
+            </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => setMode('enhance')}
+              disabled={isBusy}
+            >
+              <SunIcon size={17} />
+              <span>Cahaya</span>
             </button>
             <button
               type="button"

@@ -845,11 +845,32 @@ Keputusan desain yang sudah diambil saat brainstorm:
 - [ ] **Batch dengan `signal`, bukan on-demand.** `applyDocumentFilter` yang ada
   punya `onProgress` tapi **tidak punya pembatalan**; enhance harus punya, karena
   Basic mentok 20 halaman tapi **Pro tidak terbatas**.
-- [ ] **Ukur sebelum merancang UI progres.** `enhancePage()` dulu, ukur di Chromium
+- [x] **Ukur sebelum merancang UI progres.** `enhancePage()` dulu, ukur di Chromium
   pada halaman 12 MP sungguhan, kalikan 4 untuk mid-range. **Kalau proyeksi 20 halaman
   melewati ±30 detik, rancangannya berubah** (resolusi kerja lebih kecil, atau hanya
   saat simpan). Ini menggantikan butir lama "uji performa di device low-end" sebagai
   gerbang, bukan sebagai pemeriksaan di akhir.
+
+  **Hasil ukur 30 Agustus 2026** (Chromium desktop, halaman 3000×4000, empat kali
+  jalan — `src/lib/enhanceBench.browser.test.ts`):
+
+  | | total | decode + getImageData | estimasi | koreksi | encode |
+  |---|---|---|---|---|---|
+  | jalan 1 | 492 ms | 131 ms | 71 ms | 274 ms | 125 ms |
+  | jalan 2 | 499 ms | 154 ms | 53 ms | 276 ms | 111 ms |
+  | jalan 3 | 508 ms | 272 ms | 42 ms | 277 ms | 122 ms |
+  | jalan 4 | 540 ms | 124 ms | 18 ms | 214 ms | 110 ms |
+
+  Proyeksi mid-range (×4) untuk 20 halaman: **39–43 detik**. Gerbang ±30 detik:
+  **TIDAK LOLOS**. Menunggu keputusan Boss Ali sebelum UI dibuat.
+
+  Yang penting dari rinciannya: **koreksi per piksel yang paling mahal** (±260 ms,
+  separuh total), bukan decode/encode seperti yang dikhawatirkan saat menulis plan.
+  Artinya opsi (a) "resolusi kerja lebih kecil" memang menyentuh biaya terbesarnya,
+  dan ada satu jalan ketiga yang tidak mengorbankan mutu sama sekali: interpolasi
+  bilinear sekarang dihitung ulang untuk **tiap piksel** di dalam loop terdalam;
+  mengangkatnya jadi satu larik gain per baris membuat loop terdalamnya tinggal
+  tiga perkalian. Estimasi sekarang murah (18–71 ms), jadi bukan di situ masalahnya.
 - [ ] Toggle on/off per dokumen
 - [x] **Tier & penamaan — final (Boss Ali, 29 Agustus 2026).** **Tier: semua tier**,
   Basic maupun Pro, setara. Argumen paywall di PRD Bagian 4 berdiri di atas **biaya

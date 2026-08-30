@@ -3,6 +3,7 @@ import {
   compressImage,
   compressImagePair,
   cropImage,
+  enhancePage,
   getImageSize,
   rotateImage,
 } from './imageEditor'
@@ -316,5 +317,79 @@ describe('shrinking a JPEG page during the decode', () => {
     expect(calls).toHaveLength(1)
     expect(options?.resizeWidth).toBeUndefined()
     expect(options?.resizeHeight).toBeUndefined()
+  })
+})
+
+/** A page lit from the left: paper fading from bright to dark across the sheet. */
+async function shadowedScan(width: number, height: number): Promise<Blob> {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')!
+
+  const gradient = ctx.createLinearGradient(0, 0, width, 0)
+  gradient.addColorStop(0, 'rgb(214, 212, 205)')
+  gradient.addColorStop(1, 'rgb(92, 91, 88)')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, width, height)
+
+  return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob!), 'image/jpeg', 0.92))
+}
+
+/** Luminance of one pixel of an encoded image, read back through a canvas. */
+async function sample(blob: Blob, x: number, y: number): Promise<number> {
+  const bitmap = await createImageBitmap(blob)
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close()
+
+  const [r, g, b] = ctx.getImageData(x, y, 1, 1).data
+  return 0.299 * r + 0.587 * g + 0.114 * b
+}
+
+describe('enhancePage', () => {
+  it('flattens a shadow that runs across the page', async () => {
+    const page = await shadowedScan(600, 800)
+    const before = Math.abs((await sample(page, 20, 400)) - (await sample(page, 580, 400)))
+
+    const enhanced = (await enhancePage(page))!
+    const after = Math.abs((await sample(enhanced, 20, 400)) - (await sample(enhanced, 580, 400)))
+
+    expect(before).toBeGreaterThan(80)
+    expect(after).toBeLessThan(30)
+  })
+
+  /**
+   * The bytes, not the MIME type. What comes out is read back by the export,
+   * the cloud backup and ML Kit, and all three care about the actual encoding
+   * (CLAUDE.md Bagian 4).
+   */
+  it('produces a real JPEG', async () => {
+    const enhanced = (await enhancePage(await shadowedScan(400, 500)))!
+    const head = new Uint8Array(await enhanced.slice(0, 3).arrayBuffer())
+
+    expect([head[0], head[1], head[2]]).toEqual([0xff, 0xd8, 0xff])
+  })
+
+  it('keeps the page the same size', async () => {
+    const enhanced = (await enhancePage(await shadowedScan(400, 500)))!
+
+    expect(await getImageSize(enhanced)).toEqual({ width: 400, height: 500 })
+  })
+
+  it('declines a page it cannot read the lighting of, instead of guessing', async () => {
+    // 4x4 pixels: almost every tile of the 16x16 grid is empty.
+    const canvas = document.createElement('canvas')
+    canvas.width = 4
+    canvas.height = 4
+    canvas.getContext('2d')!.fillRect(0, 0, 4, 4)
+    const tiny = await new Promise<Blob>((resolve) =>
+      canvas.toBlob((blob) => resolve(blob!), 'image/jpeg'),
+    )
+
+    expect(await enhancePage(tiny)).toBeNull()
   })
 })

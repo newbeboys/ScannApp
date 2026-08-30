@@ -1,4 +1,5 @@
 import { HIGHLIGHTER_ALPHA, strokeWidth, type Mark } from './annotations'
+import { correctLighting, estimateLightGrid, WORK_EDGE } from './enhance'
 import { applyFilter } from './filters'
 import { readJpegSize } from './jpegSize'
 import type { DocumentFilter } from './scanIndexMigration'
@@ -202,6 +203,49 @@ async function scaledCanvas(blob: Blob, maxEdgePx: number): Promise<HTMLCanvasEl
   bitmap.close()
 
   return canvas
+}
+
+/**
+ * Flattens the lighting across a page — "Perbaiki Pencahayaan" (Fase 7A).
+ *
+ * A stage of its own, not a sixth filter: it runs *before* whichever filter the
+ * document carries, so the two can be used together. That combination is where
+ * the value is — Hitam-Putih on a shadowed page is what produces the black
+ * blotches this removes.
+ *
+ * Only the canvas work lives here. The maths is in `enhance.ts`, kept free of
+ * the DOM so it can be tested against known pixels under Node.
+ *
+ * `null` means the light map could not be trusted — see `estimateLightGrid`.
+ * The caller must then leave the page exactly as it was; a page divided by a
+ * guessed light map is worse than an untouched one.
+ *
+ * Deterministic maths, no model. The name "AI Enhance" is reserved for the
+ * TFLite version, which will replace the body of this function and nothing
+ * else (CLAUDE.md Bagian 6).
+ */
+export async function enhancePage(blob: Blob): Promise<Blob | null> {
+  const bitmap = await decode(blob)
+  const [canvas, ctx] = draw(bitmap.width, bitmap.height)
+  ctx.drawImage(bitmap, 0, 0)
+
+  // Estimated from a small copy, corrected at full size. Lighting is a
+  // low-frequency signal: 65k pixels answer the question as well as 12 million,
+  // and the map is 256 numbers either way (design doc, Bagian 4.1).
+  const scale = Math.min(1, WORK_EDGE / Math.max(bitmap.width, bitmap.height))
+  const [work, workCtx] = draw(bitmap.width * scale, bitmap.height * scale)
+  workCtx.drawImage(bitmap, 0, 0, work.width, work.height)
+  bitmap.close()
+
+  const sample = workCtx.getImageData(0, 0, work.width, work.height)
+  const grid = estimateLightGrid(sample.data, work.width, work.height)
+  if (!grid) return null
+
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  correctLighting(image.data, canvas.width, canvas.height, grid)
+  ctx.putImageData(image, 0, 0)
+
+  return toBlob(canvas, DERIVED_QUALITY)
 }
 
 /**

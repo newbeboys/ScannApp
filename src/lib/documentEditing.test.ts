@@ -4,6 +4,7 @@ const imageEditor = {
   cropImage: vi.fn(async () => new Blob(['cropped'])),
   rotateImage: vi.fn(async () => new Blob(['rotated'])),
   filterImage: vi.fn(async () => new Blob(['filtered'])),
+  enhancePage: vi.fn(async () => new Blob(['enhanced'])),
 }
 vi.mock('./imageEditor', () => imageEditor)
 
@@ -14,7 +15,9 @@ vi.mock('./imageEditor', () => imageEditor)
  * real scanStorage.ts pulls in at the top of the module.
  */
 const scanStorage = {
+  applyDocumentEnhance: vi.fn(),
   applyDocumentFilter: vi.fn(),
+  applyPageEnhance: vi.fn(),
   applyPageDerived: vi.fn(),
   applyPageFilter: vi.fn(),
   savePageMarks: vi.fn(),
@@ -28,14 +31,27 @@ const scanStorage = {
     if (page.filter) return page.filter
     return doc.filter ?? null
   },
-  filterSource: (page: { edited?: string; original: string }) => page.edited ?? page.original,
-  resolvePage: (page: { filtered?: string; edited?: string; original: string }) =>
-    page.filtered ?? page.edited ?? page.original,
+  filterSource: (page: { enhanced?: string; edited?: string; original: string }) =>
+    page.enhanced ?? page.edited ?? page.original,
+  resolvePage: (page: {
+    filtered?: string
+    enhanced?: string
+    edited?: string
+    original: string
+  }) => page.filtered ?? page.enhanced ?? page.edited ?? page.original,
 }
 vi.mock('./scanStorage', () => scanStorage)
 
-const { cropPage, movePage, revertPage, rotatePage, setDocumentFilter, setPageFilter } =
-  await import('./documentEditing')
+const {
+  cropPage,
+  describeEnhanceOutcome,
+  movePage,
+  revertPage,
+  rotatePage,
+  setDocumentEnhance,
+  setDocumentFilter,
+  setPageFilter,
+} = await import('./documentEditing')
 
 const RECT = { x: 0, y: 0, width: 1, height: 1 }
 
@@ -213,5 +229,147 @@ describe('available to every tier', () => {
     scanStorage.reorderPages.mockResolvedValue(doc)
 
     await expect(movePage(doc, 0, 1)).resolves.toBe(doc)
+  })
+})
+
+describe('rebuilding the lighting render after a geometry edit', () => {
+  /**
+   * The lighting render is deleted along with everything else derived from the
+   * old geometry, and the filter is rendered *from* it — so it has to come back
+   * first, or the filter is rebuilt from a page whose shadows are still there.
+   *
+   * The document handed to cropPage deliberately has no switch on it: the one
+   * that counts is the copy storage just read back, not the caller's, which may
+   * predate a switch flipped somewhere else.
+   */
+  it('renders the lighting fix first, then the filter and the ink', async () => {
+    const doc = { id: 'd', filter: 'bw', pages: [{ original: 'a.jpg' }] }
+    scanStorage.savePageEdit.mockResolvedValue({
+      ...doc,
+      enhance: true,
+      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg' }],
+    })
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
+
+    await cropPage(doc, 0, RECT)
+
+    expect(scanStorage.applyPageEnhance).toHaveBeenCalledWith('d', 0, imageEditor.enhancePage)
+    expect(scanStorage.applyPageEnhance.mock.invocationCallOrder[0]).toBeLessThan(
+      scanStorage.applyPageDerived.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('does not touch it at all when the document switch is off', async () => {
+    const doc = { id: 'd', filter: 'bw', pages: [{ original: 'a.jpg' }] }
+    scanStorage.savePageEdit.mockResolvedValue({
+      ...doc,
+      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg' }],
+    })
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
+
+    await cropPage(doc, 0, RECT)
+
+    expect(scanStorage.applyPageEnhance).not.toHaveBeenCalled()
+  })
+
+  /** Undoing a crop invalidates the lighting render exactly as making one does. */
+  it('rebuilds it after "Asli" too', async () => {
+    const doc = { id: 'd', pages: [{ original: 'a.jpg', edited: 'a-edited.jpg' }] }
+    scanStorage.resetPageEdit.mockResolvedValue({
+      ...doc,
+      enhance: true,
+      pages: [{ original: 'a.jpg' }],
+    })
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
+
+    await revertPage(doc, 0)
+
+    expect(scanStorage.applyPageEnhance).toHaveBeenCalledWith('d', 0, imageEditor.enhancePage)
+  })
+})
+
+describe('setDocumentEnhance', () => {
+  it("hands the storage layer the canvas renderers and the caller's signal", async () => {
+    const controller = new AbortController()
+    scanStorage.applyDocumentEnhance.mockResolvedValue({
+      document: { id: 'doc-1' },
+      outcome: { changed: 2, skipped: 0, unchanged: 0, failed: 0, cancelled: false },
+    })
+
+    await setDocumentEnhance({ id: 'doc-1', pages: [] } as never, true, {
+      signal: controller.signal,
+    })
+
+    expect(scanStorage.applyDocumentEnhance).toHaveBeenCalledWith(
+      'doc-1',
+      true,
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+      expect.objectContaining({ signal: controller.signal }),
+    )
+  })
+})
+
+describe('describeEnhanceOutcome', () => {
+  it('reports a clean run', () => {
+    expect(
+      describeEnhanceOutcome(
+        { changed: 20, skipped: 0, unchanged: 0, failed: 0, cancelled: false },
+        true,
+      ),
+    ).toBe('Pencahayaan 20 halaman diperbaiki.')
+  })
+
+  /**
+   * Pages the estimator declined have to reach the user. They will never get a
+   * lighting render, so the panel's count stops short of the total for good —
+   * and without this line the user is left tapping "Lanjutkan" forever with no
+   * explanation, exactly the trap `describeOcrOutcome` was written to avoid.
+   */
+  it('says how many pages were passed over, and does not call it a failure', () => {
+    expect(
+      describeEnhanceOutcome(
+        { changed: 18, skipped: 0, unchanged: 2, failed: 0, cancelled: false },
+        true,
+      ),
+    ).toBe('Pencahayaan 18 halaman diperbaiki, 2 halaman dilewati.')
+  })
+
+  it('reports a cancelled run as stopped, not as finished', () => {
+    expect(
+      describeEnhanceOutcome(
+        { changed: 5, skipped: 0, unchanged: 0, failed: 0, cancelled: true },
+        true,
+      ),
+    ).toBe('Dihentikan setelah 5 halaman.')
+  })
+
+  it('reports failures separately from pages that were passed over', () => {
+    expect(
+      describeEnhanceOutcome(
+        { changed: 17, skipped: 0, unchanged: 1, failed: 2, cancelled: false },
+        true,
+      ),
+    ).toBe('Pencahayaan 17 halaman diperbaiki, 1 halaman dilewati, 2 gagal.')
+  })
+
+  it('has its own sentence for switching the whole thing off', () => {
+    expect(
+      describeEnhanceOutcome(
+        { changed: 20, skipped: 0, unchanged: 0, failed: 0, cancelled: false },
+        false,
+      ),
+    ).toBe('Perbaikan pencahayaan dimatikan.')
+  })
+
+  /** Nothing to do is not the same as something done. */
+  it('says so when every page was already in the state asked for', () => {
+    expect(
+      describeEnhanceOutcome(
+        { changed: 0, skipped: 20, unchanged: 0, failed: 0, cancelled: false },
+        true,
+      ),
+    ).toBe('Semua halaman sudah diperbaiki.')
   })
 })

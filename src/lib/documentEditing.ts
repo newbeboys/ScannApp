@@ -6,6 +6,7 @@ import {
 } from './annotations'
 import {
   cropImage,
+  enhancePage,
   filterImage,
   renderMarks,
   rotateImage,
@@ -14,8 +15,10 @@ import {
 } from './imageEditor'
 import {
   annotationSource,
+  applyDocumentEnhance,
   applyDocumentFilter,
   applyPageDerived,
+  applyPageEnhance,
   applyPageFilter,
   filterSource,
   invalidateDisplayUri,
@@ -26,6 +29,7 @@ import {
   savePageEdit,
   savePageMarks,
   type DocumentFilter,
+  type EnhanceOutcome,
   type LocalScanDocument,
   type PageFilter,
   type ScanPage,
@@ -78,24 +82,31 @@ async function drawMarks(source: Blob, marks: Mark[]): Promise<Blob> {
 }
 
 /**
- * Rebuilds both derived files after a page's geometry changed underneath them.
+ * Rebuilds every derived file after a page's geometry changed underneath them.
  *
- * `savePageEdit`/`resetPageEdit` delete the filter render and the ink render as
- * a side effect — right, since both were made from geometry that no longer
- * exists — but neither can regenerate them; they are storage, with no canvas
- * to render with. This is the one place that closes the gap, shared by
- * `editPage` (after a crop or rotate) and `revertPage` (after undoing one).
+ * `savePageEdit`/`resetPageEdit` delete the lighting render, the filter render
+ * and the ink render as a side effect — right, since all three were made from
+ * geometry that no longer exists — but none of them can regenerate anything;
+ * they are storage, with no canvas to render with. This is the one place that
+ * closes the gap, shared by `editPage` (after a crop or rotate) and
+ * `revertPage` (after undoing one).
  *
- * One call rather than "filter, then ink": the filter pass renders the ink too,
- * so doing it in two steps draws every stroke twice — once at the coordinates
- * the crop just invalidated.
+ * The lighting fix goes first and on its own, because the filter renders *from*
+ * it. The filter and the ink then go together in one call: the filter pass
+ * renders the ink too, so splitting those two would draw every stroke twice —
+ * once at the coordinates the crop just invalidated.
+ *
+ * Takes the document rather than its id because only the document knows
+ * whether the lighting stage is on, and it is the copy storage just handed
+ * back — not the caller's, which may predate a switch flipped elsewhere.
  */
 async function rebuildDerived(
-  docId: string,
+  doc: LocalScanDocument,
   pageIndex: number,
   marks: Mark[],
 ): Promise<LocalScanDocument> {
-  return applyPageDerived(docId, pageIndex, marks, filterImage, drawMarks)
+  if (doc.enhance) await applyPageEnhance(doc.id, pageIndex, enhancePage)
+  return applyPageDerived(doc.id, pageIndex, marks, filterImage, drawMarks)
 }
 
 /**
@@ -126,7 +137,7 @@ async function editPage(
   // The remap runs even when it empties the list: that means every stroke was
   // on the part of the page that was just cut away, and the ink render has to
   // go with them.
-  return rebuildDerived(doc.id, pageIndex, remap(saved.pages[pageIndex].marks ?? []))
+  return rebuildDerived(saved, pageIndex, remap(saved.pages[pageIndex].marks ?? []))
 }
 
 /**
@@ -178,7 +189,7 @@ export async function revertPage(
   // The marks keep their coordinates: they cannot be mapped back through a
   // crop that no longer exists, and undoing a crop is not a request to tear up
   // a signature.
-  return rebuildDerived(doc.id, pageIndex, reverted.pages[pageIndex].marks ?? [])
+  return rebuildDerived(reverted, pageIndex, reverted.pages[pageIndex].marks ?? [])
 }
 
 /**
@@ -207,6 +218,53 @@ export async function setPageFilter(
   choice: PageFilter | null,
 ): Promise<LocalScanDocument> {
   return applyPageFilter(doc.id, pageIndex, choice, filterImage, drawMarks)
+}
+
+/**
+ * Turns "Perbaiki Pencahayaan" on or off for the whole document.
+ *
+ * Every tier. No tier argument, no tier check — see `applyDocumentEnhance`.
+ *
+ * `signal` is not optional decoration: every page is decoded and re-encoded at
+ * full resolution and Pro has no page limit, so the user needs a way out that
+ * is not force-quitting the app.
+ */
+export async function setDocumentEnhance(
+  doc: LocalScanDocument,
+  enabled: boolean,
+  options: {
+    onProgress?: (done: number, total: number) => void
+    signal?: AbortSignal
+  } = {},
+): Promise<{ document: LocalScanDocument; outcome: EnhanceOutcome }> {
+  return applyDocumentEnhance(doc.id, enabled, enhancePage, filterImage, drawMarks, options)
+}
+
+/**
+ * The one line the editor shows once a run is over.
+ *
+ * `unchanged` has to reach the user rather than being rounded into the total:
+ * a page the estimator declined will never get a lighting render, so the
+ * panel's count stops short of the total permanently. Reported as a plain
+ * success, that leaves the user pressing "Lanjutkan" forever with nothing to
+ * explain why — the same trap `describeOcrOutcome` exists to avoid.
+ *
+ * Never say "AI" here (CLAUDE.md Bagian 6): this is deterministic maths, and
+ * the name belongs to the TFLite version.
+ */
+export function describeEnhanceOutcome(outcome: EnhanceOutcome, enabled: boolean): string {
+  if (outcome.cancelled) return `Dihentikan setelah ${outcome.changed} halaman.`
+  if (!enabled) return 'Perbaikan pencahayaan dimatikan.'
+  if (outcome.changed === 0 && outcome.unchanged === 0 && outcome.failed === 0) {
+    return 'Semua halaman sudah diperbaiki.'
+  }
+
+  const problems: string[] = []
+  if (outcome.unchanged > 0) problems.push(`${outcome.unchanged} halaman dilewati`)
+  if (outcome.failed > 0) problems.push(`${outcome.failed} gagal`)
+
+  const done = `Pencahayaan ${outcome.changed} halaman diperbaiki`
+  return problems.length === 0 ? `${done}.` : `${done}, ${problems.join(', ')}.`
 }
 
 /**

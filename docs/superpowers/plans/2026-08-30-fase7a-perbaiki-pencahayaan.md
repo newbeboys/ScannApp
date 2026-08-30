@@ -1883,7 +1883,7 @@ EOF
 
   Task 7 memanggil keduanya dari `EditorScreen`.
 
-- [ ] **Step 1: Tulis tesnya dulu — tambahkan di `src/lib/documentEditing.test.ts`**
+- [x] **Step 1: Tulis tesnya dulu — tambahkan di `src/lib/documentEditing.test.ts`**
 
 Berkas itu memakai mock modul yang ditulis tangan, bukan `vi.mocked` — jadi ada empat penyesuaian sebelum tesnya bisa jalan:
 
@@ -1996,12 +1996,14 @@ describe('describeEnhanceOutcome', () => {
 
 (Keduanya sudah masuk lewat penyesuaian nomor 4 di atas — tidak ada import statis yang perlu ditambahkan.)
 
-- [ ] **Step 2: Jalankan, pastikan gagal**
+- [x] **Step 2: Jalankan, pastikan gagal**
 
 Run: `npm run test:node -- documentEditing`
 Expected: FAIL — `setDocumentEnhance is not exported`.
 
-- [ ] **Step 3: Ubah `src/lib/documentEditing.ts`**
+Hasil: 7 gagal, persis sebab itu.
+
+- [x] **Step 3: Ubah `src/lib/documentEditing.ts`**
 
 **3a.** Tambahkan ke import `./imageEditor`: `enhancePage`. Tambahkan ke import `./scanStorage`: `applyDocumentEnhance`, `applyPageEnhance`, dan `type EnhanceOutcome`.
 
@@ -2034,6 +2036,14 @@ async function rebuildDerived(
 ```
 
 Ubah dua pemanggilnya: di `editPage`, `return rebuildDerived(doc, pageIndex, remap(...))`; di `revertPage`, `return rebuildDerived(doc, pageIndex, reverted.pages[pageIndex].marks ?? [])`.
+
+**Diubah sedikit saat dikerjakan:** yang diserahkan bukan `doc` milik pemanggil,
+melainkan dokumen yang baru saja dibaca ulang oleh penyimpanan — `saved` di
+`editPage`, `reverted` di `revertPage`. Nol biaya (keduanya sudah ada di tangan) dan
+satu-satunya yang dibaca dari situ adalah sakelar `enhance`, yang di salinan
+pemanggil bisa saja mendahului perubahan dari tempat lain. Tes
+"renders the lighting fix first, then the filter and the ink" mengunci pilihan ini:
+dokumen yang diserahkan ke `cropPage` sengaja **tidak** punya sakelar.
 
 **3c.** Fungsi barunya, taruh setelah `setPageFilter`:
 
@@ -2086,17 +2096,28 @@ export function describeEnhanceOutcome(outcome: EnhanceOutcome, enabled: boolean
 }
 ```
 
-- [ ] **Step 4: Jalankan tesnya sampai hijau**
+- [x] **Step 4: Jalankan tesnya sampai hijau**
 
 Run: `npm run test:node -- documentEditing`
 Expected: PASS, termasuk tes lama di berkas itu.
 
-- [ ] **Step 5: Typecheck, lint, suite penuh**
+Hasil: 21 lolos. **Tiga tes di luar plan**, karena inti Task 6 — memulihkan render
+cahaya sesudah crop — tidak punya satu pun tes di Step 1: urutan (cahaya dulu, baru
+filter+tinta), tidak dipanggil sama sekali saat sakelar mati, dan jalur "Asli".
+
+- [x] **Step 5: Typecheck, lint, suite penuh**
 
 Run: `npm run build && npm run lint && npm test`
 Expected: bersih. Node ±738 tes.
 
-- [ ] **Step 6: Commit**
+Hasil: bersih. Node **752 lolos / 50 berkas**, browser **127 lolos / 13 berkas**.
+
+Satu jalan `npm test` sempat melaporkan 1 gagal tanpa sempat tercatat namanya, lalu
+**tidak bisa diulang** dalam 3 jalan `npm test`, 2 jalan node, dan 2 jalan browser
+sesudahnya. Dicatat di sini apa adanya, bukan disimpulkan sebagai flake yang aman —
+kalau muncul lagi di Task 7 atau 8, ini titik awalnya.
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/documentEditing.ts src/lib/documentEditing.test.ts

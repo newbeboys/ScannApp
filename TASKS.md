@@ -856,9 +856,17 @@ Keputusan desain yang sudah diambil saat brainstorm:
   **Selesai 30 Agustus 2026** di `src/lib/enhance.ts` (murni matematika, tanpa DOM,
   suite node) dan `enhancePage()` di `src/lib/imageEditor.ts` (sisi kanvas, suite
   browser).
-- [ ] **Batch dengan `signal`, bukan on-demand.** `applyDocumentFilter` yang ada
+- [x] **Batch dengan `signal`, bukan on-demand.** `applyDocumentFilter` yang ada
   punya `onProgress` tapi **tidak punya pembatalan**; enhance harus punya, karena
   Basic mentok 20 halaman tapi **Pro tidak terbatas**.
+
+  **Selesai 30 Agustus 2026** — `applyDocumentEnhance()` di `scanStorage.ts`, dengan
+  `applyPageEnhance()` sebagai pendampingnya untuk satu halaman sesudah crop/rotate.
+  Signal diperiksa **antar halaman**, tidak pernah di tengah satu halaman: berhenti
+  di tengah render hanya menyisakan berkas separuh tulis. Jalan yang dibatalkan
+  menyimpan yang sudah jadi **dan** tetap mencatat sakelar yang diminta user —
+  sakelar merekam niat, berkasnya merekam sejauh mana. Jalan kedua melewati halaman
+  yang sudah benar, jadi melanjutkan itu murah. Sambungan UI-nya menyusul.
 - [x] **Ukur sebelum merancang UI progres.** `enhancePage()` dulu, ukur di Chromium
   pada halaman 12 MP sungguhan, kalikan 4 untuk mid-range. **Kalau proyeksi 20 halaman
   melewati ±30 detik, rancangannya berubah** (resolusi kerja lebih kecil, atau hanya

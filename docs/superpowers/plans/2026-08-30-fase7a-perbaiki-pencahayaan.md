@@ -1254,7 +1254,7 @@ EOF
 
   Task 6 memanggil keduanya; Task 7 memakai `EnhanceOutcome` lewat `describeEnhanceOutcome`.
 
-- [ ] **Step 1: Tulis tesnya dulu — `src/lib/scanStorageEnhance.test.ts`**
+- [x] **Step 1: Tulis tesnya dulu — `src/lib/scanStorageEnhance.test.ts`**
 
 ```ts
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -1559,12 +1559,14 @@ describe('applyPageEnhance', () => {
 })
 ```
 
-- [ ] **Step 2: Jalankan, pastikan gagal**
+- [x] **Step 2: Jalankan, pastikan gagal**
 
 Run: `npm run test:node -- scanStorageEnhance`
 Expected: FAIL — `applyDocumentEnhance is not a function`.
 
-- [ ] **Step 3: Ubah `src/lib/scanStorage.ts`**
+Hasil: 14 gagal / 14, persis sebab itu.
+
+- [x] **Step 3: Ubah `src/lib/scanStorage.ts`**
 
 **3a.** `derivedPath` menerima suffix baru:
 
@@ -1810,17 +1812,32 @@ export async function applyPageEnhance(
 
 **3g.** Import `enhanceSource` di blok import `scanIndexMigration` (kalau Task 4 Step 4 belum menambahkannya).
 
-- [ ] **Step 4: Jalankan tesnya sampai hijau**
+- [x] **Step 4: Jalankan tesnya sampai hijau**
 
 Run: `npm run test:node -- scanStorage`
 Expected: PASS — berkas baru hijau (16 tes), **dan** `scanStorageFilter.test.ts` serta `scanStorageSave.test.ts` tetap hijau. Kalau ada yang merah di dua berkas lama itu, baca dulu apa yang berubah — jangan longgarkan asersinya.
 
-- [ ] **Step 5: Typecheck, lint, suite penuh**
+Hasil: 78 lolos di tiga berkas `scanStorage*`, dua berkas lama tidak berubah sama
+sekali. Berkas barunya 14 tes, bukan 16 — hitungan di plan cuma perkiraan.
+
+**Satu tes ke-15 ditambahkan di luar plan, karena menemukan bug sungguhan.**
+Di jalur mematikan sakelar, `clearPageEnhance` menghapus berkasnya **sebelum**
+filter di bawahnya dirender ulang. Kalau render itu gagal, blok `catch` versi plan
+mendorong `page` apa adanya — lengkap dengan `enhanced` yang berkasnya sudah tidak
+ada. Dokumen yang dikembalikan lalu menampilkan halaman rusak sampai index dibaca
+ulang (pembacaan berikutnya memang membuangnya sendiri: sakelarnya mati, dan aturan
+pasangan di migrasi Task 4 melepasnya). Diperbaiki jadi
+`pages.push(enabled ? page : await clearPageEnhance(page))` — di jalur menyalakan,
+`page` apa adanya tetap benar.
+
+- [x] **Step 5: Typecheck, lint, suite penuh**
 
 Run: `npm run build && npm run lint && npm test`
 Expected: bersih. Node ±731 tes.
 
-- [ ] **Step 6: Commit**
+Hasil: bersih. Node **742 lolos / 50 berkas**, browser **127 lolos / 13 berkas**.
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/scanStorage.ts src/lib/scanStorageEnhance.test.ts

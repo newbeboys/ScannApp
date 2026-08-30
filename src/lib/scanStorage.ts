@@ -8,6 +8,7 @@ import {
   CURRENT_SCHEMA_VERSION,
   annotationSource,
   effectiveFilter,
+  enhanceSource,
   filterSource,
   migrateScanIndex,
   type DocumentFilter,
@@ -371,7 +372,10 @@ export async function readPageBlob(pagePath: string): Promise<Blob> {
  * the other's. `original` is assigned once, at creation, and never changes,
  * so it stays a safe, unique key for the document's lifetime.
  */
-function derivedPath(original: string, suffix: 'edited' | 'filtered' | 'annotated'): string {
+function derivedPath(
+  original: string,
+  suffix: 'edited' | 'enhanced' | 'filtered' | 'annotated',
+): string {
   return original.replace(/\.jpg$/i, `-${suffix}.jpg`)
 }
 
@@ -412,9 +416,10 @@ export async function savePageEdit(
     data: await blobToBase64(edited),
   })
 
-  // Both derived files were made from the *old* geometry, so both are now
-  // wrong — they would show the page at its pre-crop shape. Dropped here; the
-  // caller re-renders them from the new edit (see documentEditing.editPage).
+  // Every derived file was made from the *old* geometry, so every one of them
+  // is now wrong — they would show the page at its pre-crop shape. Dropped
+  // here; the caller re-renders them from the new edit (see
+  // documentEditing.editPage).
   //
   // The marks themselves survive: they are coordinates, and the caller remaps
   // them onto the new geometry rather than asking the user to draw again.
@@ -425,7 +430,8 @@ export async function savePageEdit(
   // cropped page gives a better result than remapping the old one. Left in
   // place it would be *invisibly* wrong — the layer nobody sees, quietly
   // sending search and copy-paste to the wrong part of the page.
-  const { filtered, annotated, text, ...rest } = page
+  const { enhanced, filtered, annotated, text, ...rest } = page
+  await discard(enhanced)
   await discard(filtered)
   await discard(annotated)
   await discard(text)
@@ -447,13 +453,13 @@ export async function resetPageEdit(
   const page = doc.pages[pageIndex]
   if (!page?.edited) return doc
 
-  // The filter render and the recognised text were both derived from the
-  // geometry that is about to be thrown away, so both are now wrong and are
-  // deleted here — but the filter is *not* regenerated: that needs a canvas,
-  // which this module deliberately has no access to.
+  // The lighting render, the filter render and the recognised text were all
+  // derived from the geometry that is about to be thrown away, so all three are
+  // now wrong and are deleted here — but they are *not* regenerated: that
+  // needs a canvas, which this module deliberately has no access to.
   // documentEditing.revertPage does that step right after calling this, using
   // the page this function returns.
-  for (const path of [page.edited, page.filtered, page.annotated, page.text]) {
+  for (const path of [page.edited, page.enhanced, page.filtered, page.annotated, page.text]) {
     await discard(path)
   }
 
@@ -594,6 +600,41 @@ async function renderPageMarks(page: ScanPage, render: MarkRenderer): Promise<Sc
 }
 
 /**
+ * Renders one page's lighting fix and returns the new page entry, or `null`
+ * when the estimator declined it.
+ *
+ * Always from `enhanceSource` — geometry only. Reading the filter render here
+ * would mean estimating the light of a page that has already thrown its greys
+ * away, and reading its own previous output would compound the correction on
+ * every run.
+ */
+async function renderPageEnhance(
+  page: ScanPage,
+  render: EnhanceRenderer,
+): Promise<ScanPage | null> {
+  const rendered = await render(await readPageBlob(enhanceSource(page)))
+  if (!rendered) return null
+
+  const path = derivedPath(page.original, 'enhanced')
+  await Filesystem.writeFile({
+    path,
+    directory: Directory.Data,
+    data: await blobToBase64(rendered),
+  })
+  // The path is stable across re-renders, so any cached object URL is stale.
+  invalidateDisplayUri(path)
+
+  return { ...page, enhanced: path }
+}
+
+/** Drops a page's lighting render, so the chain falls back to its geometry. */
+async function clearPageEnhance(page: ScanPage): Promise<ScanPage> {
+  await discard(page.enhanced)
+  const { enhanced: _dropped, ...rest } = page
+  return rest
+}
+
+/**
  * Both derived files for one page, in the order they depend on each other.
  *
  * The ink is drawn onto the filter render, so the filter has to be settled
@@ -619,6 +660,28 @@ async function renderPageDerived(
  */
 export type FilterRenderer = (source: Blob, filter: DocumentFilter) => Promise<Blob>
 export type MarkRenderer = (source: Blob, marks: Mark[]) => Promise<Blob>
+
+/**
+ * Renders one page's lighting fix.
+ *
+ * `null` means the estimator declined the page — the light map could not be
+ * trusted, so the page is left exactly as it is. Not an error: the machine
+ * looked and said "not this one".
+ */
+export type EnhanceRenderer = (source: Blob) => Promise<Blob | null>
+
+export interface EnhanceOutcome {
+  /** Pages rendered — or cleared — on this run. */
+  changed: number
+  /** Pages already in the state asked for, so nothing was done to them. */
+  skipped: number
+  /** Pages the estimator declined. They keep whatever they had. */
+  unchanged: number
+  /** Pages whose render threw. The document keeps whatever it had. */
+  failed: number
+  /** True when the run stopped early because its signal was aborted. */
+  cancelled: boolean
+}
 
 /**
  * Sets the filter for the whole document and re-renders every page that is
@@ -663,6 +726,144 @@ export async function applyDocumentFilter(
   docs[docs.indexOf(doc)] = next
   await writeIndex(docs)
   return next
+}
+
+/**
+ * Turns "Perbaiki Pencahayaan" on or off for a whole document.
+ *
+ * Every tier — there is deliberately no tier parameter here and no tier check
+ * anywhere on this path (CLAUDE.md Bagian 6, keputusan Boss Ali 29 Agustus
+ * 2026). The Pro gate belongs to the TFLite version, if and when it exists.
+ *
+ * The filter and ink renderers come along because switching this stage changes
+ * what the filter render is *derived from*: `filterSource` reads the lighting
+ * render when there is one, so both files under it have to be rebuilt.
+ *
+ * Unlike `applyDocumentFilter`, this one can be cancelled. Filtering a document
+ * is seconds of work over at most a few dozen pages; this decodes and re-encodes
+ * every page at full resolution, and Pro has no page limit — without a way out,
+ * a sixty-page run leaves killing the app as the only option. The signal is
+ * checked between pages, never inside one: stopping mid-page would leave a
+ * half-written file.
+ *
+ * A cancelled run keeps what it finished and still records the switch the user
+ * asked for. The state that leaves is visible (the panel says "12 dari 20"),
+ * resumable (a second run skips the pages already in the right state), and
+ * lossless — `original` and `edited` are never touched here.
+ */
+export async function applyDocumentEnhance(
+  docId: string,
+  enabled: boolean,
+  renderEnhance: EnhanceRenderer,
+  renderFilter: FilterRenderer,
+  renderMarks: MarkRenderer,
+  options: {
+    onProgress?: (done: number, total: number) => void
+    signal?: AbortSignal
+  } = {},
+): Promise<{ document: LocalScanDocument; outcome: EnhanceOutcome }> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const next: LocalScanDocument = { ...doc, enhance: enabled ? true : undefined }
+  if (!enabled) delete next.enhance
+
+  const outcome: EnhanceOutcome = {
+    changed: 0,
+    skipped: 0,
+    unchanged: 0,
+    failed: 0,
+    cancelled: false,
+  }
+
+  const pages: ScanPage[] = []
+  for (const page of doc.pages) {
+    if (options.signal?.aborted) {
+      outcome.cancelled = true
+      break
+    }
+
+    if (enabled === Boolean(page.enhanced)) {
+      // Already in the state being asked for: on a resumed run this is most of
+      // the document, and skipping it is the whole point of resuming.
+      outcome.skipped++
+      pages.push(page)
+      options.onProgress?.(pages.length, doc.pages.length)
+      continue
+    }
+
+    try {
+      const settled = enabled
+        ? await renderPageEnhance(page, renderEnhance)
+        : await clearPageEnhance(page)
+
+      if (!settled) {
+        // Declined. Nothing under it changed, so nothing under it is re-rendered.
+        outcome.unchanged++
+        pages.push(page)
+      } else {
+        pages.push(
+          await renderPageDerived(
+            settled,
+            effectiveFilter(next, settled),
+            renderFilter,
+            renderMarks,
+          ),
+        )
+        outcome.changed++
+      }
+    } catch {
+      // The page keeps whatever it had, and the count is what the caller
+      // reports. Nineteen good pages beat one clean failure.
+      //
+      // On the way out it cannot keep quite everything: clearPageEnhance
+      // deletes the file before anything underneath is re-rendered, so holding
+      // on to the field would leave the index naming a file that is gone. The
+      // next read would drop it anyway — the switch is off, and the migration
+      // unpairs the two — so this only spares the caller a broken page in the
+      // meantime.
+      outcome.failed++
+      pages.push(enabled ? page : await clearPageEnhance(page))
+    }
+
+    options.onProgress?.(pages.length, doc.pages.length)
+  }
+
+  // Whatever the loop did not reach stays exactly as it was.
+  next.pages = [...pages, ...doc.pages.slice(pages.length)]
+  docs[docs.indexOf(doc)] = next
+  await writeIndex(docs)
+
+  return { document: next, outcome }
+}
+
+/**
+ * Rebuilds one page's lighting render, for the moment right after its geometry
+ * changed and `savePageEdit`/`resetPageEdit` threw the old one away.
+ *
+ * A no-op when the document's switch is off, so the caller can call it
+ * unconditionally. It deliberately does *not* re-render the filter or the ink:
+ * the caller does that next in one pass via `applyPageDerived`, and doing it
+ * here as well would render the ink twice over a 12 MP page.
+ */
+export async function applyPageEnhance(
+  docId: string,
+  pageIndex: number,
+  render: EnhanceRenderer,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const page = doc.pages[pageIndex]
+  if (!page) throw new Error('Halaman tidak ditemukan.')
+  if (!doc.enhance) return doc
+
+  doc.pages[pageIndex] = (await renderPageEnhance(page, render)) ?? (await clearPageEnhance(page))
+
+  await writeIndex(docs)
+  return doc
 }
 
 /**

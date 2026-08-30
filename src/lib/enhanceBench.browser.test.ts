@@ -105,4 +105,33 @@ describe('enhancePage cost on a 12 MP page', () => {
     // is the projection above, read by a human.
     expect(total).toBeLessThan(30_000)
   })
+
+  /**
+   * The same page at the sizes the export presets already cap to.
+   *
+   * Once the loop optimisation on 30 Agustus 2026 came up short of the gate, the
+   * only lever left was how many pixels the stage touches at all — and the
+   * export path already answers that question for itself: Standar caps the long
+   * edge at 2400 and Tinggi at 3200, so a lighting render capped the same way is
+   * invisible to everything but a Maksimal export. This measures what each cap
+   * would actually buy.
+   */
+  it('measures what capping the long edge would cost instead', async () => {
+    for (const [long, short] of [
+      [3200, 2400],
+      [2400, 1800],
+    ]) {
+      const page = await bigScan(long, short)
+
+      const started = performance.now()
+      const result = await enhancePage(page)
+      const ms = performance.now() - started
+
+      expect(result).not.toBeNull()
+      console.log(
+        `[bench] enhancePage ${long}x${short} — ${Math.round(ms)}ms — ` +
+          `proyeksi 20 halaman di mid-range: ${Math.round((ms * 4 * 20) / 1000)} detik`,
+      )
+    }
+  })
 })

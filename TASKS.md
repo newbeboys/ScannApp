@@ -886,6 +886,23 @@ Keputusan desain yang sudah diambil saat brainstorm:
   ±24 detik, dan koreksi seoptimal apa pun hari ini ±140 ms. Jadi sisa pilihannya
   memang menyentuh rancangan, bukan aritmetika.
 
+  **Biaya di dua resolusi lain, diukur di hari yang sama** (3 kali jalan tiap
+  ukuran) — angka untuk keputusan berikutnya, karena satu-satunya tuas yang
+  tersisa adalah berapa piksel yang disentuh tahap ini:
+
+  | ukuran halaman | per halaman | proyeksi 20 halaman |
+  |---|---|---|
+  | 3000×4000 (12 MP, apa adanya) | 397–543 ms | 32–43 detik |
+  | 3200×2400 (7,7 MP = preset Tinggi) | 259–405 ms | 21–32 detik |
+  | **2400×1800 (4,3 MP = preset Standar)** | **179–228 ms** | **14–18 detik** |
+
+  Yang membuat baris terakhir menarik: jalur ekspor **sudah** memampatkan ke
+  2400 px di preset Standar, dan cadangan cloud **selalu** Standar (`CLAUDE.md`
+  Bagian 6). Jadi membatasi sisi panjang hasil koreksi di 2400 px tidak terlihat
+  sama sekali di ekspor bawaan maupun cadangan — yang berkurang hanya ekspor
+  Tinggi & Maksimal, dan hanya selama sakelarnya menyala (`original` tidak pernah
+  disentuh, jadi mematikan sakelar mengembalikan resolusi penuh).
+
   **Satu jalan yang ditolak, dicatat supaya tidak dicoba lagi:** menghitung gain
   cuma di 16 simpul kisi lalu menginterpolasinya (tanpa langkah 4 piksel) memang
   paling cepat, tapi `target / cahaya` itu cembung — di tepi bayangan tajam

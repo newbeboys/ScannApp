@@ -1,4 +1,9 @@
-import { BASIC_COMPRESSION } from './exportLimits'
+import { HIGHLIGHTER_ALPHA, strokeWidth, type Mark } from './annotations'
+import { correctLighting, ENHANCED_EDGE, estimateLightGrid, WORK_EDGE } from './enhance'
+import { applyFilter } from './filters'
+import { readJpegSize } from './jpegSize'
+import type { DocumentFilter } from './scanIndexMigration'
+import { STANDARD_COMPRESSION, type CompressOptions } from './exportLimits'
 
 /** Crop area expressed as fractions of the source image (0..1), so it survives resizing. */
 export interface CropRect {
@@ -10,12 +15,36 @@ export interface CropRect {
 
 export type Rotation = 90 | 180 | 270
 
-export interface CompressOptions {
-  quality: number
-  maxEdgePx: number
-}
-
 const JPEG = 'image/jpeg'
+
+/**
+ * Quality for the files this module derives from a page — the filter render and
+ * the ink render.
+ *
+ * Higher than an ordinary edit because these are what the export and the cloud
+ * backup are built from, and JPEG artefacts around thresholded text compound
+ * badly through a second encode. Lower than the 0.95 it used to be: the file
+ * that comes out has to be base64-encoded, carried across the Capacitor bridge
+ * and written by Java, then read and decoded again to put it back on screen, so
+ * its size is paid for four times over on a phone. Measured in Chromium on a
+ * 3000x4200 scan-like page: 5.76 MB at 0.95 against 3.96 MB at 0.90 — 31% fewer
+ * bytes for a difference that does not survive being printed. Saving an
+ * annotated 12 MP page was the slowest thing in the editor (dilaporkan dari HP,
+ * 25 Agustus 2026).
+ *
+ * Technical, not a business number — see CLAUDE.md Bagian 6 on the compression
+ * presets; free to retune without asking.
+ */
+const DERIVED_QUALITY = 0.9
+
+/**
+ * How much of a file to read when only its header is wanted.
+ *
+ * The frame header sits within the first few hundred bytes of an ordinary JPEG,
+ * but a page carrying a large EXIF thumbnail can push it further back; 64 KB
+ * clears every scan this app produces while still being a slice, not a read.
+ */
+const HEADER_BYTES = 65_536
 
 /**
  * `from-image` makes the browser apply EXIF orientation while decoding, so
@@ -35,11 +64,16 @@ function draw(width: number, height: number): [HTMLCanvasElement, CanvasRenderin
   return [canvas, ctx]
 }
 
-function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+function toBlob(
+  canvas: HTMLCanvasElement,
+  quality: number,
+  mimeType: string = JPEG,
+): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error('Gagal mengubah gambar.'))),
-      JPEG,
+      mimeType,
+      // Ignored by the PNG encoder, which is lossless — harmless to pass.
       quality,
     )
   })
@@ -77,23 +111,267 @@ export async function cropImage(blob: Blob, rect: CropRect): Promise<Blob> {
 }
 
 /**
- * Single standard compression level for Basic (PRD Bagian 3): cap the long
- * edge and re-encode as JPEG. Pro gets a manual quality slider in Fase 6,
- * which is why the options are a parameter rather than baked in.
+ * Caps the long edge and re-encodes the page for export.
+ *
+ * Any of the four levels can arrive (`COMPRESSION_PRESETS`); the standard one
+ * is the default for callers that have no opinion. `mimeType` picks the encoder
+ * — PNG exports run this same resize and then encode losslessly.
  */
 export async function compressImage(
   blob: Blob,
-  options: CompressOptions = BASIC_COMPRESSION,
+  options: CompressOptions = STANDARD_COMPRESSION,
 ): Promise<Blob> {
-  const bitmap = await decode(blob)
+  const [canvas] = await scaledCanvas(blob, options.maxEdgePx)
+
+  return toBlob(canvas, options.quality, options.mimeType)
+}
+
+/**
+ * Both encodings of one page from a single decode.
+ *
+ * The export sheet needs a JPEG figure and a PNG figure side by side. Calling
+ * `compressImage` twice decodes and redraws the page twice for pixels that are
+ * identical either way — about 270ms of waste per estimate on a 12MP scan in
+ * desktop Chromium, and a good deal more on a phone (diukur 24 Agustus 2026).
+ */
+export async function compressImagePair(
+  blob: Blob,
+  options: CompressOptions,
+): Promise<{ jpeg: Blob; png: Blob }> {
+  const [canvas] = await scaledCanvas(blob, options.maxEdgePx)
+
+  return {
+    jpeg: await toBlob(canvas, options.quality, JPEG),
+    png: await toBlob(canvas, options.quality, 'image/png'),
+  }
+}
+
+/**
+ * How to resample a page on the way down.
+ *
+ * Not a rounding error: getting a 12 MP JPEG into a 2400px buffer costs
+ * 305-357 ms with the high-quality resampler and 135-163 ms with plain bilinear
+ * (Chromium, diukur 30 Agustus 2026), and that gap — not the decode, which is
+ * about 65 ms — was what kept Perbaiki Pencahayaan outside its twenty-page
+ * budget. Where the resize happens makes no difference; asking for it during
+ * the decode costs the same as drawing it onto a smaller canvas.
+ *
+ * Bilinear reads a 2x2 neighbourhood, so it still sees every source pixel while
+ * the reduction stays under half, and starts skipping them past that. Measured
+ * against the high-quality result on a page of body text and hairlines: 1.34
+ * levels of mean difference at 0.6x, 3.43 at 0.45x, 6.72 at 0.3x — where whole
+ * hairlines drop out. So: cheap above half size, careful below it.
+ */
+function resamplerFor(longEdge: number, maxEdgePx: number): ImageSmoothingQuality {
+  return longEdge < maxEdgePx * 2 ? 'low' : 'high'
+}
+
+/**
+ * Decodes a page, asking the decoder to shrink it on the way out where it can.
+ *
+ * `createImageBitmap` can resize during decode, which is far cheaper than
+ * decoding a 12 MP scan in full and throwing three quarters of it away on a
+ * canvas a moment later — that full decode is the bulk of what an export spends
+ * per page, and a ten-document batch pays it ten times (dilaporkan dari HP,
+ * 25 Agustus 2026).
+ *
+ * Only *one* dimension is ever requested, and the aspect ratio is left to the
+ * browser. Passing both would silently distort a page tagged with an EXIF
+ * rotation: `imageOrientation: 'from-image'` swaps its axes while the size read
+ * from the header does not, so the two would disagree about which number is the
+ * width. With one dimension the worst that rotation can do is cap the short edge
+ * instead of the long one — the result is still smaller than the original, still
+ * correctly shaped, and `scaledCanvas` finishes the job from there.
+ */
+async function decodeCapped(blob: Blob, maxEdgePx: number): Promise<ImageBitmap> {
+  let stored: { width: number; height: number } | null = null
+  try {
+    stored = readJpegSize(new Uint8Array(await blob.slice(0, HEADER_BYTES).arrayBuffer()))
+  } catch {
+    // Unreadable header — a PNG, or a slice that failed. Plain decode below.
+  }
+
+  if (!stored || Math.max(stored.width, stored.height) <= maxEdgePx) return decode(blob)
+
+  try {
+    return await createImageBitmap(blob, {
+      imageOrientation: 'from-image',
+      resizeQuality: resamplerFor(Math.max(stored.width, stored.height), maxEdgePx),
+      ...(stored.width >= stored.height
+        ? { resizeWidth: maxEdgePx }
+        : { resizeHeight: maxEdgePx }),
+    })
+  } catch {
+    // Older WebViews ignore or reject the resize options rather than falling
+    // back themselves. A full decode is slower, not wrong.
+    return decode(blob)
+  }
+}
+
+/**
+ * Decodes a page and redraws it no larger than `maxEdgePx` on its long side.
+ *
+ * The scale below is still computed from the bitmap that came back, not from
+ * the size asked for: `decodeCapped` is allowed to hand back something larger
+ * than the cap when EXIF rotation got in the way, and this is what finishes it.
+ *
+ * The context comes back beside the canvas for the sake of `enhancePage`, which
+ * reads the pixels again instead of encoding them straight away. Callers that
+ * only encode destructure the canvas and ignore it.
+ */
+async function scaledCanvas(
+  blob: Blob,
+  maxEdgePx: number,
+): Promise<[HTMLCanvasElement, CanvasRenderingContext2D]> {
+  const bitmap = await decodeCapped(blob, maxEdgePx)
   const longEdge = Math.max(bitmap.width, bitmap.height)
-  const scale = longEdge > options.maxEdgePx ? options.maxEdgePx / longEdge : 1
+  const scale = longEdge > maxEdgePx ? maxEdgePx / longEdge : 1
 
   const [canvas, ctx] = draw(bitmap.width * scale, bitmap.height * scale)
+
+  // Matters most on the WebViews that reject the resize options above: there
+  // the whole reduction happens here, and it would cost triple at 'high'.
+  ctx.imageSmoothingQuality = resamplerFor(longEdge, maxEdgePx)
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
   bitmap.close()
 
-  return toBlob(canvas, options.quality)
+  return [canvas, ctx]
+}
+
+/**
+ * Flattens the lighting across a page — "Perbaiki Pencahayaan" (Fase 7A).
+ *
+ * A stage of its own, not a sixth filter: it runs *before* whichever filter the
+ * document carries, so the two can be used together. That combination is where
+ * the value is — Hitam-Putih on a shadowed page is what produces the black
+ * blotches this removes.
+ *
+ * Only the canvas work lives here. The maths is in `enhance.ts`, kept free of
+ * the DOM so it can be tested against known pixels under Node.
+ *
+ * `null` means the light map could not be trusted — see `estimateLightGrid`.
+ * The caller must then leave the page exactly as it was; a page divided by a
+ * guessed light map is worse than an untouched one.
+ *
+ * What comes back is never longer than `ENHANCED_EDGE` on its long side, and the
+ * cap is applied during the decode rather than after the correction: correcting
+ * twelve million pixels and then throwing three quarters of them away would pay
+ * the whole cost first.
+ *
+ * Deterministic maths, no model. The name "AI Enhance" is reserved for the
+ * TFLite version, which will replace the body of this function and nothing
+ * else (CLAUDE.md Bagian 6).
+ */
+export async function enhancePage(blob: Blob): Promise<Blob | null> {
+  const [canvas, ctx] = await scaledCanvas(blob, ENHANCED_EDGE)
+
+  // Estimated from a small copy of the capped page, corrected at that page's
+  // own size. Lighting is a low-frequency signal: 65k pixels answer the
+  // question as well as several million, and the map is 256 numbers either way
+  // (design doc, Bagian 4.1).
+  const scale = Math.min(1, WORK_EDGE / Math.max(canvas.width, canvas.height))
+  const [work, workCtx] = draw(canvas.width * scale, canvas.height * scale)
+  workCtx.drawImage(canvas, 0, 0, work.width, work.height)
+
+  const sample = workCtx.getImageData(0, 0, work.width, work.height)
+  const grid = estimateLightGrid(sample.data, work.width, work.height)
+  if (!grid) return null
+
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  correctLighting(image.data, canvas.width, canvas.height, grid)
+  ctx.putImageData(image, 0, 0)
+
+  return toBlob(canvas, DERIVED_QUALITY)
+}
+
+/**
+ * Renders one of the document filters onto a page.
+ *
+ * Only the canvas work lives here — the pixel maths is in `filters.ts`, kept
+ * free of the DOM so it can be tested against known pixels under Node.
+ *
+ * Encoded at a higher quality than an ordinary edit — see `DERIVED_QUALITY`.
+ */
+export async function filterImage(blob: Blob, filter: DocumentFilter): Promise<Blob> {
+  const bitmap = await decode(blob)
+  const [canvas, ctx] = draw(bitmap.width, bitmap.height)
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close()
+
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  applyFilter(filter, image.data, canvas.width, canvas.height)
+  ctx.putImageData(image, 0, 0)
+
+  return toBlob(canvas, DERIVED_QUALITY)
+}
+
+/**
+ * Draws the user's ink and signatures onto a page.
+ *
+ * Marks are stored as data, not baked into the page (design doc Bagian 2.1),
+ * so this runs again from scratch every time the page underneath is re-derived
+ * — after a crop, after a filter change. Nothing here reads the previous
+ * render, which is what keeps ink from compounding.
+ *
+ * Signature bitmaps are handed in already decoded, keyed by the path the mark
+ * refers to: the same signature is usually stamped on several pages, and this
+ * module has no way to read a file.
+ *
+ * Encoded at the same quality as `filterImage`, and for the same reason: this
+ * file is what the export and the cloud backup are built from — see
+ * `DERIVED_QUALITY`.
+ */
+export async function renderMarks(
+  blob: Blob,
+  marks: Mark[],
+  signatures: Map<string, ImageBitmap>,
+): Promise<Blob> {
+  const bitmap = await decode(blob)
+  const [canvas, ctx] = draw(bitmap.width, bitmap.height)
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close()
+
+  // Widths are fractions of the long edge, so a stroke keeps its weight
+  // whether the page is portrait or landscape.
+  const longEdge = Math.max(canvas.width, canvas.height)
+
+  for (const mark of marks) {
+    if (mark.kind === 'signature') {
+      const signature = signatures.get(mark.source)
+      if (!signature) continue
+      ctx.drawImage(
+        signature,
+        mark.x * canvas.width,
+        mark.y * canvas.height,
+        mark.width * canvas.width,
+        mark.height * canvas.height,
+      )
+      continue
+    }
+
+    ctx.save()
+    ctx.strokeStyle = mark.color
+    ctx.lineWidth = Math.max(1, strokeWidth(mark) * longEdge)
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    if (mark.tool === 'highlighter') {
+      // `multiply` rather than plain alpha: overlapping passes of a real
+      // highlighter darken the ink, they do not paint over it, and text under
+      // a plain translucent layer washes out instead of showing through.
+      ctx.globalAlpha = HIGHLIGHTER_ALPHA
+      ctx.globalCompositeOperation = 'multiply'
+    }
+
+    ctx.beginPath()
+    ctx.moveTo(mark.points[0] * canvas.width, mark.points[1] * canvas.height)
+    for (let i = 2; i < mark.points.length; i += 2) {
+      ctx.lineTo(mark.points[i] * canvas.width, mark.points[i + 1] * canvas.height)
+    }
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  return toBlob(canvas, DERIVED_QUALITY)
 }
 
 /** Natural pixel size of an image, used by the crop overlay to keep its aspect ratio honest. */

@@ -130,7 +130,7 @@ User A share referral_code miliknya → User B daftar pakai kode itu
 | Supabase project terpisah dari FinanceApp | Isolasi kuota database & keamanan RLS antar dua produk berbeda |
 | R2 dipilih atas Appwrite/Firebase untuk storage | Kuota lebih besar (10GB vs 2GB Appwrite), nol biaya egress, riwayat harga lebih stabil |
 | Signed URL langsung dari Edge Function, tanpa Cloudflare Worker | Lebih sederhana untuk versi pertama, cukup untuk kebutuhan saat ini |
-| AI Enhance wajib on-device (TFLite), bukan cloud API | Cloud API "gratis" rawan berubah kebijakan/kena biaya begitu user bertambah |
+| Perbaikan gambar on-device (klasik dulu, TFLite menyusul), bukan cloud API | Cloud API "gratis" rawan berubah kebijakan/kena biaya begitu user bertambah. Versi klasik memenuhi alasan yang sama dengan lebih kuat: nol biaya, nol jaringan, nol tambahan bobot APK |
 
 ---
 

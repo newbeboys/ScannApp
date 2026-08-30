@@ -15,6 +15,21 @@
   );
 }
 
+/*
+  Dipasang `useScrollLock` selama ada lembar/popup terbuka.
+
+  Backdrop `position: fixed` menutupi layar, tapi ia tidak memiliki gestur di
+  atasnya: jari yang menggeser di situ tetap menggulir wadah gulir terdekat,
+  jadi daftar dokumen ikut bergeser di belakang lembar yang terbuka (dilaporkan
+  dari HP, 25 Agustus 2026). Kedua wadah gulirnya disebut di sini —
+  `.app__body` di layar tab, dan viewport itu sendiri di layar alur penuh yang
+  menggulir `body`.
+*/
+body.scroll-locked,
+body.scroll-locked .app__body {
+  overflow: hidden;
+}
+
 .screen {
   padding: calc(20px + env(safe-area-inset-top, 0px)) 20px 24px;
   display: flex;
@@ -381,10 +396,103 @@
   margin-top: 2px;
 }
 
+/* ---------- dokumen yang masih di cloud ---------- */
+
+/*
+  Sisi putus-putus & tanpa bayangan: baris ini milik akun, tapi berkasnya belum
+  ada di HP — jadi sengaja tidak terlihat "padat" seperti dokumen lokal.
+*/
+.doc-tile--cloud,
+.doc-row--cloud {
+  background: var(--chip);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+/* Tidak ada thumbnail yang bisa ditampilkan sampai halamannya diunduh. */
+.doc-tile__preview--cloud,
+.doc-row__preview--cloud {
+  display: grid;
+  place-items: center;
+  background: var(--acc-soft);
+  color: var(--acc);
+}
+
+.doc-tile--cloud:disabled,
+.doc-row--cloud .doc-row__open:disabled,
+.doc-row--cloud .icon-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/*
+  Menjawab pertanyaan yang dulu ditimbulkan diam-diam oleh daftar kosong:
+  dokumennya tidak hilang, cuma belum ada di HP ini.
+*/
+.cloud-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--acc-soft);
+  border: 1px solid var(--acc-edge);
+}
+
+.cloud-note__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--chip);
+  color: var(--acc);
+  flex-shrink: 0;
+}
+
+.cloud-note__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cloud-note__body h3 {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cloud-note__body p {
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-top: 2px;
+}
+
+.cloud-note__action {
+  flex-shrink: 0;
+  padding: 10px 13px;
+  border: none;
+  border-radius: 12px;
+  background: var(--acc);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cloud-note__action:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.cloud-note__action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ---------- review flow ---------- */
 
+/* Sebuah <button>: mengetuknya membuka pratinjau layar penuh. */
 .review-stage {
   flex: 1 1 auto;
+  width: 100%;
   min-height: 260px;
   display: grid;
   place-items: center;
@@ -392,6 +500,13 @@
   border-radius: 20px;
   background: var(--chip);
   border: 1px solid var(--chip-border);
+  font: inherit;
+  color: inherit;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.review-stage:active {
+  transform: scale(0.99);
 }
 
 .review-stage .page-image {
@@ -615,6 +730,18 @@
   padding: 15px;
   font-size: 16px;
   font-weight: 700;
+  /*
+    Warna dasar, bukan cuma bentuk.
+
+    Tanpa dua baris ini sebuah `.button` polos yang tidak duduk di dalam
+    `.editor-actions`/`.viewer__actions`/`.split-entry` jatuh ke tombol bawaan
+    browser: kotak putih dengan teks gelap, tidak terbaca di tema gelap. Itulah
+    tombol "Hentikan" di lembar Ekspor Banyak Dokumen (terlihat di tangkapan
+    layar HP, 25 Agustus 2026). Varian `--primary`, `--danger` dan `--upgrade`
+    menetapkan latar & warnanya sendiri, jadi tidak ada yang berubah di sana.
+  */
+  background: var(--chip);
+  color: var(--fg);
   transition:
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 160ms ease;
@@ -745,13 +872,35 @@
   color: #fff;
   background: rgba(20, 24, 34, 0.94);
   padding: 11px 18px;
-  border-radius: 999px;
+  /*
+    20px, bukan 999px: dengan tinggi satu baris (~40px) hasilnya sama persis
+    dengan pill yang lama, tapi tidak berubah jadi kapsul aneh saat pesannya
+    memakan dua-tiga baris.
+  */
+  border-radius: 20px;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
   animation: toast-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
-  white-space: nowrap;
+  /*
+    Dulu `nowrap` + `text-overflow: ellipsis`. Itu memotong justru pesan yang
+    paling perlu dibaca: kegagalan ekspor sampai ke user sebagai
+    "'writeFile' failed with: /storage/emulated/0/Documen..." — nama berkas dan
+    sebab aslinya hilang persis di tempat kalimatnya mulai berguna
+    (dilaporkan dari HP, 26 Agustus 2026).
+  */
+  white-space: pre-wrap;
+  /* Path panjang tanpa spasi harus boleh patah, atau ia melebar melewati layar. */
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.4;
   max-width: 90vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /*
+    Membungkus tanpa batas tinggi cuma memindahkan masalahnya: toast ini
+    dijangkarkan dari bawah, jadi pesan native yang panjang bisa tumbuh
+    melewati tepi atas layar — paling parah di layar pendek/landscape, dan
+    bagian yang kepotong justru bagian awal kalimatnya.
+  */
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 @keyframes toast-in {
@@ -770,9 +919,24 @@
 
 /* ---------- editor ---------- */
 
+/*
+  Sized from the page's own aspect ratio, but never taller than `--stage-max`.
+
+  Capping the width rather than the height is what keeps the ratio exact: the
+  crop overlay works in 0..1 coordinates and trusts this box to match the
+  image, so letterboxing inside a mis-shaped frame would put every corner
+  handle in the wrong place. A `max-height` would do exactly that.
+
+  Without the cap a portrait page ran off the bottom of the screen and pushed
+  the toolbar out of reach, while a landscape one sat comfortably — the two
+  looked like different screens (dilaporkan dari HP, 24 Agustus 2026).
+*/
 .editor-stage {
+  --stage-max: 46vh;
   position: relative;
-  width: 100%;
+  align-self: center;
+  width: min(100%, calc(var(--stage-max) * var(--page-aspect, 0.7071)));
+  aspect-ratio: var(--page-aspect, 0.7071);
   border-radius: 18px;
   overflow: hidden;
   background: var(--chip);
@@ -780,11 +944,16 @@
   touch-action: none;
 }
 
+/* Cropping needs the detail, and hides the tool rows that compete for height. */
+.editor-stage--crop {
+  --stage-max: 58vh;
+}
+
 .editor-image {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: fill;
+  object-fit: contain;
 }
 
 .editor-actions {
@@ -971,6 +1140,8 @@
   align-items: flex-end;
   justify-content: center;
   animation: fade-in 180ms ease;
+  /* Pelengkap kunci di body: gestur yang mulai di sini tidak merambat keluar. */
+  overscroll-behavior: contain;
 }
 
 @keyframes fade-in {
@@ -979,10 +1150,16 @@
   }
 }
 
+/*
+  Opaque, unlike the cards. `--surface` is 5% white on the dark themes, which
+  is right for something resting on the page but wrong for a sheet: its own
+  backdrop is translucent too, so the live document read straight through the
+  text (dilaporkan dari HP, 24 Agustus 2026).
+*/
 .sheet {
   width: 100%;
   max-width: 560px;
-  background: var(--surface);
+  background: var(--surface-solid);
   border: 1px solid var(--chip-border);
   border-bottom: none;
   border-radius: 22px 22px 0 0;
@@ -992,6 +1169,15 @@
   gap: 12px;
   box-shadow: var(--shadow);
   animation: sheet-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  /*
+    Halaman di belakang dibekukan selama lembar ini terbuka, jadi lembarnya
+    sendiri harus bisa mencapai tombolnya di layar pendek — lembar Ekspor
+    dengan dua perkiraan ukuran dan baris progres lebih tinggi dari
+    kelihatannya.
+  */
+  max-height: 88vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @keyframes sheet-in {
@@ -1064,6 +1250,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .format-option__text strong {
@@ -1074,6 +1261,141 @@
 .format-option__text small {
   font-size: 12px;
   color: var(--fg-dim);
+}
+
+/*
+  Estimated size, right-aligned so the three formats form a column the eye can
+  compare down — which is the whole point of showing PNG's number rather than
+  warning about it in a sentence.
+*/
+.format-option__size {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- kontrol kualitas ekspor (Fase 6) ---------- */
+
+.export-quality {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--chip-border);
+  background: var(--chip);
+}
+
+.export-quality__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.export-quality__value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--acc);
+}
+
+.export-quality__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  margin: 0;
+}
+
+/*
+  `--fill` comes from the element's inline style. A uniformly grey track reads
+  as a setting that is switched off rather than one resting at a level.
+*/
+.export-quality__slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--acc) 0 var(--fill, 0%),
+    var(--chip-border) var(--fill, 0%) 100%
+  );
+}
+
+.export-quality__slider:disabled::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    var(--fg-dim) 0 var(--fill, 0%),
+    var(--chip-border) var(--fill, 0%) 100%
+  );
+}
+
+.export-quality__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--acc);
+  border: 3px solid var(--surface);
+  box-shadow: 0 2px 6px rgba(20, 34, 70, 0.28);
+}
+
+.export-quality__slider:disabled::-webkit-slider-thumb {
+  background: var(--fg-dim);
+}
+
+.export-quality__slider:disabled {
+  opacity: 0.7;
+}
+
+.export-quality__ticks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  font-size: 11px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+.export-quality__tick:first-child {
+  text-align: left;
+}
+
+.export-quality__tick:last-child {
+  text-align: right;
+}
+
+.export-quality__tick--on {
+  color: var(--acc);
+  font-weight: 700;
+}
+
+.export-quality__hint,
+.sheet-field__hint {
+  font-size: 12px;
+  color: var(--fg-dim);
+  line-height: 1.45;
+}
+
+/*
+  Satu baris kontrol di dalam lembar: label, kontrolnya, lalu keterangan.
+  Dipakai bersama oleh sakelar Tujuan dan sakelar Format supaya dua kontrol
+  yang bertumpuk tidak berdiri tanpa nama.
+*/
+.sheet-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-field__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
 }
 
 /* ---------- merge ---------- */
@@ -1312,4 +1634,839 @@
 .upgrade-row {
   color: var(--upgrade);
   font-weight: 700;
+}
+
+/* ---------- filter dokumen & urutkan halaman (Pro, Fase 6) ---------- */
+
+.filter-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/*
+  Cakupan dipisah dari daftar filternya supaya jelas: chip yang sama berarti
+  dua hal berbeda tergantung tombol mana yang aktif di sini.
+*/
+/*
+  Dipakai dua tempat: cakupan filter di editor, dan pilihan format di lembar
+  Ekspor Banyak Dokumen. Selektornya digabung, bukan disalin — dua salinan
+  aturan yang sama pasti berbeda cepat atau lambat.
+*/
+.filter-scope,
+.format-switch,
+.enhance-switch {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+}
+
+.filter-scope__option,
+.format-switch__option,
+.enhance-switch__option {
+  flex: 1 1 0;
+  padding: 9px 8px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--fg-dim);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.filter-scope__option--active,
+.format-switch__option--active,
+.enhance-switch__option--active {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+}
+
+.filter-scope__option:disabled,
+.format-switch__option:disabled,
+.enhance-switch__option:disabled {
+  opacity: 0.6;
+}
+
+/* Bisa digulir mendatar: enam pilihan tidak muat di layar HP sempit. */
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 6px;
+  scrollbar-width: none;
+}
+
+.filter-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--chip-border);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.filter-chip:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.filter-chip--active {
+  border-color: var(--acc);
+  background: var(--acc-soft);
+  color: var(--acc);
+}
+
+.filter-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.filter-progress {
+  font-size: 12px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+/* Satu kalimat penjelas di atas sakelarnya: tahap ini tidak menggantikan filter. */
+.enhance-note {
+  font-size: 13px;
+  color: var(--fg-dim);
+  line-height: 1.5;
+}
+
+.reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.reorder__hint {
+  font-size: 12px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+/* ---------- pratinjau dokumen (layar penuh) ---------- */
+
+/*
+  Latar tinta pekat, bukan gradien milik tema.
+
+  Halaman hasil pindai hampir selalu kertas putih: di atas latar terang,
+  tepinya lenyap dan mata tidak punya pegangan sama sekali. Nilainya diambil
+  dari tinta yang sudah dipakai `.sheet-backdrop`, jadi tidak ada warna baru
+  yang masuk ke palet (CLAUDE.md 9.2) — dan sengaja tidak ikut berganti antar
+  tema, karena yang sedang ditonton adalah dokumennya, bukan aplikasinya.
+*/
+/*
+  z-index sengaja di BAWAH toast (20) dan lembar bawah (30).
+
+  Pratinjau memang menutupi seluruh layar, tapi ia tidak pernah tampil
+  bersamaan dengan bottom nav (10) — sedangkan lembar Ekspor dan toast justru
+  dibuka DARI dalamnya. Dengan 40, menekan "Ekspor" di bilah bawah pratinjau
+  terlihat seolah tidak terjadi apa-apa: lembarnya benar-benar terbuka, hanya
+  saja tergambar di belakang latar tinta yang solid.
+*/
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  background: #080a12;
+  color: #f2f5fb;
+  overscroll-behavior: contain;
+  animation: fade-in 200ms ease;
+}
+
+.viewer__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition:
+    opacity 220ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.viewer__bar--top {
+  top: 0;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 20px;
+  background: linear-gradient(to bottom, rgba(8, 10, 18, 0.92), rgba(8, 10, 18, 0));
+}
+
+.viewer__bar--bottom {
+  bottom: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 26px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgba(8, 10, 18, 0.94), rgba(8, 10, 18, 0));
+}
+
+/* Ketuk sekali untuk menyingkirkan seluruh perkakas dari pandangan. */
+.viewer--immersive .viewer__bar,
+.viewer--immersive .viewer__step {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.viewer--immersive .viewer__bar--top {
+  transform: translateY(-10px);
+}
+
+.viewer--immersive .viewer__bar--bottom {
+  transform: translateY(10px);
+}
+
+.viewer__icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2f5fb;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.viewer__icon:active {
+  transform: scale(0.94);
+}
+
+.viewer__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer__count {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.66);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+  `touch-action: none` bukan kehati-hatian: seluruh gestur di sini —geser antar
+  halaman, cubit, geser saat diperbesar— digerakkan sendiri lewat pointer
+  event. Kalau WebView masih boleh menggulir atau memperbesar sendiri, ia akan
+  merebut jari di tengah gestur dan halamannya berhenti mengikuti.
+*/
+.viewer__stage {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.viewer__track {
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+
+/* Mengikuti jari saat digeser; meluncur sendiri setelah dilepas. */
+.viewer__track:not(.viewer__track--dragging) {
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+  Ruang tetap untuk kedua bilah, juga saat bilahnya disembunyikan. Kalau
+  padding-nya ikut berubah, tiap ketukan memaksa tata letak ulang gambar 12 MP
+  — dan halamannya melompat-lompat besar-kecil hanya karena perkakasnya lewat.
+*/
+.viewer__slide {
+  flex: 0 0 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: calc(62px + env(safe-area-inset-top, 0px)) 12px
+    calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+.viewer__image {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 5px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* Hanya saat tidak ada jari di layar — lihat catatan `isTouching`. */
+.viewer__image--settling {
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.viewer__placeholder {
+  width: 62%;
+  aspect-ratio: 1 / 1.4142;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  animation: viewer-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes viewer-pulse {
+  50% {
+    background: rgba(255, 255, 255, 0.11);
+  }
+}
+
+.viewer__step {
+  position: absolute;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 10, 18, 0.55);
+  backdrop-filter: blur(6px);
+  color: #f2f5fb;
+  transition: opacity 220ms ease;
+}
+
+.viewer__step--prev {
+  left: 10px;
+}
+
+.viewer__step--next {
+  right: 10px;
+}
+
+.viewer__step:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.viewer__pages {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 2px;
+  scrollbar-width: none;
+}
+
+.viewer__pages::-webkit-scrollbar {
+  display: none;
+}
+
+.viewer__page-dot {
+  flex: 0 0 auto;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.viewer__page-dot--active {
+  border-color: transparent;
+  background: var(--acc);
+  color: #fff;
+}
+
+.viewer__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.viewer__actions .button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 13px 10px;
+  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2f5fb;
+}
+
+.viewer__actions .button--primary {
+  border-color: transparent;
+  background: var(--acc);
+  color: #fff;
+}
+
+.viewer__hint {
+  text-align: center;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/*
+  Kartu halaman di layar detail sekarang tombol menuju pratinjau, bukan lagi
+  <div> mati. Elemennya berganti, tampilannya tidak boleh ikut berganti —
+  browser memberi <button> border, latar, dan teks rata tengah bawaan.
+*/
+.doc-tile--page {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------- anotasi & tanda tangan (Pro) ---------- */
+
+/*
+  Satu-satunya baris Pro di editor, jadi ia memakai warna Pro/upgrade —
+  coral, bukan biru primary. Token yang sama dengan seluruh elemen Pro lain
+  (CLAUDE.md 9.2); tidak ada warna baru.
+*/
+.editor-actions .button--pro {
+  border-color: var(--upgrade);
+  background: var(--upgrade-soft);
+  color: var(--upgrade);
+}
+
+.editor-actions .button--pro .pro-badge {
+  align-self: center;
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
+/*
+  Permukaan gambar. `touch-action: none` wajib: seluruh gestur di sini
+  digerakkan sendiri lewat pointer event, dan WebView yang masih boleh
+  menggulir akan merebut jari di tengah goresan.
+
+  Sengaja TIDAK diberi z-index. z-index pada elemen berposisi membuat stacking
+  context baru, dan itu mengisolasi `mix-blend-mode` stabilo dari gambar
+  halaman di belakangnya — stabilonya jadi menimpa teks, bukan menembusnya,
+  persis kebalikan dari yang dilakukan hasil render sungguhan.
+*/
+.annotate {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.annotate__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Kotak seleksi tanda tangan: garis putus-putus supaya jelas ia bukan tinta. */
+.annotate__selection {
+  fill: none;
+  stroke: var(--acc);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.annotate__handle {
+  fill: var(--acc);
+  stroke: #fff;
+  stroke-width: 2.5;
+}
+
+.annotate-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.annotate-tools__ink {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.filter-chip--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/*
+  Titik seukuran mata pena yang sebenarnya. Label "Tipis/Sedang/Tebal" saja
+  memaksa user mencoba ketiganya untuk tahu artinya.
+*/
+.filter-chip--nib {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-chip__nib {
+  width: var(--nib, 4px);
+  height: var(--nib, 4px);
+  min-width: 3px;
+  min-height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.ink-colors {
+  display: flex;
+  gap: 10px;
+}
+
+.ink-color {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--chip-border);
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ink-color--active {
+  border-color: var(--surface);
+  box-shadow: 0 0 0 2px var(--acc);
+  transform: scale(1.08);
+}
+
+.ink-color:disabled {
+  opacity: 0.5;
+}
+
+/*
+  Kotak tanda tangan sengaja jauh lebih lebar daripada tinggi, dan bukan di
+  atas halamannya. Menandatangani di kotak kecil di sudut halaman menghasilkan
+  coretan besar dan gemetar yang langsung terbaca sebagai "ditandatangani di
+  HP"; kotak selebar layar ditulis pada ukuran yang nyaman lalu dikecilkan.
+*/
+.signature-pad {
+  width: 100%;
+  aspect-ratio: 5 / 2;
+  border-radius: 16px;
+  border: 1px dashed var(--chip-border);
+  background: var(--chip);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* Batch export sheet
+   ------------------------------------------------------------------ */
+
+.batch-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+
+.batch-progress {
+  margin-bottom: 14px;
+}
+
+.batch-progress__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+/* Long titles must not push the counter off the row. */
+.batch-progress__head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-progress__head span {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.batch-progress__track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--chip-border);
+  overflow: hidden;
+}
+
+.batch-progress__fill {
+  display: block;
+  height: 100%;
+  background: var(--acc);
+  transition: width 180ms ease-out;
+}
+
+/* Select mode in the documents tab
+   ------------------------------------------------------------------ */
+
+.select-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 2px solid var(--chip-border);
+  border-radius: 50%;
+  color: #fff;
+}
+
+.select-check--on {
+  border-color: var(--acc);
+  background: var(--acc);
+}
+
+/* A cloud row cannot join a bulk action, and should not look as if it could. */
+.doc-row--muted {
+  opacity: 0.45;
+}
+
+/*
+  Bilahnya `position: fixed`, jadi ia menutupi ujung daftar alih-alih
+  mendorongnya naik: dokumen terakhir terpotong separuh di HP (dilaporkan
+  25 Agustus 2026). Layar menyisakan ruang setinggi bilah itu selama ia tampil.
+*/
+.screen--select-bar {
+  padding-bottom: calc(24px + var(--select-bar-height));
+}
+
+/*
+  Sits above the bottom nav, and above the ad banner the tab reserves room for
+  — the bar is the only way out of a selection, so nothing may cover it.
+*/
+.select-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--nav-height) + var(--ad-banner-height) + env(safe-area-inset-bottom, 0px));
+  z-index: 12;
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--surface-solid);
+  border-top: 1px solid var(--chip-border);
+}
+
+.select-bar .button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.select-bar .button .pro-badge {
+  align-self: center;
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
+.button--danger {
+  background: #e5484d;
+  color: #fff;
+}
+
+/* ---------- layar Pisah Hasil Pindai (Fase 6 C2) ---------- */
+
+.split-name {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.split-name input {
+  border: 1px solid var(--chip-border);
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+}
+
+/*
+  Hanya muncul saat memisah dokumen yang sudah tersimpan: hasil pindai yang
+  belum disimpan tidak punya "asli" untuk dihapus.
+*/
+.split-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.split-option input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: var(--acc);
+}
+
+.split-patterns {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 2px 12px;
+  scrollbar-width: none;
+}
+
+.split-patterns::-webkit-scrollbar {
+  display: none;
+}
+
+.split-chip {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--chip-border);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.split-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.split-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.split-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.split-group__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--acc);
+  margin: 4px 0 0;
+}
+
+.split-page {
+  position: relative;
+  border: 1px solid var(--chip-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  height: 92px;
+}
+
+.split-page .page-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.split-page__number {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg);
+  background: var(--chip);
+  border-radius: 7px;
+  padding: 2px 7px;
+}
+
+/* A tap target, not a hairline: this is the control the whole screen is about. */
+.split-cut {
+  width: 100%;
+  padding: 9px;
+  margin: 4px 0;
+  border: 1px dashed var(--chip-border);
+  border-radius: 10px;
+  background: none;
+  color: var(--fg-dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.split-cut--on {
+  border-style: solid;
+  border-color: var(--acc);
+  background: var(--acc-soft);
+  color: var(--acc);
+}
+
+/*
+  Penutup daftar, bukan hiasan: tanpa baris ini ujung daftar terlihat seperti
+  terpotong tombol di bawahnya (dilaporkan dari HP, 25 Agustus 2026).
+*/
+.split-end {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-dim);
+  text-align: center;
+  margin: 0;
+  padding: 0 12px;
+}
+
+.split-progress {
+  font-size: 12.5px;
+  color: var(--fg-dim);
+  text-align: center;
+  margin: 0 0 8px;
+}
+
+.split-entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 13px;
+  font-size: 14.5px;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+  color: var(--fg);
 }

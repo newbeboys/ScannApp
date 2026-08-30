@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { DocumentScanner } from '@capacitor-mlkit/document-scanner'
+import { resumeTracker } from './ads/appOpenGate'
 
 export interface DocumentScanFailure {
   reason: 'cancelled' | 'error'
@@ -24,6 +25,12 @@ export type DocumentScanOutcome = string[] | DocumentScanFailure
  * already converted untouched — so it is safe to apply more than once.
  */
 export async function scanDocument(): Promise<DocumentScanOutcome> {
+  // The scanner is a separate activity, so the WebView sees the app get
+  // backgrounded and come back — indistinguishable from the user stepping out
+  // to another app unless we say so. Without this, finishing a scan would be
+  // met with a full-screen App Open ad every single time.
+  resumeTracker.leaveForOwnFlow()
+
   try {
     const result = await DocumentScanner.scanDocument({
       resultFormats: 'JPEG',

@@ -6,10 +6,14 @@ interface ReviewScreenProps {
   currentIndex: number
   isBusy: boolean
   onSelectPage: (index: number) => void
+  /** Opens the full-screen preview so a page can be checked before it is kept. */
+  onPreview: (index: number) => void
   onRemovePage: (index: number) => void
   onAddPages: () => void
   onCancel: () => void
   onSave: () => void
+  /** Opens the split screen. Every tier — see `saveSplitScan`. */
+  onSplit: () => void
 }
 
 export function ReviewScreen({
@@ -17,10 +21,12 @@ export function ReviewScreen({
   currentIndex,
   isBusy,
   onSelectPage,
+  onPreview,
   onRemovePage,
   onAddPages,
   onCancel,
   onSave,
+  onSplit,
 }: ReviewScreenProps) {
   const safeIndex = Math.min(currentIndex, pages.length - 1)
 
@@ -36,12 +42,22 @@ export function ReviewScreen({
         </div>
       </header>
 
-      <div className="review-stage">
-        {pages[safeIndex] && <PageImage source={pages[safeIndex]} raw alt="Halaman terpilih" />}
-      </div>
+      {/*
+        Tappable, because deciding whether a scan is good enough to keep is
+        exactly what this screen is for — and blurred text is not visible at
+        46vh. Straight into the same viewer the saved document uses.
+      */}
+      <button
+        type="button"
+        className="review-stage"
+        onClick={() => onPreview(safeIndex)}
+        aria-label={`Lihat halaman ${safeIndex + 1} layar penuh`}
+      >
+        {pages[safeIndex] && <PageImage source={pages[safeIndex]} raw alt="" />}
+      </button>
 
       <p className="review-counter">
-        Halaman {safeIndex + 1} dari {pages.length}
+        Halaman {safeIndex + 1} dari {pages.length} · ketuk untuk memperbesar
       </p>
 
       <div className="review-strip">
@@ -79,6 +95,18 @@ export function ReviewScreen({
         <button type="button" className="button button--primary" onClick={onSave} disabled={isBusy}>
           {isBusy ? 'Menyimpan…' : `Simpan Dokumen (${pages.length} halaman)`}
         </button>
+
+        {/* Hidden for a single page: there is nothing to split. Semua tier. */}
+        {pages.length > 1 && (
+          <button
+            type="button"
+            className="button split-entry"
+            onClick={onSplit}
+            disabled={isBusy}
+          >
+            <span>Pisah jadi Beberapa Dokumen</span>
+          </button>
+        )}
       </div>
     </div>
   )

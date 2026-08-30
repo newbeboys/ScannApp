@@ -1,11 +1,33 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { normalizeDocumentTitle } from '../../supabase/functions/_shared/documentTitle'
+import type { Mark } from './annotations'
 import { base64ToBlob, blobToBase64 } from './blobBase64'
-import { migrateScanIndex, type LocalScanDocument, type ScanPage } from './scanIndexMigration'
+import { sanitizePageText, type PageText } from './ocrLayout'
+import {
+  CURRENT_SCHEMA_VERSION,
+  annotationSource,
+  effectiveFilter,
+  enhanceSource,
+  filterSource,
+  migrateScanIndex,
+  type DocumentFilter,
+  type LocalScanDocument,
+  type PageFilter,
+  type ScanPage,
+} from './scanIndexMigration'
 
-export { resolvePage, hasEdits } from './scanIndexMigration'
-export type { LocalScanDocument, ScanPage } from './scanIndexMigration'
+export {
+  resolvePage,
+  hasEdits,
+  effectiveFilter,
+  filterSource,
+  enhanceSource,
+  annotationSource,
+  markCount,
+  DOCUMENT_FILTERS,
+} from './scanIndexMigration'
+export type { LocalScanDocument, ScanPage, DocumentFilter, PageFilter } from './scanIndexMigration'
 
 const SCANS_DIR = 'scans'
 const INDEX_PATH = `${SCANS_DIR}/index.json`
@@ -70,7 +92,8 @@ async function readIndex(): Promise<LocalScanDocument[]> {
 
   const docs = migrateScanIndex(parsed)
   const needsRewrite =
-    Array.isArray(parsed) && parsed.some((doc) => (doc as LocalScanDocument)?.schemaVersion !== 2)
+    Array.isArray(parsed) &&
+    parsed.some((doc) => (doc as LocalScanDocument)?.schemaVersion !== CURRENT_SCHEMA_VERSION)
   if (needsRewrite) {
     await writeIndex(docs)
   }
@@ -136,7 +159,7 @@ export async function saveScanDocument(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 2,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     id,
     title: title ?? `Scan ${new Date().toLocaleString('id-ID')}`,
     createdAt: new Date().toISOString(),
@@ -145,6 +168,91 @@ export async function saveScanDocument(
   }
 
   const docs = await readIndex()
+  docs.unshift(doc)
+  await writeIndex(docs)
+
+  return doc
+}
+
+/**
+ * Puts a document from the cloud back on this phone.
+ *
+ * The other half of `backupDocument`: pages that `pdfImport` recovered from
+ * the backup PDF are written to disk and indexed, so a document that only
+ * existed in R2 — after a reinstall or on a new phone — becomes an ordinary
+ * local document again, editable and mergeable like any other.
+ *
+ * The cloud's id is kept rather than minting a new one. That id is the primary
+ * key of the `scan_documents` row and the R2 object name behind it, so a fresh
+ * one would make the next backup write a *second* row, charge the same bytes
+ * against the quota twice, and orphan the copy already up there.
+ */
+export async function restoreDocumentFromJpegs(
+  cloud: { id: string; title: string; createdAt: string },
+  jpegs: Uint8Array[],
+): Promise<LocalScanDocument> {
+  // Checked before writing anything: overwriting a local copy would destroy
+  // page edits that were never backed up. The UI only ever offers documents
+  // that are missing locally, but storage must not depend on the caller for
+  // that. The index is read again at the end, which is the real guard.
+  if ((await readIndex()).some((doc) => doc.id === cloud.id)) {
+    throw new Error('Dokumen ini sudah ada di HP.')
+  }
+
+  await ensureScansDir()
+  const docDir = `${SCANS_DIR}/${cloud.id}`
+  try {
+    await Filesystem.mkdir({ path: docDir, directory: Directory.Data, recursive: true })
+  } catch {
+    // Unlike saveScanDocument, the id comes from the cloud rather than being
+    // freshly minted, so the folder can already exist — a delete whose rmdir
+    // failed still clears the index. An existing folder is no reason to
+    // refuse; a real failure surfaces when the first page is written.
+  }
+
+  const pages: ScanPage[] = []
+  try {
+    for (let i = 0; i < jpegs.length; i++) {
+      const pagePath = `${docDir}/page-${i + 1}.jpg`
+      await Filesystem.writeFile({
+        path: pagePath,
+        directory: Directory.Data,
+        data: await blobToBase64(new Blob([jpegs[i] as BlobPart])),
+      })
+      pages.push({ original: pagePath })
+    }
+  } catch (error) {
+    // Same reasoning as saveScanDocument: the index is written last, so a
+    // failure here would strand docDir with nothing pointing at it.
+    await Filesystem.rmdir({ path: docDir, directory: Directory.Data, recursive: true }).catch(
+      () => {
+        // Nothing better to do; the original failure is what matters.
+      },
+    )
+    throw error
+  }
+
+  const doc: LocalScanDocument = {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    id: cloud.id,
+    title: cloud.title,
+    // The day it was scanned, not the day it came back.
+    createdAt: cloud.createdAt,
+    pageCount: pages.length,
+    pages,
+  }
+
+  // Read last, like saveScanDocument. A copy taken before the download started
+  // would be stale by now: restoring is slow enough that the user can finish a
+  // scan meanwhile, and writing that old copy back would drop the new document
+  // from the index while its files stayed on disk as garbage.
+  const docs = await readIndex()
+  if (docs.some((existing) => existing.id === cloud.id)) {
+    // A second restore of the same backup got there first. Its pages are ours
+    // byte for byte — same id, same folder — so there is nothing to clean up.
+    throw new Error('Dokumen ini sudah ada di HP.')
+  }
+
   docs.unshift(doc)
   await writeIndex(docs)
 
@@ -253,6 +361,39 @@ export async function readPageBlob(pagePath: string): Promise<Blob> {
 }
 
 /**
+ * Derives a page's edit/filter file path from its own stable `original` path
+ * rather than from its current position in the array.
+ *
+ * `reorderPages` only changes array order — it never renames a page's files.
+ * A path keyed on `pageIndex` would therefore collide the moment two pages
+ * swap places: page A (cropped, `edited: page-1-edited.jpg`) moved to index 1
+ * and page B moved into index 0 would both compute `page-1-edited.jpg` the
+ * next time either was edited, and one page's file would silently overwrite
+ * the other's. `original` is assigned once, at creation, and never changes,
+ * so it stays a safe, unique key for the document's lifetime.
+ */
+function derivedPath(
+  original: string,
+  suffix: 'edited' | 'enhanced' | 'filtered' | 'annotated',
+): string {
+  return original.replace(/\.jpg$/i, `-${suffix}.jpg`)
+}
+
+/**
+ * Forgets a derived file: drops its cached display URL, then removes it.
+ *
+ * A missing file is not an error here. The index is what decides what is
+ * displayed, and by the time this is called the entry is already on its way
+ * out — a delete that fails because the file was never written leaves nothing
+ * behind to clean up.
+ */
+async function discard(path: string | undefined): Promise<void> {
+  if (!path) return
+  invalidateDisplayUri(path)
+  await Filesystem.deleteFile({ path, directory: Directory.Data }).catch(() => {})
+}
+
+/**
  * Stores an edited version of a page alongside — never over — the original.
  * A page can be edited repeatedly; each save replaces the previous edit.
  */
@@ -268,14 +409,34 @@ export async function savePageEdit(
   const page = doc.pages[pageIndex]
   if (!page) throw new Error('Halaman tidak ditemukan.')
 
-  const editedPath = `${SCANS_DIR}/${docId}/page-${pageIndex + 1}-edited.jpg`
+  const editedPath = derivedPath(page.original, 'edited')
   await Filesystem.writeFile({
     path: editedPath,
     directory: Directory.Data,
     data: await blobToBase64(edited),
   })
 
-  doc.pages[pageIndex] = { ...page, edited: editedPath }
+  // Every derived file was made from the *old* geometry, so every one of them
+  // is now wrong — they would show the page at its pre-crop shape. Dropped
+  // here; the caller re-renders them from the new edit (see
+  // documentEditing.editPage).
+  //
+  // The marks themselves survive: they are coordinates, and the caller remaps
+  // them onto the new geometry rather than asking the user to draw again.
+  //
+  // Recognised text is coordinates too, but it goes. Marks cannot be made
+  // again by anything but the user's hand, so they are worth remapping;
+  // recognised text can be read again by the machine, and reading it from the
+  // cropped page gives a better result than remapping the old one. Left in
+  // place it would be *invisibly* wrong — the layer nobody sees, quietly
+  // sending search and copy-paste to the wrong part of the page.
+  const { enhanced, filtered, annotated, text, ...rest } = page
+  await discard(enhanced)
+  await discard(filtered)
+  await discard(annotated)
+  await discard(text)
+
+  doc.pages[pageIndex] = { ...rest, edited: editedPath }
   await writeIndex(docs)
   return doc
 }
@@ -292,13 +453,598 @@ export async function resetPageEdit(
   const page = doc.pages[pageIndex]
   if (!page?.edited) return doc
 
-  try {
-    await Filesystem.deleteFile({ path: page.edited, directory: Directory.Data })
-  } catch {
-    // file already gone; clearing the index entry below is what matters
+  // The lighting render, the filter render and the recognised text were all
+  // derived from the geometry that is about to be thrown away, so all three are
+  // now wrong and are deleted here — but they are *not* regenerated: that
+  // needs a canvas, which this module deliberately has no access to.
+  // documentEditing.revertPage does that step right after calling this, using
+  // the page this function returns.
+  for (const path of [page.edited, page.enhanced, page.filtered, page.annotated, page.text]) {
+    await discard(path)
   }
 
-  doc.pages[pageIndex] = { original: page.original }
+  // The page's own filter *choice* survives — reverting a crop is not the
+  // same thing as changing the user's mind about this page's filter. Losing
+  // it here would silently pull the page back onto the document's filter, or
+  // strip a deliberate 'none' exception, neither of which "Asli" ever asked for.
+  //
+  // The marks survive for the same reason: "Asli" undoes a crop, and undoing a
+  // crop is not a request to tear up a signature. They cannot be mapped back
+  // through the crop that is being thrown away, so they keep the coordinates
+  // they have and are re-rendered onto the restored page by the caller.
+  doc.pages[pageIndex] = {
+    original: page.original,
+    ...(page.filter ? { filter: page.filter } : {}),
+    ...(page.marks && page.marks.length > 0 ? { marks: page.marks } : {}),
+  }
+  await writeIndex(docs)
+  return doc
+}
+
+/**
+ * Where a page's recognised text lives.
+ *
+ * Derived from `original` like every other derived file: a name built from the
+ * page's position would follow the slot rather than the page, so reordering
+ * would point one page's layout at another page's words.
+ */
+function textPath(original: string): string {
+  return original.replace(/\.jpg$/i, '-ocr.json')
+}
+
+/** Stores one page's recognised text and points the page at it. */
+export async function savePageText(
+  docId: string,
+  pageIndex: number,
+  text: PageText,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const page = doc.pages[pageIndex]
+  if (!page) throw new Error('Halaman tidak ditemukan.')
+
+  const path = textPath(page.original)
+  await Filesystem.writeFile({
+    path,
+    directory: Directory.Data,
+    data: JSON.stringify(text),
+    encoding: Encoding.UTF8,
+  })
+
+  doc.pages[pageIndex] = { ...page, text: path }
+  await writeIndex(docs)
+  return doc
+}
+
+/**
+ * Reads a page's recognised text, or nothing.
+ *
+ * Nothing covers all three ways it can be absent — never recognised, file gone,
+ * file unreadable — because the caller treats them identically: the text layer
+ * is an optional extra on top of an export that must happen either way.
+ */
+export async function readPageText(page: ScanPage): Promise<PageText | null> {
+  if (!page.text) return null
+
+  try {
+    const result = await Filesystem.readFile({
+      path: page.text,
+      directory: Directory.Data,
+      encoding: Encoding.UTF8,
+    })
+    const parsed = sanitizePageText(JSON.parse(result.data as string))
+    return parsed.blocks.length > 0 ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+/** Renders one page's filter, or clears it, and returns the new page entry. */
+async function renderPageFilter(
+  page: ScanPage,
+  filter: DocumentFilter | null,
+  render: FilterRenderer,
+): Promise<ScanPage> {
+  const path = derivedPath(page.original, 'filtered')
+
+  if (filter === null) {
+    await discard(page.filtered)
+    const { filtered: _dropped, ...rest } = page
+    return rest
+  }
+
+  // Always from the geometry chain, never from the previous render — this is
+  // what lets a filter be swapped without eating the crop underneath it.
+  const rendered = await render(await readPageBlob(filterSource(page)), filter)
+  await Filesystem.writeFile({
+    path,
+    directory: Directory.Data,
+    data: await blobToBase64(rendered),
+  })
+  // The path is stable across re-renders, so any cached object URL is stale.
+  invalidateDisplayUri(path)
+
+  return { ...page, filtered: path }
+}
+
+/**
+ * Renders one page's ink on top of whatever the page currently shows, or
+ * clears it, and returns the new page entry.
+ *
+ * Always drawn onto `annotationSource` — the filter render, else the crop,
+ * else the scan — never onto the previous annotated file. Reading that back
+ * would lay every stroke over itself a second time, and removing a stroke
+ * would never actually remove anything.
+ */
+async function renderPageMarks(page: ScanPage, render: MarkRenderer): Promise<ScanPage> {
+  const marks = page.marks ?? []
+
+  if (marks.length === 0) {
+    await discard(page.annotated)
+    const { annotated: _dropped, marks: _none, ...rest } = page
+    return rest
+  }
+
+  const path = derivedPath(page.original, 'annotated')
+  const rendered = await render(await readPageBlob(annotationSource(page)), marks)
+  await Filesystem.writeFile({
+    path,
+    directory: Directory.Data,
+    data: await blobToBase64(rendered),
+  })
+  invalidateDisplayUri(path)
+
+  return { ...page, marks, annotated: path }
+}
+
+/**
+ * Renders one page's lighting fix and returns the new page entry, or `null`
+ * when the estimator declined it.
+ *
+ * Always from `enhanceSource` — geometry only. Reading the filter render here
+ * would mean estimating the light of a page that has already thrown its greys
+ * away, and reading its own previous output would compound the correction on
+ * every run.
+ */
+async function renderPageEnhance(
+  page: ScanPage,
+  render: EnhanceRenderer,
+): Promise<ScanPage | null> {
+  const rendered = await render(await readPageBlob(enhanceSource(page)))
+  if (!rendered) return null
+
+  const path = derivedPath(page.original, 'enhanced')
+  await Filesystem.writeFile({
+    path,
+    directory: Directory.Data,
+    data: await blobToBase64(rendered),
+  })
+  // The path is stable across re-renders, so any cached object URL is stale.
+  invalidateDisplayUri(path)
+
+  return { ...page, enhanced: path }
+}
+
+/** Drops a page's lighting render, so the chain falls back to its geometry. */
+async function clearPageEnhance(page: ScanPage): Promise<ScanPage> {
+  await discard(page.enhanced)
+  const { enhanced: _dropped, ...rest } = page
+  return rest
+}
+
+/**
+ * Both derived files for one page, in the order they depend on each other.
+ *
+ * The ink is drawn onto the filter render, so the filter has to be settled
+ * first. Keeping the pair in one function is what lets `applyDocumentFilter`
+ * re-render a whole annotated document inside its existing single pass, rather
+ * than walking the pages a second time.
+ */
+async function renderPageDerived(
+  page: ScanPage,
+  filter: DocumentFilter | null,
+  renderFilter: FilterRenderer,
+  renderMarks: MarkRenderer,
+): Promise<ScanPage> {
+  return renderPageMarks(await renderPageFilter(page, filter, renderFilter), renderMarks)
+}
+
+/**
+ * Renders supplied by the caller rather than imported.
+ *
+ * Storage has no business touching a canvas — keeping the rendering out here
+ * is what lets this module stay free of the DOM, and lets these functions be
+ * tested without one.
+ */
+export type FilterRenderer = (source: Blob, filter: DocumentFilter) => Promise<Blob>
+export type MarkRenderer = (source: Blob, marks: Mark[]) => Promise<Blob>
+
+/**
+ * Renders one page's lighting fix.
+ *
+ * `null` means the estimator declined the page — the light map could not be
+ * trusted, so the page is left exactly as it is. Not an error: the machine
+ * looked and said "not this one".
+ */
+export type EnhanceRenderer = (source: Blob) => Promise<Blob | null>
+
+export interface EnhanceOutcome {
+  /** Pages rendered — or cleared — on this run. */
+  changed: number
+  /** Pages already in the state asked for, so nothing was done to them. */
+  skipped: number
+  /** Pages the estimator declined. They keep whatever they had. */
+  unchanged: number
+  /** Pages whose render threw. The document keeps whatever it had. */
+  failed: number
+  /** True when the run stopped early because its signal was aborted. */
+  cancelled: boolean
+}
+
+/**
+ * Sets the filter for the whole document and re-renders every page that is
+ * not carrying its own exception.
+ *
+ * One index write at the end rather than one per page: twenty pages would
+ * otherwise mean twenty rewrites of the same file, each its own chance to be
+ * interrupted half-written.
+ *
+ * That does not make a failure atomic, and it is worth being plain about what
+ * it costs. Page files are written before the index is, so giving up at page
+ * five leaves five pages already re-rendered on disk under an index that still
+ * describes the old filter. The state is visible (those pages look different)
+ * and self-healing (the derived path is fixed per page, so the next successful
+ * run overwrites them and the index catches up), and nothing the user cannot
+ * regenerate is lost — `original` and `edited` are never touched here. Making
+ * it truly atomic needs the render written to a path that carries the filter's
+ * name, so a half-finished run leaves files the index simply never mentions;
+ * that is a storage-layout change, not a tweak to this loop.
+ */
+export async function applyDocumentFilter(
+  docId: string,
+  filter: DocumentFilter | null,
+  render: FilterRenderer,
+  renderMarks: MarkRenderer,
+  onProgress?: (done: number, total: number) => void,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const next: LocalScanDocument = { ...doc, filter: filter ?? undefined }
+  if (filter === null) delete next.filter
+
+  const pages: ScanPage[] = []
+  for (const [index, page] of doc.pages.entries()) {
+    pages.push(await renderPageDerived(page, effectiveFilter(next, page), render, renderMarks))
+    onProgress?.(index + 1, doc.pages.length)
+  }
+
+  next.pages = pages
+  docs[docs.indexOf(doc)] = next
+  await writeIndex(docs)
+  return next
+}
+
+/**
+ * Turns "Perbaiki Pencahayaan" on or off for a whole document.
+ *
+ * Every tier — there is deliberately no tier parameter here and no tier check
+ * anywhere on this path (CLAUDE.md Bagian 6, keputusan Boss Ali 29 Agustus
+ * 2026). The Pro gate belongs to the TFLite version, if and when it exists.
+ *
+ * The filter and ink renderers come along because switching this stage changes
+ * what the filter render is *derived from*: `filterSource` reads the lighting
+ * render when there is one, so both files under it have to be rebuilt.
+ *
+ * Unlike `applyDocumentFilter`, this one can be cancelled. Filtering a document
+ * is seconds of work over at most a few dozen pages; this decodes and re-encodes
+ * every page at full resolution, and Pro has no page limit — without a way out,
+ * a sixty-page run leaves killing the app as the only option. The signal is
+ * checked between pages, never inside one: stopping mid-page would leave a
+ * half-written file.
+ *
+ * A cancelled run keeps what it finished and still records the switch the user
+ * asked for. The state that leaves is visible (the panel says "12 dari 20"),
+ * resumable (a second run skips the pages already in the right state), and
+ * lossless — `original` and `edited` are never touched here.
+ */
+export async function applyDocumentEnhance(
+  docId: string,
+  enabled: boolean,
+  renderEnhance: EnhanceRenderer,
+  renderFilter: FilterRenderer,
+  renderMarks: MarkRenderer,
+  options: {
+    onProgress?: (done: number, total: number) => void
+    signal?: AbortSignal
+  } = {},
+): Promise<{ document: LocalScanDocument; outcome: EnhanceOutcome }> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const next: LocalScanDocument = { ...doc, enhance: enabled ? true : undefined }
+  if (!enabled) delete next.enhance
+
+  const outcome: EnhanceOutcome = {
+    changed: 0,
+    skipped: 0,
+    unchanged: 0,
+    failed: 0,
+    cancelled: false,
+  }
+
+  const pages: ScanPage[] = []
+  for (const page of doc.pages) {
+    if (options.signal?.aborted) {
+      outcome.cancelled = true
+      break
+    }
+
+    if (enabled === Boolean(page.enhanced)) {
+      // Already in the state being asked for: on a resumed run this is most of
+      // the document, and skipping it is the whole point of resuming.
+      outcome.skipped++
+      pages.push(page)
+      options.onProgress?.(pages.length, doc.pages.length)
+      continue
+    }
+
+    try {
+      const settled = enabled
+        ? await renderPageEnhance(page, renderEnhance)
+        : await clearPageEnhance(page)
+
+      if (!settled) {
+        // Declined. Nothing under it changed, so nothing under it is re-rendered.
+        outcome.unchanged++
+        pages.push(page)
+      } else {
+        pages.push(
+          await renderPageDerived(
+            settled,
+            effectiveFilter(next, settled),
+            renderFilter,
+            renderMarks,
+          ),
+        )
+        outcome.changed++
+      }
+    } catch {
+      // The page keeps whatever it had, and the count is what the caller
+      // reports. Nineteen good pages beat one clean failure.
+      //
+      // On the way out it cannot keep quite everything: clearPageEnhance
+      // deletes the file before anything underneath is re-rendered, so holding
+      // on to the field would leave the index naming a file that is gone. The
+      // next read would drop it anyway — the switch is off, and the migration
+      // unpairs the two — so this only spares the caller a broken page in the
+      // meantime.
+      outcome.failed++
+      pages.push(enabled ? page : await clearPageEnhance(page))
+    }
+
+    options.onProgress?.(pages.length, doc.pages.length)
+  }
+
+  // Whatever the loop did not reach stays exactly as it was.
+  next.pages = [...pages, ...doc.pages.slice(pages.length)]
+  docs[docs.indexOf(doc)] = next
+  await writeIndex(docs)
+
+  return { document: next, outcome }
+}
+
+/**
+ * Rebuilds one page's lighting render, for the moment right after its geometry
+ * changed and `savePageEdit`/`resetPageEdit` threw the old one away.
+ *
+ * A no-op when the document's switch is off, so the caller can call it
+ * unconditionally. It deliberately does *not* re-render the filter or the ink:
+ * the caller does that next in one pass via `applyPageDerived`, and doing it
+ * here as well would render the ink twice over a 12 MP page.
+ */
+export async function applyPageEnhance(
+  docId: string,
+  pageIndex: number,
+  render: EnhanceRenderer,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const page = doc.pages[pageIndex]
+  if (!page) throw new Error('Halaman tidak ditemukan.')
+  if (!doc.enhance) return doc
+
+  doc.pages[pageIndex] = (await renderPageEnhance(page, render)) ?? (await clearPageEnhance(page))
+
+  await writeIndex(docs)
+  return doc
+}
+
+/**
+ * Sets one page's exception to the document filter.
+ *
+ * `null` puts the page back under the document's choice; `'none'` is the
+ * opposite — the user deliberately keeping this one page plain.
+ */
+export async function applyPageFilter(
+  docId: string,
+  pageIndex: number,
+  choice: PageFilter | null,
+  render: FilterRenderer,
+  renderMarks: MarkRenderer,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const page = doc.pages[pageIndex]
+  if (!page) throw new Error('Halaman tidak ditemukan.')
+
+  const withChoice: ScanPage = { ...page }
+  if (choice === null) delete withChoice.filter
+  else withChoice.filter = choice
+
+  doc.pages[pageIndex] = await renderPageDerived(
+    withChoice,
+    effectiveFilter(doc, withChoice),
+    render,
+    renderMarks,
+  )
+
+  await writeIndex(docs)
+  return doc
+}
+
+/**
+ * Replaces what is drawn on one page and re-renders it.
+ *
+ * Passing an empty list is how ink is cleared: the annotated file goes, and
+ * `resolvePage` falls back to the filter render underneath it.
+ */
+export async function savePageMarks(
+  docId: string,
+  pageIndex: number,
+  marks: Mark[],
+  render: MarkRenderer,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const page = doc.pages[pageIndex]
+  if (!page) throw new Error('Halaman tidak ditemukan.')
+
+  doc.pages[pageIndex] = await renderPageMarks({ ...page, marks }, render)
+
+  await writeIndex(docs)
+  return doc
+}
+
+/**
+ * Writes a page's marks and re-renders both derived files in one pass.
+ *
+ * For the moment straight after a crop or a rotate, when three things are true
+ * at once: the marks have moved with the geometry, the filter render is gone,
+ * and the ink render is gone. Doing it as "re-render the filter, then re-render
+ * the ink" instead renders the ink twice — once at the old coordinates, from
+ * inside the filter pass, and again over the top — which costs a whole extra
+ * pass over a 12 MP page and leaves the ink stored in the wrong place if the
+ * second one fails.
+ */
+export async function applyPageDerived(
+  docId: string,
+  pageIndex: number,
+  marks: Mark[],
+  render: FilterRenderer,
+  renderMarks: MarkRenderer,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const page = doc.pages[pageIndex]
+  if (!page) throw new Error('Halaman tidak ditemukan.')
+
+  const withMarks: ScanPage = { ...page, marks }
+  doc.pages[pageIndex] = await renderPageDerived(
+    withMarks,
+    effectiveFilter(doc, withMarks),
+    render,
+    renderMarks,
+  )
+
+  await writeIndex(docs)
+  return doc
+}
+
+/**
+ * Deletes signature files no document refers to any more.
+ *
+ * A signature is written the moment it is drawn, because the overlay has to
+ * show it while it is being positioned — so backing out of the annotate screen
+ * without saving leaves one behind, as does deleting the last document that
+ * used it. They are only a few KB each, but nothing else would ever remove
+ * them, and "a few KB, forever, per attempt" adds up on a phone.
+ *
+ * Only ever called when no annotate draft is open: a draft's signature is not
+ * in the index yet, and would be swept away from under it.
+ */
+export async function pruneUnusedSignatures(): Promise<void> {
+  let entries: { name: string }[]
+  try {
+    entries = (await Filesystem.readdir({ path: SCANS_DIR, directory: Directory.Data })).files
+  } catch {
+    return
+  }
+
+  const docs = await readIndex()
+  const inUse = new Set(
+    docs.flatMap((doc) =>
+      doc.pages.flatMap((page) =>
+        (page.marks ?? []).flatMap((mark) => (mark.kind === 'signature' ? [mark.source] : [])),
+      ),
+    ),
+  )
+
+  for (const entry of entries) {
+    if (!/^signature-\d+\.png$/.test(entry.name)) continue
+    const path = `${SCANS_DIR}/${entry.name}`
+    if (inUse.has(path)) continue
+    await discard(path)
+  }
+}
+
+/**
+ * Stores a drawn signature and hands back the path a mark should point at.
+ *
+ * The filename carries a timestamp rather than being fixed. A signature is
+ * drawn once and stamped on many pages over many months; if redrawing it
+ * overwrote the old file, every document already signed would silently take on
+ * the new signature — including ones already backed up under the old one.
+ */
+export async function saveSignatureImage(png: Blob): Promise<string> {
+  await ensureScansDir()
+  const path = `${SCANS_DIR}/signature-${Date.now()}.png`
+
+  await Filesystem.writeFile({
+    path,
+    directory: Directory.Data,
+    data: await blobToBase64(png),
+  })
+
+  return path
+}
+
+/**
+ * Moves a page to a new position.
+ *
+ * Only the order in the index changes — no file is touched or rewritten, so
+ * this stays instant however large the pages are. The filenames deliberately
+ * keep their original numbers; they are identifiers, not positions, and
+ * renaming them would mean rewriting every page to fix an ordering that the
+ * index already expresses.
+ */
+export async function reorderPages(
+  docId: string,
+  from: number,
+  to: number,
+): Promise<LocalScanDocument> {
+  const docs = await readIndex()
+  const doc = docs.find((entry) => entry.id === docId)
+  if (!doc) throw new Error('Dokumen tidak ditemukan.')
+
+  const lastIndex = doc.pages.length - 1
+  if (from < 0 || from > lastIndex || to < 0 || to > lastIndex || from === to) return doc
+
+  const [moved] = doc.pages.splice(from, 1)
+  doc.pages.splice(to, 0, moved)
+
   await writeIndex(docs)
   return doc
 }
@@ -311,7 +1057,15 @@ export async function resetPageEdit(
 export async function createDocumentFromPages(
   sources: { pagePath: string }[],
   title: string,
-  sourceDocumentIds: string[],
+  /**
+   * Which documents were merged to make this one, for the "Hasil gabungan
+   * dari n dokumen" line on the detail screen.
+   *
+   * Left off by `splitDocument`, which is the opposite operation: an empty
+   * array is truthy, so passing one would have that line claim a merge of no
+   * documents at all.
+   */
+  sourceDocumentIds?: string[],
 ): Promise<LocalScanDocument> {
   await ensureScansDir()
   const id = newDocumentId()
@@ -331,13 +1085,13 @@ export async function createDocumentFromPages(
   }
 
   const doc: LocalScanDocument = {
-    schemaVersion: 2,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     id,
     title,
     createdAt: new Date().toISOString(),
     pageCount: pages.length,
     pages,
-    sourceDocumentIds,
+    ...(sourceDocumentIds?.length ? { sourceDocumentIds } : {}),
   }
 
   const docs = await readIndex()

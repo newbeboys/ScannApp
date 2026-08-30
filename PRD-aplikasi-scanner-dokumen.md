@@ -30,27 +30,45 @@ Aplikasi scan dokumen untuk Android dengan dua tier: **Basic** (gratis, ad-suppo
 | Area | Basic (gratis, ada iklan) | Pro (berbayar, no ads) |
 |---|---|---|
 | Scan engine | ML Kit (kualitas penuh) | ML Kit (kualitas penuh, sama) |
-| Edit dasar | Crop manual, rotate | Sama, plus edit lanjutan di bawah |
+| Edit dasar | Crop manual, rotate, reorder halaman, filter dokumen (5 pilihan) | Sama, plus edit lanjutan di bawah |
 | Merge dokumen | ✅ Maksimal **20 halaman** per dokumen hasil merge | ✅ **Unlimited** |
-| Edit dibantu AI ("AI Enhance") | ❌ Tidak tersedia | ✅ Auto-enhance gambar (cahaya/kontras/noise/ketajaman) + auto-deskew & auto-crop presisi |
-| Edit lanjutan lain | ❌ | Annotate, tanda tangan digital, reorder halaman, filter lanjutan (B&W, magic color) |
+| Perbaiki Pencahayaan (koreksi bayangan, metode klasik) | ✅ Tersedia — **sama dengan Pro** (keputusan 29 Agustus 2026) | ✅ Tersedia |
+| "AI Enhance" (model TFLite on-device) | ❌ Tidak tersedia | ✅ Menyusul saat modelnya selesai dilatih (Fase 7 lanjutan) |
+| Edit lanjutan lain | ❌ | Annotate, tanda tangan digital |
 | OCR (searchable text) | ❌ | ✅ |
-| Export format | PDF, JPG (kompresi otomatis, 1 level) | PDF, JPG, DOCX, PNG + kontrol level kompresi manual |
+| Export format | PDF, JPG, **PNG** + kontrol level kompresi manual (4 level) — **sama dengan Pro sejak 25 Agustus 2026**, kecuali DOCX | PDF, JPG, PNG, **DOCX** + kontrol level kompresi manual (4 level) |
 | Watermark hasil export | Ada (kecil) | Tidak ada |
 | Batch scan/export | ❌ | ✅ |
 | Iklan | Banner + interstitial tiap 5 scan, + interstitial setelah export | Tidak ada |
 | Quota storage cloud (R2) | 100 MB | 500 MB (langganan bulanan) / **1 GB (langganan tahunan)** |
 
+> **Direvisi 23 Agustus 2026:** reorder halaman dan filter dokumen **pindah dari Pro-exclusive ke tersedia untuk semua tier**, menggantikan baris "Edit lanjutan lain" versi sebelumnya yang mencantumkan keduanya sebagai Pro. Filter sekaligus naik dari 2 pilihan (B&W, magic color) jadi 5 (Magic Color, Cerah, Abu-abu, Hitam-Putih, Hemat Tinta) — lihat CLAUDE.md Bagian 6 & `TASKS.md` Fase 6. ~~Annotate dan tanda tangan digital tetap Pro-exclusive, belum diimplementasikan.~~
+>
+> **Direvisi lagi 25 Agustus 2026:** setelah uji device, Boss Ali memindahkan **anotasi, tanda tangan digital, pisah dokumen, dan ekspor banyak dokumen sekaligus** dari Pro ke **semua tier** — lalu, beberapa jam kemudian, **kontrol level kompresi manual dan ekspor DOCX** menyusul.
+>
+> Setelah pembatalan ini, seluruh **baris "Export format" dan "Edit lanjutan"** di tabel atas berlaku untuk semua tier. Yang tersisa sebagai nilai jual Pro: **bebas iklan, tanpa watermark di PDF, merge tanpa batas halaman, kuota storage lebih besar**, dan nanti **OCR**. ~~DOCX belum ada kodenya; keputusan ini berlaku untuk saat ia dibuat nanti bersama OCR.~~ **Dikoreksi 25 Agustus 2026 malam: DOCX ikut Pro bersama OCR** — DOCX yang berguna isinya hasil OCR, jadi membukanya ke semua tier akan membocorkan mesin yang justru dijual Pro. Lihat CLAUDE.md Bagian 6 & `TASKS.md` Fase 6 bagian 8.
+>
+> **Direvisi lagi 23 Agustus 2026 (sore):** **export PNG ikut pindah ke semua tier.** Baris "Export format" di atas sebelumnya menaruh PNG di kolom Pro; sekarang Basic juga bisa mengekspor PNG. Yang tetap Pro di baris itu hanya **DOCX** dan **kontrol level kompresi manual**. Alasannya sejalan dengan revisi sebelumnya: memilih format berkas adalah kebutuhan dasar, bukan nilai jual — yang dijual Pro adalah kendali atas mutu dan ukurannya. DOCX belum diimplementasikan dan menunggu OCR (tanpa lapisan teks, DOCX hanya berisi gambar yang tidak bisa diedit).
+
 ---
 
-## 4. Fitur "AI Enhance" (Pro-exclusive)
+## 4. Perbaikan Gambar: "Perbaiki Pencahayaan" (semua tier) & "AI Enhance" (Pro, menyusul)
+
+> **Direvisi 29 Agustus 2026.** Bagian ini semula berjudul *Fitur "AI Enhance" (Pro-exclusive)* dan menyatakan fitur ini **wajib** berbasis model TensorFlow Lite. Riset saat brainstorm Fase 7 menemukan tidak ada model shadow-removal dokumen yang bisa dipasang di HP — rinciannya beserta angkanya di `TASKS.md` Fase 7 — sehingga versi pertama dikerjakan dengan metode klasik. Dua keputusan Boss Ali menyertainya dan keduanya mengikat: soal **tier** dan soal **nama**.
 
 **Cakupan:**
-- (A) Auto-enhance kualitas gambar — koreksi cahaya/kontras, kurangi noise, tingkatkan ketajaman
-- (B) Auto-deskew (luruskan halaman miring) + auto-crop yang lebih presisi dari deteksi tepi standar
+- (A) Koreksi cahaya & bayangan — **versi pertama, metode klasik, semua tier**
+- (A2) Kurangi noise + tingkatkan ketajaman — **belum dikerjakan**, sengaja di luar versi pertama; menunggu versi model (known gap tercatat di `TASKS.md` Fase 7)
+- (B) Auto-deskew (luruskan halaman miring) + auto-crop yang lebih presisi dari deteksi tepi standar — dipisah jadi Fase 7B
 
-**Keputusan arsitektur penting:**
-Fitur ini **wajib berbasis on-device model (TensorFlow Lite)**, bukan cloud AI API dengan free tier. Alasan: free tier API pihak ketiga (mis. Gemini API atau sejenis) rawan dipangkas atau berubah kebijakan begitu jumlah user bertambah — ini bisa merusak fitur andalan Pro tier atau tiba-tiba menimbulkan biaya operasional yang tidak direncanakan. On-device model memastikan biaya tetap nol secara permanen, dengan trade-off kualitas enhancement yang lebih terbatas dibanding model cloud besar.
+**Tier (keputusan Boss Ali 29 Agustus 2026):**
+Versi klasik koreksi bayangan **gratis untuk semua tier**, Basic maupun Pro, secara setara. Alasannya: argumen paywall di bagian ini semula berdiri di atas **biaya cloud AI**, sementara metode klasik punya **nol biaya marjinal** — tidak ada yang perlu dibiayai, jadi tidak ada alasan menahannya di belakang paywall. Status **Pro-exclusive baru berlaku khusus untuk versi model TFLite**, begitu model itu selesai dilatih dan diintegrasikan.
+
+**Nama (keputusan Boss Ali 29 Agustus 2026):**
+Versi klasik **tidak boleh disebut "AI Enhance"** di UI maupun copy mana pun — namanya **"Perbaiki Pencahayaan"**. Fitur ini murni matematika deterministik, bukan model; menyebutnya AI adalah klaim yang menyesatkan user. Nama **"AI Enhance" disimpan** untuk versi model TFLite nanti, di mana klaim itu benar.
+
+**Keputusan arsitektur yang tidak berubah:**
+Kalau versi model dikerjakan, ia **wajib berbasis on-device model (TensorFlow Lite)**, bukan cloud AI API dengan free tier. Alasan: free tier API pihak ketiga (mis. Gemini API atau sejenis) rawan dipangkas atau berubah kebijakan begitu jumlah user bertambah — ini bisa merusak fitur andalan Pro tier atau tiba-tiba menimbulkan biaya operasional yang tidak direncanakan. On-device memastikan biaya tetap nol secara permanen, dengan trade-off kualitas yang lebih terbatas dibanding model cloud besar. Metode klasik versi pertama memenuhi alasan yang sama dengan lebih kuat lagi: nol biaya, nol jaringan, dan nol tambahan bobot APK.
 
 Kalau ke depan ingin upgrade ke cloud AI yang lebih canggih, itu harus jadi keputusan sadar dengan anggaran cadangan — bukan asumsi default di versi pertama.
 
@@ -105,5 +123,5 @@ Detail per-task ada di `TASKS.md`. Ringkasan fase:
 4. Backend storage/backup (Supabase Edge Function + Cloudflare R2).
 5. Monetisasi iklan (Basic) + flow pembelian Pro.
 6. Fitur Pro: OCR, edit lanjutan, export tambahan.
-7. AI Enhance (on-device TFLite) — subsistem paling berat, disarankan paling akhir.
+7. Perbaikan gambar — **"Perbaiki Pencahayaan"** (metode klasik, semua tier) lebih dulu; **"AI Enhance"** (on-device TFLite, Pro) menyusul saat modelnya ada. Subsistem paling berat, disarankan paling akhir.
 8. Program referral — bisa dibangun paralel dengan fitur Pro karena scope-nya cukup terisolasi.

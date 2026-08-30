@@ -1,18 +1,21 @@
 {
   "name": "scannapp",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.4.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:node": "vitest run --project node",
+    "test:browser": "vitest run --project browser"
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.1.0",
     "@capacitor-mlkit/document-scanner": "^8.1.0",
+    "@capacitor-mlkit/text-recognition": "^8.2.0",
     "@capacitor/android": "^8.4.2",
     "@capacitor/core": "^8.4.2",
     "@capacitor/filesystem": "^8.1.2",
@@ -30,9 +33,13 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "@vitest/browser": "^4.1.11",
+    "@vitest/browser-playwright": "^4.1.11",
     "oxlint": "^1.71.0",
+    "playwright": "^1.62.1",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "vitest-browser-react": "^2.2.0"
   }
 }

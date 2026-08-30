@@ -1,34 +1,143 @@
-import { cropImage, rotateImage, type CropRect, type Rotation } from './imageEditor'
 import {
+  remapMarksForCrop,
+  remapMarksForRotation,
+  type Mark,
+  type SignatureStamp,
+} from './annotations'
+import {
+  cropImage,
+  enhancePage,
+  filterImage,
+  renderMarks,
+  rotateImage,
+  type CropRect,
+  type Rotation,
+} from './imageEditor'
+import {
+  annotationSource,
+  applyDocumentEnhance,
+  applyDocumentFilter,
+  applyPageDerived,
+  applyPageEnhance,
+  applyPageFilter,
+  filterSource,
   invalidateDisplayUri,
   readPageBlob,
+  reorderPages,
   resetPageEdit,
   resolvePage,
   savePageEdit,
+  savePageMarks,
+  type DocumentFilter,
+  type EnhanceOutcome,
   type LocalScanDocument,
+  type PageFilter,
   type ScanPage,
 } from './scanStorage'
 
-/** Loads whatever the page currently shows — the edit if present, else the original. */
+/** Loads whatever the page currently shows — the ink, else the filter, else the edit, else the scan. */
 export async function loadPageBlob(page: ScanPage): Promise<Blob> {
   return readPageBlob(resolvePage(page))
 }
 
+/**
+ * Loads the page *without* its ink, for the annotate screen.
+ *
+ * The overlay draws every mark live, so showing the annotated render behind it
+ * would put each stroke on screen twice — and undoing one would appear to do
+ * nothing, because the copy underneath would still be there.
+ */
+export async function loadAnnotationBase(page: ScanPage): Promise<Blob> {
+  return readPageBlob(annotationSource(page))
+}
+
+/**
+ * Draws marks onto a page, reading each signature file the marks refer to.
+ *
+ * The renderer itself only knows about bitmaps — it has no way to read a file —
+ * so the decoding happens here, once per distinct signature rather than once
+ * per stamp. A signature that has gone missing is skipped: it can only mean a
+ * file was deleted underneath us, and losing one stamp is better than refusing
+ * to render the page at all.
+ */
+async function drawMarks(source: Blob, marks: Mark[]): Promise<Blob> {
+  const paths = new Set(
+    marks.filter((mark): mark is SignatureStamp => mark.kind === 'signature').map((m) => m.source),
+  )
+
+  const signatures = new Map<string, ImageBitmap>()
+  for (const path of paths) {
+    try {
+      signatures.set(path, await createImageBitmap(await readPageBlob(path)))
+    } catch {
+      // Gone from disk; the stamp is skipped rather than failing the render.
+    }
+  }
+
+  try {
+    return await renderMarks(source, marks, signatures)
+  } finally {
+    for (const bitmap of signatures.values()) bitmap.close()
+  }
+}
+
+/**
+ * Rebuilds every derived file after a page's geometry changed underneath them.
+ *
+ * `savePageEdit`/`resetPageEdit` delete the lighting render, the filter render
+ * and the ink render as a side effect — right, since all three were made from
+ * geometry that no longer exists — but none of them can regenerate anything;
+ * they are storage, with no canvas to render with. This is the one place that
+ * closes the gap, shared by `editPage` (after a crop or rotate) and
+ * `revertPage` (after undoing one).
+ *
+ * The lighting fix goes first and on its own, because the filter renders *from*
+ * it. The filter and the ink then go together in one call: the filter pass
+ * renders the ink too, so splitting those two would draw every stroke twice —
+ * once at the coordinates the crop just invalidated.
+ *
+ * Takes the document rather than its id because only the document knows
+ * whether the lighting stage is on, and it is the copy storage just handed
+ * back — not the caller's, which may predate a switch flipped elsewhere.
+ */
+async function rebuildDerived(
+  doc: LocalScanDocument,
+  pageIndex: number,
+  marks: Mark[],
+): Promise<LocalScanDocument> {
+  if (doc.enhance) await applyPageEnhance(doc.id, pageIndex, enhancePage)
+  return applyPageDerived(doc.id, pageIndex, marks, filterImage, drawMarks)
+}
+
+/**
+ * @param remap moves the page's marks onto the geometry the transform produced.
+ *   Ink is stored in coordinates relative to the page's content, so a crop
+ *   slides it across the paper unless it is remapped with the pixels.
+ */
 async function editPage(
   doc: LocalScanDocument,
   pageIndex: number,
   transform: (blob: Blob) => Promise<Blob>,
+  remap: (marks: Mark[]) => Mark[],
 ): Promise<LocalScanDocument> {
   const page = doc.pages[pageIndex]
   if (!page) throw new Error('Halaman tidak ditemukan.')
 
-  const source = await loadPageBlob(page)
+  // Read from the geometry chain rather than from what is on screen. Cropping
+  // the filtered render would bake the filter into `edited`, and the filter
+  // could never be changed again without losing the crop with it. Cropping the
+  // annotated render would bake the ink in too, and undo would stop working.
+  const source = await readPageBlob(filterSource(page))
   const result = await transform(source)
-  const updated = await savePageEdit(doc.id, pageIndex, result)
+  const saved = await savePageEdit(doc.id, pageIndex, result)
 
   // The edit reuses the same file path, so any cached object URL is stale.
-  invalidateDisplayUri(resolvePage(updated.pages[pageIndex]))
-  return updated
+  invalidateDisplayUri(resolvePage(saved.pages[pageIndex]))
+
+  // The remap runs even when it empties the list: that means every stroke was
+  // on the part of the page that was just cut away, and the ink render has to
+  // go with them.
+  return rebuildDerived(saved, pageIndex, remap(saved.pages[pageIndex].marks ?? []))
 }
 
 /**
@@ -41,7 +150,12 @@ export async function rotatePage(
   pageIndex: number,
   degrees: Rotation = 90,
 ): Promise<LocalScanDocument> {
-  return editPage(doc, pageIndex, (blob) => rotateImage(blob, degrees))
+  return editPage(
+    doc,
+    pageIndex,
+    (blob) => rotateImage(blob, degrees),
+    (marks) => remapMarksForRotation(marks, degrees),
+  )
 }
 
 export async function cropPage(
@@ -49,15 +163,131 @@ export async function cropPage(
   pageIndex: number,
   rect: CropRect,
 ): Promise<LocalScanDocument> {
-  return editPage(doc, pageIndex, (blob) => cropImage(blob, rect))
+  return editPage(
+    doc,
+    pageIndex,
+    (blob) => cropImage(blob, rect),
+    (marks) => remapMarksForCrop(marks, rect),
+  )
 }
 
-/** Throws away every edit on a page and goes back to the untouched scan. */
+/**
+ * Throws away the crop/rotate on a page and goes back to the untouched scan.
+ * The page's own filter choice, if any, is untouched — "Asli" undoes geometry,
+ * not the user's mind about colour.
+ */
 export async function revertPage(
   doc: LocalScanDocument,
   pageIndex: number,
 ): Promise<LocalScanDocument> {
   const page = doc.pages[pageIndex]
-  if (page?.edited) invalidateDisplayUri(page.edited)
-  return resetPageEdit(doc.id, pageIndex)
+  if (!page?.edited) return doc
+
+  invalidateDisplayUri(page.edited)
+  const reverted = await resetPageEdit(doc.id, pageIndex)
+
+  // The marks keep their coordinates: they cannot be mapped back through a
+  // crop that no longer exists, and undoing a crop is not a request to tear up
+  // a signature.
+  return rebuildDerived(reverted, pageIndex, reverted.pages[pageIndex].marks ?? [])
+}
+
+/**
+ * Sets the filter for the whole document.
+ *
+ * Every page without its own exception is re-rendered, which for a long
+ * document takes a few seconds — hence the progress callback.
+ */
+export async function setDocumentFilter(
+  doc: LocalScanDocument,
+  filter: DocumentFilter | null,
+  onProgress?: (done: number, total: number) => void,
+): Promise<LocalScanDocument> {
+  return applyDocumentFilter(doc.id, filter, filterImage, drawMarks, onProgress)
+}
+
+/**
+ * Sets one page's exception to the document filter — the colour chart in the
+ * middle of a black-and-white contract.
+ *
+ * `null` puts the page back under the document's choice.
+ */
+export async function setPageFilter(
+  doc: LocalScanDocument,
+  pageIndex: number,
+  choice: PageFilter | null,
+): Promise<LocalScanDocument> {
+  return applyPageFilter(doc.id, pageIndex, choice, filterImage, drawMarks)
+}
+
+/**
+ * Turns "Perbaiki Pencahayaan" on or off for the whole document.
+ *
+ * Every tier. No tier argument, no tier check — see `applyDocumentEnhance`.
+ *
+ * `signal` is not optional decoration: every page is decoded and re-encoded at
+ * full resolution and Pro has no page limit, so the user needs a way out that
+ * is not force-quitting the app.
+ */
+export async function setDocumentEnhance(
+  doc: LocalScanDocument,
+  enabled: boolean,
+  options: {
+    onProgress?: (done: number, total: number) => void
+    signal?: AbortSignal
+  } = {},
+): Promise<{ document: LocalScanDocument; outcome: EnhanceOutcome }> {
+  return applyDocumentEnhance(doc.id, enabled, enhancePage, filterImage, drawMarks, options)
+}
+
+/**
+ * The one line the editor shows once a run is over.
+ *
+ * `unchanged` has to reach the user rather than being rounded into the total:
+ * a page the estimator declined will never get a lighting render, so the
+ * panel's count stops short of the total permanently. Reported as a plain
+ * success, that leaves the user pressing "Lanjutkan" forever with nothing to
+ * explain why — the same trap `describeOcrOutcome` exists to avoid.
+ *
+ * Never say "AI" here (CLAUDE.md Bagian 6): this is deterministic maths, and
+ * the name belongs to the TFLite version.
+ */
+export function describeEnhanceOutcome(outcome: EnhanceOutcome, enabled: boolean): string {
+  if (outcome.cancelled) return `Dihentikan setelah ${outcome.changed} halaman.`
+  if (!enabled) return 'Perbaikan pencahayaan dimatikan.'
+  if (outcome.changed === 0 && outcome.unchanged === 0 && outcome.failed === 0) {
+    return 'Semua halaman sudah diperbaiki.'
+  }
+
+  const problems: string[] = []
+  if (outcome.unchanged > 0) problems.push(`${outcome.unchanged} halaman dilewati`)
+  if (outcome.failed > 0) problems.push(`${outcome.failed} gagal`)
+
+  const done = `Pencahayaan ${outcome.changed} halaman diperbaiki`
+  return problems.length === 0 ? `${done}.` : `${done}, ${problems.join(', ')}.`
+}
+
+/**
+ * Replaces what is drawn on one page. Available to every tier.
+ *
+ * This used to refuse anything but Pro, here in the library rather than only
+ * in the UI. Boss Ali lifted that on 25 Agustus 2026 — the same decision that
+ * opened batch export and split — so there is no tier left to check, and the
+ * parameter went with the check rather than sitting here unread.
+ */
+export async function setPageMarks(
+  doc: LocalScanDocument,
+  pageIndex: number,
+  marks: Mark[],
+): Promise<LocalScanDocument> {
+  return savePageMarks(doc.id, pageIndex, marks, drawMarks)
+}
+
+/** Moves a page one step towards the front or the back of the document. */
+export async function movePage(
+  doc: LocalScanDocument,
+  pageIndex: number,
+  direction: -1 | 1,
+): Promise<LocalScanDocument> {
+  return reorderPages(doc.id, pageIndex, pageIndex + direction)
 }

@@ -32,9 +32,20 @@ jobs:
         # dan tidak ada error boundary di main.tsx — tanpa ini AAB terbuild
         # sempurna dan lolos signing, tapi layar putih kosong untuk semua
         # user begitu terpasang dari Play Store.
+        #
+        # Tiga VITE_ADMOB_* di bawah hanya ada di workflow ini, sengaja TIDAK
+        # di ci.yml: APK debug dipasang berulang kali di HP Boss Ali sendiri,
+        # dan impresi iklan asli dari HP developer itu invalid traffic yang
+        # bisa membuat akun AdMob ditutup. APK debug tetap pakai unit test.
+        # Kalau ketiga secret ini belum di-set, aplikasi rilis TIDAK crash —
+        # ia jatuh ke unit test, artinya iklannya tampil tapi tidak menghasilkan
+        # apa-apa. Jadi kalau pendapatan nol setelah rilis, cek ini dulu.
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_ADMOB_BANNER_UNIT_ID: ${{ secrets.VITE_ADMOB_BANNER_UNIT_ID }}
+          VITE_ADMOB_INTERSTITIAL_UNIT_ID: ${{ secrets.VITE_ADMOB_INTERSTITIAL_UNIT_ID }}
+          VITE_ADMOB_APP_OPEN_UNIT_ID: ${{ secrets.VITE_ADMOB_APP_OPEN_UNIT_ID }}
         run: npm run build
 
       - name: Sync Capacitor

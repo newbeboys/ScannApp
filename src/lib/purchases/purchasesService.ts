@@ -5,6 +5,7 @@ import {
   type PurchasesOffering,
   type PurchasesPackage,
 } from '@revenuecat/purchases-capacitor'
+import { resumeTracker } from '../ads/appOpenGate'
 import {
   FALLBACK_PRICES,
   matchPlanId,
@@ -133,6 +134,11 @@ export async function purchasePlan(plan: PlanOption): Promise<PurchaseOutcome> {
   }
 
   try {
+    // Google Play's purchase sheet is its own activity. Returning from it must
+    // not be mistaken for the user coming back from another app — landing an
+    // ad on top of a payment the user just made is the worst possible moment
+    // for one, and this is the flow that stops showing ads altogether.
+    resumeTracker.leaveForOwnFlow()
     const result = await Purchases.purchasePackage({ aPackage: plan.pkg })
     return hasProEntitlement(result.customerInfo)
       ? { status: 'purchased' }

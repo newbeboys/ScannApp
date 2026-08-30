@@ -1,5 +1,6 @@
 import {
   AdMob,
+  AppOpenAdPluginEvents,
   BannerAdPosition,
   BannerAdSize,
   InterstitialAdPluginEvents,
@@ -7,7 +8,8 @@ import {
 import { Capacitor } from '@capacitor/core'
 import type { Tier } from '../tier'
 import { resolveAdConfig } from './adConfig'
-import { shouldShowInterstitial, type AdTrigger } from './adFrequency'
+import { resetScanStreak, shouldShowInterstitial, type AdTrigger } from './adFrequency'
+import { resumeTracker } from './appOpenGate'
 
 /**
  * Height reserved under the bottom nav so the banner never covers it. Matches
@@ -23,6 +25,9 @@ let interstitialReady = false
 /** A prepare() is in flight — stops us stacking duplicate load requests. */
 let preparing = false
 let bannerVisible = false
+/** An App Open ad is loaded and waiting. */
+let appOpenReady = false
+let loadingAppOpen = false
 
 /**
  * Ads only exist on the device. In the browser every entry point below turns
@@ -63,6 +68,20 @@ export async function initializeAds(): Promise<void> {
       interstitialReady = false
       preparing = false
     })
+
+    // Same bookkeeping for App Open: the plugin drops the loaded ad once it
+    // has been shown, so the next resume needs a freshly loaded one.
+    await AdMob.addListener(AppOpenAdPluginEvents.Closed, () => {
+      appOpenReady = false
+      void loadAppOpen()
+    })
+    await AdMob.addListener(AppOpenAdPluginEvents.FailedToShow, () => {
+      appOpenReady = false
+    })
+    await AdMob.addListener(AppOpenAdPluginEvents.FailedToLoad, () => {
+      appOpenReady = false
+      loadingAppOpen = false
+    })
   } catch (error) {
     initialized = false
     ignore('initialize')(error)
@@ -92,6 +111,28 @@ async function prepareInterstitial(): Promise<void> {
 }
 
 /**
+ * Loads an App Open ad ahead of time.
+ *
+ * Warmed up well before it is wanted for the same reason as the interstitial,
+ * only more so: the moment it is needed is the moment the user is looking at
+ * the app again, and fetching then would show the ad *over* work they have
+ * already resumed — the one thing an App Open ad must never do.
+ */
+async function loadAppOpen(): Promise<void> {
+  if (!available() || appOpenReady || loadingAppOpen) return
+
+  loadingAppOpen = true
+  try {
+    await AdMob.loadAppOpen({ adId: config.appOpenUnitId })
+    appOpenReady = true
+  } catch (error) {
+    ignore('loadAppOpen')(error)
+  } finally {
+    loadingAppOpen = false
+  }
+}
+
+/**
  * Single gate for the whole ads subsystem. Called whenever the tier is
  * resolved or changes: Basic gets ads warmed up, Pro gets everything torn
  * down. Keeping the tier check here means no caller has to remember it.
@@ -102,11 +143,13 @@ export async function syncAdsToTier(tier: Tier): Promise<void> {
   if (tier === 'pro') {
     await hideBanner()
     interstitialReady = false
+    appOpenReady = false
     return
   }
 
   await initializeAds()
   await prepareInterstitial()
+  await loadAppOpen()
 }
 
 export async function showBanner(tier: Tier): Promise<void> {
@@ -160,12 +203,54 @@ export async function maybeShowInterstitial(trigger: AdTrigger, tier: Tier): Pro
   }
 
   try {
+    // The ad is its own activity, so showing it backgrounds the WebView. Left
+    // unmarked, dismissing it after five seconds would read as the user coming
+    // back from another app and summon an App Open ad on top of it.
+    resumeTracker.leaveForOwnFlow()
     await AdMob.showInterstitial()
     interstitialReady = false
+    // Only now is the streak spent — see the note in adFrequency.
+    if (trigger === 'scan-saved') resetScanStreak()
     return true
   } catch (error) {
     ignore('showInterstitial')(error)
     interstitialReady = false
+    return false
+  }
+}
+
+/**
+ * Shows the App Open ad if one is loaded, for a Basic user, on a device.
+ *
+ * Whether the moment *deserves* an ad is not decided here — that is
+ * `resumeTracker`'s job, and it is the part with the interesting rules (see
+ * appOpenGate.ts). This function only answers "is there one ready to show?".
+ *
+ * Nothing is fetched on the spot when none is ready: an ad that arrives
+ * seconds after the user has resumed reads as an ad appearing out of nowhere
+ * on top of their work, which is exactly what the format exists to avoid.
+ */
+export async function showAppOpenAd(tier: Tier): Promise<boolean> {
+  if (!available() || tier === 'pro') return false
+
+  await initializeAds()
+
+  if (!appOpenReady) {
+    void loadAppOpen()
+    return false
+  }
+
+  try {
+    // Same as the interstitial, and here it matters even more: an App Open ad
+    // dismissed after five seconds would otherwise qualify as a return from
+    // being away and show the next App Open ad, forever.
+    resumeTracker.leaveForOwnFlow()
+    await AdMob.showAppOpen()
+    appOpenReady = false
+    return true
+  } catch (error) {
+    ignore('showAppOpen')(error)
+    appOpenReady = false
     return false
   }
 }

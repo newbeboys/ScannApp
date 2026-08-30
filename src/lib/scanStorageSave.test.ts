@@ -29,14 +29,16 @@ vi.mock('./blobBase64', () => ({
   base64ToBlob: () => new Blob(),
 }))
 
-const { saveScanDocument, renameScanDocument } = await import('./scanStorage')
+const { saveScanDocument, renameScanDocument, restoreDocumentFromJpegs, listScanDocuments } = await import(
+  './scanStorage'
+)
 
 /** Menaruh satu dokumen di index yang dibaca readIndex(). */
 function seedIndex(title: string) {
   fs.readFile.mockResolvedValue({
     data: JSON.stringify([
       {
-        schemaVersion: 2,
+        schemaVersion: 6,
         id: 'doc-1',
         title,
         createdAt: '2026-08-23T00:00:00.000Z',
@@ -49,7 +51,7 @@ function seedIndex(title: string) {
 
 /** Index yang ditulis kembali ke disk pada pemanggilan terakhir. */
 function writtenIndex() {
-  const call = fs.writeFile.mock.calls.find((c) => c[0].path === 'scans/index.json')
+  const call = fs.writeFile.mock.calls.filter((c) => c[0].path === 'scans/index.json').at(-1)
   return JSON.parse(call![0].data)
 }
 
@@ -61,6 +63,9 @@ function createdDocDir(): string {
 beforeEach(() => {
   for (const fn of Object.values(fs)) fn.mockClear()
   fs.readFile.mockResolvedValue({ data: '[]' })
+  // mockClear() menyimpan implementasi; dikembalikan supaya satu test yang
+  // membuat mkdir gagal tidak menular ke test berikutnya.
+  fs.mkdir.mockImplementation(async () => {})
 })
 
 describe('saveScanDocument', () => {
@@ -175,5 +180,173 @@ describe('renameScanDocument', () => {
 
     expect(writtenIndex()[0].pages).toEqual([{ original: 'scans/doc-1/page-1.jpg' }])
     expect(writtenIndex()[0].pageCount).toBe(1)
+  })
+})
+
+describe('restoreDocumentFromJpegs', () => {
+  const cloudDoc = {
+    id: '96903960-6bf5-4af9-9b08-5fade4699a91',
+    title: 'Dok agent',
+    createdAt: '2026-08-22T18:46:10.365Z',
+  }
+
+  it('writes one file per page and indexes the restored document', async () => {
+    const doc = await restoreDocumentFromJpegs(cloudDoc, [new Uint8Array([1]), new Uint8Array([2])])
+
+    expect(doc.pageCount).toBe(2)
+    // 2 halaman + 1 tulis index.json
+    expect(fs.writeFile).toHaveBeenCalledTimes(3)
+    expect(writtenIndex()[0].pages).toEqual([
+      { original: `scans/${cloudDoc.id}/page-1.jpg` },
+      { original: `scans/${cloudDoc.id}/page-2.jpg` },
+    ])
+  })
+
+  /**
+   * Yang membuat pemulihan tidak merusak apa pun. Kalau dokumen hasil pulihan
+   * mendapat id baru, mencadangkannya lagi akan menulis baris kedua di
+   * `scan_documents` dan menghitung byte yang sama dua kali terhadap kuota —
+   * cadangan lama pun jadi yatim, tidak lagi dikenali sebagai dokumen ini.
+   */
+  it('keeps the id the cloud copy already has', async () => {
+    const doc = await restoreDocumentFromJpegs(cloudDoc, [new Uint8Array([1])])
+
+    expect(doc.id).toBe(cloudDoc.id)
+    expect(writtenIndex()[0].id).toBe(cloudDoc.id)
+  })
+
+  it('keeps the original scan date rather than dating it today', async () => {
+    const doc = await restoreDocumentFromJpegs(cloudDoc, [new Uint8Array([1])])
+
+    expect(doc.createdAt).toBe(cloudDoc.createdAt)
+  })
+
+  it('removes the half-written directory when a page cannot be written', async () => {
+    fs.writeFile.mockRejectedValueOnce(new Error('disk penuh'))
+
+    await expect(
+      restoreDocumentFromJpegs(cloudDoc, [new Uint8Array([1])]),
+    ).rejects.toThrow('disk penuh')
+
+    expect(fs.rmdir).toHaveBeenCalledWith(
+      expect.objectContaining({ path: `scans/${cloudDoc.id}`, recursive: true }),
+    )
+    expect(fs.writeFile).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'scans/index.json' }),
+    )
+  })
+
+  /**
+   * Memulihkan dokumen yang salinan lokalnya masih ada akan menimpa berkas
+   * halaman yang mungkin sudah diedit di HP. UI tidak pernah menawarkannya,
+   * tapi lapisan penyimpanan tidak boleh bergantung pada itu.
+   */
+  it('refuses to overwrite a document that is still on the phone', async () => {
+    fs.readFile.mockResolvedValue({
+      data: JSON.stringify([
+        {
+          schemaVersion: 6,
+          id: cloudDoc.id,
+          title: 'Dok agent',
+          createdAt: cloudDoc.createdAt,
+          pageCount: 1,
+          pages: [{ original: `scans/${cloudDoc.id}/page-1.jpg` }],
+        },
+      ]),
+    })
+
+    await expect(restoreDocumentFromJpegs(cloudDoc, [new Uint8Array([1])])).rejects.toThrow(
+      'Dokumen ini sudah ada di HP.',
+    )
+    expect(fs.writeFile).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Beda dengan saveScanDocument: id-nya dipakai ulang dari cloud, jadi folder
+   * `scans/<id>/` bisa sudah ada — misalnya kalau rmdir saat menghapus dokumen
+   * gagal padahal index tetap dibersihkan. Folder yang sudah ada bukan alasan
+   * untuk menolak memulihkan.
+   */
+  it('restores even when the document folder is already there', async () => {
+    // Hanya folder dokumennya yang sudah ada; `scans/` sendiri dibuat seperti
+    // biasa — kalau keduanya ditolak, ensureScansDir yang menelan errornya dan
+    // test ini tidak menguji apa pun.
+    fs.mkdir.mockImplementation(async ({ path }: { path: string }) => {
+      if (path === `scans/${cloudDoc.id}`) throw new Error('Directory exists')
+    })
+
+    const doc = await restoreDocumentFromJpegs(cloudDoc, [new Uint8Array([1])])
+
+    expect(doc.pageCount).toBe(1)
+    expect(writtenIndex()[0].id).toBe(cloudDoc.id)
+  })
+
+  /**
+   * Index dibaca ulang tepat sebelum ditulis, sama seperti saveScanDocument.
+   * Kalau memakai salinan yang diambil sebelum unduhan dimulai, dokumen yang
+   * dipindai selama "Pulihkan semua" berjalan akan lenyap dari index padahal
+   * berkasnya sudah telanjur ada di disk.
+   */
+  it('keeps a document saved while the download was still running', async () => {
+    const scannedMeanwhile = {
+      schemaVersion: 6,
+      id: 'dipindai-saat-memulihkan',
+      title: 'Scan baru',
+      createdAt: '2026-08-23T01:00:00.000Z',
+      pageCount: 1,
+      pages: [{ original: 'scans/dipindai-saat-memulihkan/page-1.jpg' }],
+    }
+
+    // Pembacaan pertama (cek duplikat) melihat HP masih kosong; pembacaan
+    // kedua — setelah halaman ditulis — sudah memuat dokumen barusan.
+    fs.readFile.mockResolvedValueOnce({ data: '[]' })
+    fs.readFile.mockResolvedValue({ data: JSON.stringify([scannedMeanwhile]) })
+
+    await restoreDocumentFromJpegs(cloudDoc, [new Uint8Array([1])])
+
+    expect(writtenIndex().map((doc: { id: string }) => doc.id)).toEqual([
+      cloudDoc.id,
+      scannedMeanwhile.id,
+    ])
+  })
+})
+
+describe('readIndex — menulis ulang index yang masih versi lama', () => {
+  beforeEach(() => {
+    for (const fn of Object.values(fs)) fn.mockClear()
+  })
+
+  /**
+   * Baris penentunya di scanStorage membandingkan schemaVersion tersimpan
+   * dengan versi sekarang. Kalau angkanya ketinggalan saat skema naik, dokumen
+   * lama tetap dimigrasikan di memori tapi tidak pernah tersimpan — jadi
+   * migrasinya diulang tiap aplikasi dibuka, dan halaman yang dibuang karena
+   * rusak muncul lagi setiap kali.
+   */
+  it('menulis ulang index v4 ke disk sebagai v5', async () => {
+    fs.readFile.mockResolvedValue({
+      data: JSON.stringify([
+        {
+          schemaVersion: 4,
+          id: 'doc-lama',
+          title: 'Kwitansi',
+          createdAt: '2026-03-02T04:00:00.000Z',
+          pageCount: 1,
+          pages: [{ original: 'scans/doc-lama/page-1.jpg' }],
+        },
+      ]),
+    })
+
+    await listScanDocuments()
+
+    expect(writtenIndex()[0].schemaVersion).toBe(6)
+  })
+
+  it('tidak menulis apa pun kalau index sudah versi sekarang', async () => {
+    seedIndex('Kwitansi')
+
+    await listScanDocuments()
+
+    expect(fs.writeFile).not.toHaveBeenCalled()
   })
 })

@@ -167,6 +167,18 @@ export function MergeIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function SplitIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M3.5 12h4" />
+      <path d="M7.5 12a4 4 0 0 0 4-4h5" />
+      <path d="M7.5 12a4 4 0 0 1 4 4h5" />
+      <path d="m14 5.5 2.5 2.5L14 10.5" />
+      <path d="m14 13.5 2.5 2.5L14 18.5" />
+    </svg>
+  )
+}
+
 export function PdfIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">
@@ -226,12 +238,62 @@ export function LogoutIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function SunIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2" />
+      <path d="M12 19v2" />
+      <path d="M3 12h2" />
+      <path d="M19 12h2" />
+      <path d="m5.6 5.6 1.4 1.4" />
+      <path d="m17 17 1.4 1.4" />
+      <path d="m18.4 5.6-1.4 1.4" />
+      <path d="m7 17-1.4 1.4" />
+    </svg>
+  )
+}
+
 export function ImageIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">
       <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
       <circle cx="9" cy="10" r="1.5" />
       <path d="m4.5 17 4.5-4.5 3.5 3.5 3-2.5 4 4" />
+    </svg>
+  )
+}
+
+/** PNG: the same picture frame as JPG but stacked, so the two rows never read alike. */
+export function ImageStackIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <rect x="7.5" y="3.5" width="13" height="13" rx="2" />
+      <path d="M16.5 20.5h-9a2 2 0 0 1-2-2v-9" />
+      <path d="m9.5 13.6 3-3.2 2.3 2.4 1.8-1.6 2.9 2.9" />
+    </svg>
+  )
+}
+
+/** A signature: a flowing line over the rule it is signed on. */
+export function SignatureIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M3.5 15c2.5 0 3-8 5-8s1.5 8 3.5 8 2-4 3.5-4 1.2 2.5 2.6 2.5" />
+      <path d="M4 19.5h16" />
+    </svg>
+  )
+}
+
+/** A page with lines of type on it — recognised text, as opposed to a picture. */
+export function TextIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M14 3v4h4" />
+      <path d="M8.5 12h7" />
+      <path d="M8.5 15.5h7" />
+      <path d="M8.5 19h4" />
     </svg>
   )
 }

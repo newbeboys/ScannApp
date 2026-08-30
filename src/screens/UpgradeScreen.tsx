@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import { ArrowRightIcon, CheckIcon, ChevronLeftIcon } from '../components/Icons'
-import { MAX_BASIC_MERGE_PAGES } from '../lib/exportLimits'
-import { formatBytes } from '../lib/formatBytes'
 import type { PlanId } from '../lib/purchases/purchaseConfig'
 import {
   loadPlans,
@@ -9,7 +7,7 @@ import {
   restorePurchases,
   type PlanOption,
 } from '../lib/purchases/purchasesService'
-import { QUOTA_BYTES } from '../lib/storageQuota'
+import { limitRows } from '../lib/upgradeLedger'
 
 interface UpgradeScreenProps {
   onClose: () => void
@@ -21,31 +19,6 @@ interface UpgradeScreenProps {
 const PLAN_LABELS: Record<PlanId, { name: string; per: string }> = {
   monthly: { name: 'Bulanan', per: '/bulan' },
   yearly: { name: 'Tahunan', per: '/tahun' },
-}
-
-/**
- * What Basic gives up, and what Pro gives back.
- *
- * Deliberately lists only what the app enforces today — no ads, no watermark,
- * unlimited merge, larger quota. OCR, annotation and signatures belong to Fase
- * 6 and are not built, so they are not sold here. A paywall that takes money
- * for features that do not exist yet is a refund request waiting to happen.
- */
-function limitRows(plan: PlanId): { label: string; basic: string; pro: string }[] {
-  return [
-    {
-      label: 'Halaman per dokumen gabungan',
-      basic: `${MAX_BASIC_MERGE_PAGES} halaman`,
-      pro: 'Tanpa batas',
-    },
-    {
-      label: 'Penyimpanan cadangan cloud',
-      basic: formatBytes(QUOTA_BYTES.basic),
-      pro: formatBytes(QUOTA_BYTES[plan]),
-    },
-    { label: 'Iklan', basic: 'Banner & sisipan', pro: 'Tidak ada' },
-    { label: 'Watermark di PDF', basic: 'Ada', pro: 'Tidak ada' },
-  ]
 }
 
 export function UpgradeScreen({ onClose, onUpgraded, onNotice }: UpgradeScreenProps) {

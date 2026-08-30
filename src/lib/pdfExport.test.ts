@@ -1,4 +1,12 @@
-import { PDFDict, PDFDocument, PDFName } from 'pdf-lib'
+import {
+  PDFArray,
+  PDFDict,
+  PDFDocument,
+  PDFName,
+  PDFRawStream,
+  StandardFonts,
+  decodePDFRawStream,
+} from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 import { buildPdf } from './pdfExport'
 
@@ -92,5 +100,145 @@ describe('buildPdf', () => {
     const withoutMark = await buildPdf([jpegPage()], { watermark: false })
 
     expect(withMark.byteLength).toBeGreaterThan(withoutMark.byteLength)
+  })
+})
+
+/** The page's content stream, decompressed — where the drawing operators live. */
+async function contentStream(pdfBytes: Uint8Array, index = 0): Promise<string> {
+  const loaded = await PDFDocument.load(pdfBytes)
+  const contents = loaded.getPage(index).node.Contents()
+  const streams =
+    contents instanceof PDFArray
+      ? contents.asArray().map((ref) => loaded.context.lookup(ref))
+      : [contents]
+
+  return streams
+    .filter((stream): stream is PDFRawStream => stream instanceof PDFRawStream)
+    .map((stream) => Buffer.from(decodePDFRawStream(stream).decode()).toString('latin1'))
+    .join('\n')
+}
+
+/** WinAnsi bytes as pdf-lib writes them: `<48616C6F> Tj`. */
+function hexOf(word: string): string {
+  return Buffer.from(word, 'latin1').toString('hex').toUpperCase()
+}
+
+/** One word filling the given fraction of the page. */
+function layout(text: string, box: { x: number; y: number; w: number; h: number }) {
+  return { blocks: [{ text, lines: [{ text, words: [{ text, ...box }] }] }] }
+}
+
+/*
+  The test JPEG is 1x1, so it is fitted to whichever A4 edge runs out first —
+  the width, minus an 18pt margin on each side. The result is a square image
+  centred on a taller page, which is why the two offsets differ.
+*/
+const DRAW_SIZE = 595.28 - 36
+const IMAGE_LEFT = (595.28 - DRAW_SIZE) / 2
+const IMAGE_BOTTOM = (841.89 - DRAW_SIZE) / 2
+
+describe('buildPdf — invisible text layer', () => {
+  it('draws nothing at all when no text was recognised', async () => {
+    const pdf = await buildPdf([jpegPage()], { watermark: false })
+
+    expect(await contentStream(pdf)).not.toContain('Tr')
+  })
+
+  /**
+   * The upgrade must be invisible to documents that never ran OCR. Comparing
+   * whole files catches an accidental font embed or resource entry that a
+   * content-stream check would miss.
+   */
+  it('leaves the file byte-for-byte unchanged when a page has no text', async () => {
+    const before = await buildPdf([jpegPage()], { watermark: false })
+    const after = await buildPdf([jpegPage()], { watermark: false, text: [null] })
+
+    expect(Buffer.from(after)).toEqual(Buffer.from(before))
+  })
+
+  it('writes each word in the invisible rendering mode', async () => {
+    const pdf = await buildPdf([jpegPage()], {
+      watermark: false,
+      text: [layout('Kwitansi', { x: 0, y: 0, w: 0.5, h: 0.1 })],
+    })
+
+    const stream = await contentStream(pdf)
+    expect(stream).toContain('3 Tr')
+    expect(stream).toContain(`<${hexOf('Kwitansi')}> Tj`)
+  })
+
+  /**
+   * The box is a fraction of the *scan*, and the scan is drawn inside a
+   * margin on A4. A word placed against the page instead of against the image
+   * would sit 18pt out horizontally and 141pt out vertically here.
+   */
+  it('places a word against the drawn image, not against the paper', async () => {
+    const pdf = await buildPdf([jpegPage()], {
+      watermark: false,
+      text: [layout('Halo', { x: 0.25, y: 0.5, w: 0.5, h: 0.1 })],
+    })
+
+    const [, x, y] = /1 0 0 1 ([\d.-]+) ([\d.-]+) Tm/.exec(await contentStream(pdf))!
+
+    expect(Number(x)).toBeCloseTo(IMAGE_LEFT + 0.25 * DRAW_SIZE, 1)
+    // Fractions run downward from the top of the image; PDF y runs upward, so
+    // the baseline sits at the *bottom* edge of the box.
+    expect(Number(y)).toBeCloseTo(IMAGE_BOTTOM + (1 - 0.6) * DRAW_SIZE, 1)
+  })
+
+  /**
+   * Without the horizontal scale, a word's invisible run is however wide
+   * Helvetica happens to make it — so selecting one word highlights half a
+   * sentence, or a sliver of one.
+   */
+  it('stretches each word to the width of its own box', async () => {
+    const box = { x: 0.1, y: 0.2, w: 0.4, h: 0.05 }
+    const pdf = await buildPdf([jpegPage()], { watermark: false, text: [layout('Halo', box)] })
+
+    const stream = await contentStream(pdf)
+    const size = Number(/ ([\d.]+) Tf/.exec(stream)![1])
+    const squeeze = Number(/([\d.]+) Tz/.exec(stream)![1])
+
+    const doc = await PDFDocument.create()
+    const font = await doc.embedFont(StandardFonts.Helvetica)
+    const drawn = font.widthOfTextAtSize('Halo', size) * (squeeze / 100)
+
+    expect(drawn).toBeCloseTo(box.w * DRAW_SIZE, 1)
+  })
+
+  it('sizes a word from the height of its box', async () => {
+    const pdf = await buildPdf([jpegPage()], {
+      watermark: false,
+      text: [layout('Halo', { x: 0, y: 0, w: 0.5, h: 0.04 })],
+    })
+
+    const size = Number(/ ([\d.]+) Tf/.exec(await contentStream(pdf))![1])
+
+    expect(size).toBeCloseTo(0.04 * DRAW_SIZE, 1)
+  })
+
+  /**
+   * drawText throws on a character WinAnsi cannot encode. One such glyph
+   * anywhere in a twenty-page scan would otherwise take the whole export down
+   * — and the layer it belongs to is invisible.
+   */
+  it('survives a word the font cannot encode', async () => {
+    const pdf = await buildPdf([jpegPage()], {
+      watermark: false,
+      text: [layout('\u{1F600}\u540d', { x: 0, y: 0, w: 0.5, h: 0.1 })],
+    })
+
+    expect(pdf.byteLength).toBeGreaterThan(0)
+    expect(await contentStream(pdf)).not.toContain('Tj')
+  })
+
+  it('gives each page its own text', async () => {
+    const pdf = await buildPdf([jpegPage(), jpegPage()], {
+      watermark: false,
+      text: [layout('Pertama', { x: 0, y: 0, w: 0.5, h: 0.1 }), layout('Kedua', { x: 0, y: 0, w: 0.5, h: 0.1 })],
+    })
+
+    expect(await contentStream(pdf, 0)).toContain(`<${hexOf('Pertama')}> Tj`)
+    expect(await contentStream(pdf, 1)).toContain(`<${hexOf('Kedua')}> Tj`)
   })
 })

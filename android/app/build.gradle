@@ -10,8 +10,8 @@ android {
         // versionCode = angka yang dipakai Google Play untuk mendeteksi versi baru.
         // WAJIB dinaikkan setiap upload AAB baru ke Play Console, tidak boleh mundur/sama.
         // versionName = string yang dilihat user di halaman Play Store.
-        versionCode 7
-        versionName "2.1.0"
+        versionCode 11
+        versionName "2.4.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -63,6 +63,22 @@ repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
     }
+}
+
+// @capacitor-mlkit/text-recognition menarik kelima model skrip sekaligus.
+// Diukur dari Maven Google (16.0.1): Latin 1,38 MB, Mandarin 2,04 MB,
+// Devanagari 2,02 MB, Jepang 2,63 MB, Korea 1,90 MB — jadi ±8,6 MB masuk APK
+// untuk skrip yang tidak akan pernah dipakai aplikasi berbahasa Indonesia.
+//
+// Aman dibuang karena src/lib/ocr.ts memaku Script.Latin, dan pemilihnya di
+// plugin cuma switch biasa (createRecognizerOptionsForScript): cabang yang
+// tidak pernah dieksekusi tidak pernah memuat kelasnya. Kalau suatu hari OCR
+// non-Latin benar-benar dibutuhkan, hapus baris skrip itu di sini.
+configurations.configureEach {
+    exclude group: 'com.google.mlkit', module: 'text-recognition-chinese'
+    exclude group: 'com.google.mlkit', module: 'text-recognition-devanagari'
+    exclude group: 'com.google.mlkit', module: 'text-recognition-japanese'
+    exclude group: 'com.google.mlkit', module: 'text-recognition-korean'
 }
 
 dependencies {

@@ -15,6 +15,15 @@ export interface AuthContextValue {
   profile: Profile | null
   /** Effective tier — already accounts for an expired subscription. */
   tier: Tier
+  /**
+   * Whether the profile lookup has finished, however it turned out.
+   *
+   * `tier` reads Basic until the profile arrives, which is the safe default
+   * for gating a feature but the wrong one for spending a Pro user's attention
+   * on an ad. Anything that *costs* the user something on the strength of
+   * being Basic must wait for this.
+   */
+  tierResolved: boolean
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, displayName: string) => Promise<SignUpOutcome>
   signOut: () => Promise<void>

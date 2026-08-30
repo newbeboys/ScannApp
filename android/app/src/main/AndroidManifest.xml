@@ -22,17 +22,42 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+
         </activity>
 
         <!--
             AdMob APPLICATION_ID. SDK Google Mobile Ads sengaja membuat aplikasi
             crash saat start kalau meta-data ini tidak ada, jadi nilainya tidak
-            boleh kosong. Sekarang memakai App ID test resmi Google; GANTI dengan
-            App ID asli dari dashboard AdMob (ADMOB_APP_ID di .env) sebelum rilis.
+            boleh kosong.
+
+            Ini App ID asli akun AdMob Boss Ali (dipasang 23 Agustus 2026).
+            App ID bukan rahasia — memang wajib tertulis di manifest yang ikut
+            terkirim di dalam APK, jadi tidak melanggar Aturan Keras #1.
+
+            Yang menentukan iklan asli atau iklan test adalah UNIT ID, bukan
+            baris ini: resolveAdConfig() selalu jatuh ke unit test kalau
+            VITE_ADMOB_*_UNIT_ID kosong atau build-nya build dev.
         -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-1798871739591323~7781334359" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -57,9 +82,15 @@
     <uses-permission android:name="com.android.vending.BILLING" />
 
     <!--
-        Ekspor menulis PDF/JPG ke folder Documents publik supaya file-nya
-        bisa ditemukan lewat file manager. Izin ini hanya diperlukan di
-        Android 10 ke bawah; Android 11+ (scoped storage) tidak memintanya.
+        Dipakai HANYA oleh tujuan ekspor "Simpan ke HP", yang menulis ke
+        folder Documents publik supaya file-nya bisa ditemukan lewat file
+        manager. Tujuan "Bagikan" tidak menyentuh folder publik sama sekali —
+        ia menulis ke cache privat aplikasi lalu menyerahkannya lewat
+        FileProvider, supaya membatalkan share sheet tidak meninggalkan
+        berkas apa pun (keputusan Boss Ali 27 Agustus 2026).
+
+        Izin ini hanya diperlukan di Android 10 ke bawah; Android 11+
+        (scoped storage) tidak memintanya.
     -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"

@@ -4,12 +4,17 @@ import {
   ChevronLeftIcon,
   CropIcon,
   ExportIcon,
+  EyeIcon,
   PencilIcon,
+  SplitIcon,
   TrashIcon,
 } from '../components/Icons'
+import { OcrRow } from '../components/OcrRow'
 import { PageImage } from '../components/PageImage'
 import { MAX_TITLE_LENGTH } from '../../supabase/functions/_shared/documentTitle'
+import type { OcrProgress } from '../lib/ocr'
 import { resolvePage, type LocalScanDocument } from '../lib/scanStorage'
+import type { Tier } from '../lib/tier'
 
 interface DocumentDetailScreenProps {
   document: LocalScanDocument
@@ -18,11 +23,20 @@ interface DocumentDetailScreenProps {
   isRenaming?: boolean
   onBack: () => void
   onEdit: () => void
+  /** Opens the full-screen preview at the page the user tapped. */
+  onPreview: (pageIndex: number) => void
   onExport: () => void
+  /** Opens the split screen for this document. Every tier. */
+  onSplit: () => void
   onDelete: () => void
   onBackup: () => void
   onRemoveBackup: () => void
   onRename: (title: string) => void
+  tier: Tier
+  /** Set while this document is being read; null when nothing is running. */
+  ocrProgress: OcrProgress | null
+  onRecognizeText: () => void
+  onUpgrade: () => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('id-ID', {
@@ -40,13 +54,20 @@ export function DocumentDetailScreen({
   isRenaming = false,
   onBack,
   onEdit,
+  onPreview,
   onExport,
+  onSplit,
   onDelete,
   onBackup,
   onRemoveBackup,
   onRename,
+  tier,
+  ocrProgress,
+  onRecognizeText,
+  onUpgrade,
 }: DocumentDetailScreenProps) {
   const editedCount = doc.pages.filter((page) => page.edited).length
+  const recognizedCount = doc.pages.filter((page) => page.text).length
   const [draft, setDraft] = useState<string | null>(null)
   const isEditingName = draft !== null
 
@@ -130,6 +151,10 @@ export function DocumentDetailScreen({
       )}
 
       <div className="editor-actions">
+        <button type="button" className="button" onClick={() => onPreview(0)}>
+          <EyeIcon size={17} />
+          <span>Lihat</span>
+        </button>
         <button type="button" className="button" onClick={onEdit}>
           <CropIcon size={17} />
           <span>Edit</span>
@@ -140,6 +165,33 @@ export function DocumentDetailScreen({
         </button>
       </div>
 
+      {/*
+        A row of its own rather than a fourth button above: three is already the
+        width of a phone. Hidden for a single page — there is nothing to split —
+        which also keeps it out of the way of the documents it is not for.
+
+        This is the inverse of Gabungkan Dokumen on the Documents tab, and the
+        reason it exists: a merge done by mistake had no way back short of
+        scanning everything again (dilaporkan Boss Ali 25 Agustus 2026).
+      */}
+      {doc.pageCount > 1 && (
+        <div className="editor-actions">
+          <button type="button" className="button" onClick={onSplit}>
+            <SplitIcon size={17} />
+            <span>Pisah jadi Beberapa Dokumen</span>
+          </button>
+        </div>
+      )}
+
+      <OcrRow
+        tier={tier}
+        recognized={recognizedCount}
+        total={doc.pageCount}
+        progress={ocrProgress}
+        onRecognize={onRecognizeText}
+        onUpgrade={onUpgrade}
+      />
+
       <BackupRow
         status={backupStatus}
         sizeBytes={backupSizeBytes}
@@ -149,12 +201,19 @@ export function DocumentDetailScreen({
 
       <div className="doc-grid">
         {doc.pages.map((page, index) => (
-          <div key={page.original} className="doc-tile">
+          <button
+            key={page.original}
+            type="button"
+            className="doc-tile doc-tile--page"
+            onClick={() => onPreview(index)}
+            aria-label={`Lihat halaman ${index + 1}`}
+          >
             <div className="doc-tile__preview">
-              <PageImage source={resolvePage(page)} alt={`Halaman ${index + 1}`} />
+              {/* Named by the button around it; a second label would read the page twice. */}
+              <PageImage source={resolvePage(page)} alt="" />
             </div>
             <p>Halaman {index + 1}</p>
-          </div>
+          </button>
         ))}
       </div>
     </div>

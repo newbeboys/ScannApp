@@ -1,27 +1,63 @@
 import { Capacitor } from '@capacitor/core'
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useAuth } from './auth/useAuth'
+import { BatchExportSheet } from './components/BatchExportSheet'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { ExportSheet } from './components/ExportSheet'
-import { resetScanCount } from './lib/ads/adFrequency'
+import { CropIcon, ExportIcon } from './components/Icons'
+import { resetScanStreak } from './lib/ads/adFrequency'
 import { maybeShowInterstitial } from './lib/ads/adsService'
+import { shouldShowBanner } from './lib/ads/bannerGate'
+import { toastDurationMs } from './lib/toastDuration'
 import { useAdBanner } from './lib/ads/useAdBanner'
+import { useAppOpenAd } from './lib/ads/useAppOpenAd'
 import {
   backupDocument,
   deleteBackup,
   fetchStorageUsage,
   listCloudBackups,
   renameCloudDocument,
+  type CloudBackup,
 } from './lib/backupApi'
+import { restoreBackup } from './lib/cloudRestore'
+import { mergeDocumentEntries } from './lib/documentEntries'
 import { quotaBytesFor } from './lib/storageQuota'
-import { exportDocument, type ExportFormat } from './lib/documentExport'
+import {
+  canExportDocx,
+  exportDocument,
+  exportDocumentsBatch,
+  type BatchFormat,
+  type BatchProgress,
+  type ExportFormat,
+} from './lib/documentExport'
+import { summarizeSelection, toggleSelectAll, toggleSelection } from './lib/documentSelection'
+import { splitDocument } from './lib/documentSplit'
+import { estimateExportSizes, type ExportSizeEstimate } from './lib/exportEstimate'
+import {
+  readExportDestination,
+  readExportLevel,
+  writeExportDestination,
+  writeExportLevel,
+} from './lib/exportPreference'
+import type { CompressionLevel } from './lib/exportLimits'
+import type { ExportDestination } from './lib/exportShare'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
+import { onSharedFilesReceived } from './lib/sharedImport'
+import { describeOcrOutcome, recognizeDocument, type OcrProgress } from './lib/ocr'
+import {
+  boundaryCuts,
+  everyNCuts,
+  remapCutsAfterRemoval,
+  saveSplitScan,
+} from './lib/scanSplit'
 import {
   deleteAllScanDocuments,
   deleteScanDocument,
   listScanDocuments,
+  pruneUnusedSignatures,
   renameScanDocument,
+  resolvePage,
   saveScanDocument,
   type LocalScanDocument,
 } from './lib/scanStorage'
@@ -34,8 +70,10 @@ import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
 import { HomeScreen } from './screens/HomeScreen'
 import { LandingScreen } from './screens/LandingScreen'
 import { MergeScreen } from './screens/MergeScreen'
+import { PageViewerScreen } from './screens/PageViewerScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
+import { SplitScanScreen } from './screens/SplitScanScreen'
 import { SplashScreen } from './screens/SplashScreen'
 import { UpgradeScreen } from './screens/UpgradeScreen'
 
@@ -44,6 +82,8 @@ type View =
   | { kind: 'tabs' }
   | { kind: 'detail'; id: string }
   | { kind: 'editor'; id: string }
+  | { kind: 'split'; id: string }
+  | { kind: 'viewer'; id: string; pageIndex: number }
   | { kind: 'merge' }
   | { kind: 'backups' }
   | { kind: 'upgrade' }
@@ -52,45 +92,154 @@ type View =
 type AuthView = { kind: 'landing' } | { kind: 'auth'; mode: AuthMode } | { kind: 'forgot' }
 
 function App() {
-  const { status, tier, profile, signOut, refreshProfile } = useAuth()
+  const { status, tier, tierResolved, profile, signOut, refreshProfile } = useAuth()
   const [authView, setAuthView] = useState<AuthView>({ kind: 'landing' })
   const [tab, setTab] = useState<TabId>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
   const [documents, setDocuments] = useState<LocalScanDocument[]>([])
   const [pendingPages, setPendingPages] = useState<string[] | null>(null)
+  // Lets the effect below read the *current* pendingPages without adding it
+  // to the effect's dependency array (which would tear down and rebuild the
+  // native listener subscription on every single page added or removed --
+  // wasteful, and a real risk of missing a share that arrives in the gap
+  // between unsubscribe and resubscribe, since the unsubscribe itself is
+  // async). Assigning during render is the standard way to keep a ref
+  // current without an extra effect.
+  const pendingPagesRef = useRef(pendingPages)
+  pendingPagesRef.current = pendingPages
   const [currentPage, setCurrentPage] = useState(0)
+  /** Which freshly-scanned page is open full-screen, if any. */
+  const [reviewPreview, setReviewPreview] = useState<number | null>(null)
+  /** Split screen is on top of the review screen, and what it is holding. */
+  const [splitting, setSplitting] = useState(false)
+  const [splitCuts, setSplitCuts] = useState<number[]>([])
+  const [splitName, setSplitName] = useState('')
+  /**
+   * How many documents this split session has already saved.
+   *
+   * Only non-zero after a save that half succeeded: the retry continues the
+   * numbering rather than minting a second "Kwitansi (1)".
+   */
+  const [splitSaved, setSplitSaved] = useState(0)
+  const [splitProgress, setSplitProgress] = useState<{ done: number; total: number } | null>(null)
+  /**
+   * The split screen for a document that is *already saved* — the inverse of
+   * Gabungkan Dokumen. Kept apart from the scan-split state above because the
+   * two flows can be entered from opposite ends of the app and neither should
+   * be able to inherit the other's half-finished cuts or typed name.
+   */
+  const [docSplitCuts, setDocSplitCuts] = useState<number[]>([])
+  const [docSplitName, setDocSplitName] = useState('')
+  const [docSplitDeleteOriginal, setDocSplitDeleteOriginal] = useState(false)
+  const [isSplittingDoc, setIsSplittingDoc] = useState(false)
+  const [docSplitProgress, setDocSplitProgress] = useState<
+    { done: number; total: number } | null
+  >(null)
   const [isScanning, setIsScanning] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isMerging, setIsMerging] = useState(false)
   const [exportTarget, setExportTarget] = useState<string | null>(null)
+  // Read once at mount: what the user chose on a previous export.
+  const [exportLevel, setExportLevel] = useState<CompressionLevel>(() => readExportLevel())
+  const [exportDestination, setExportDestination] = useState<ExportDestination>(() =>
+    readExportDestination(),
+  )
+  const [exportEstimate, setExportEstimate] = useState<ExportSizeEstimate | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-  /** Sizes of documents that have a cloud copy, keyed by document id. */
-  const [backedUp, setBackedUp] = useState<Record<string, number>>({})
+  const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null)
+  /** Every document this account has in the cloud, whether or not it is on the phone. */
+  const [backups, setBackups] = useState<CloudBackup[]>([])
   const [backupBusyId, setBackupBusyId] = useState<string | null>(null)
+  const [restoringId, setRestoringId] = useState<string | null>(null)
+  const [isRestoringAll, setIsRestoringAll] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  /**
+   * Whether anything was actually changed in the editor session that is open.
+   *
+   * "Selesai edit" earns an interstitial, but opening the editor and backing
+   * straight out is not an edit — charging an ad for a look would be the kind
+   * of unexpected full-screen ad that makes people uninstall.
+   */
+  const [editedInSession, setEditedInSession] = useState(false)
   const [usedBytes, setUsedBytes] = useState(0)
+  /** Documents tab is in select mode, and what is ticked in it right now. */
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  /** Open when the batch export sheet is showing. */
+  const [batchOpen, setBatchOpen] = useState(false)
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null)
+  const [isBatchBusy, setIsBatchBusy] = useState(false)
+  const batchAbort = useRef<AbortController | null>(null)
   const isNative = Capacitor.isNativePlatform()
   const quotaBytes = quotaBytesFor(profile)
+
+  /**
+   * The document the export sheet is for, or null when it is closed.
+   *
+   * Resolved here rather than next to the sheet's JSX because the banner gate
+   * below has to agree with it: keying the gate off `exportTarget` instead
+   * would let the two drift, and an id left pointing at a document no longer in
+   * the list renders no sheet while still suppressing the banner — an ad that
+   * silently never comes back, with nothing on screen to explain it.
+   */
+  const exportDoc = documents.find((doc) => doc.id === exportTarget) ?? null
+
+  /**
+   * Every sheet that covers the tab screen must be listed here.
+   *
+   * A sheet opens *over* the tab screen without replacing it, so `view.kind`
+   * stays 'tabs' and a gate that only asks which screen is showing leaves the
+   * banner sitting on top of the sheet's own action button (Boss Ali, HP,
+   * 26 Agustus 2026). Adding a new bottom sheet without adding it here brings
+   * that bug straight back.
+   */
+  const sheetOpen = exportDoc !== null || batchOpen
 
   // Banner only on the tab screens — never over a scan review, editor, merge
   // or paywall, where it would sit in the middle of a task (spec Bagian 3.3).
   const bannerPx = useAdBanner(
-    status === 'signed-in' && view.kind === 'tabs' && pendingPages === null,
+    shouldShowBanner({
+      signedIn: status === 'signed-in',
+      onTabs: view.kind === 'tabs',
+      reviewingScan: pendingPages !== null,
+      sheetOpen,
+    }),
     tier,
   )
+
+  // Waits for `tierResolved`, not just for being signed in: `tier` reads Basic
+  // until the profile lands, so a Pro user signing in on a new phone would be
+  // met with a full-screen ad they have paid not to see.
+  useAppOpenAd(status === 'signed-in' && tierResolved, tier)
 
   const refreshDocuments = useCallback(async () => {
     setDocuments(await listScanDocuments())
   }, [])
 
-  /** Which local documents already have a cloud copy, and how big it is. */
+  /** What the account has in the cloud, and how much room it is using. */
   const refreshBackupState = useCallback(async () => {
-    const [backups, usage] = await Promise.all([listCloudBackups(), fetchStorageUsage()])
+    const [cloud, usage] = await Promise.all([listCloudBackups(), fetchStorageUsage()])
 
-    setBackedUp(Object.fromEntries(backups.map((backup) => [backup.id, backup.sizeBytes])))
+    setBackups(cloud)
     setUsedBytes(usage?.usedBytes ?? 0)
   }, [])
+
+  /** Sizes of documents that have a cloud copy, keyed by document id. */
+  const backedUp = useMemo(
+    () => Object.fromEntries(backups.map((backup) => [backup.id, backup.sizeBytes])),
+    [backups],
+  )
+
+  /**
+   * The list the user sees: what is on the phone, plus every backup that is
+   * not. Without the second half, a reinstall shows an empty app even though
+   * the account still owns the documents.
+   */
+  const entries = useMemo(
+    () => mergeDocumentEntries(documents, backups),
+    [documents, backups],
+  )
 
   useEffect(() => {
     if (status !== 'signed-in') return
@@ -99,10 +248,84 @@ function App() {
   }, [refreshDocuments, refreshBackupState, status])
 
   useEffect(() => {
+    return onSharedFilesReceived(({ images, skippedCount }) => {
+      if (images.length > 0) {
+        if (pendingPagesRef.current) {
+          // Mid-review already: same as handleAddPages -- append only.
+          // Deliberately does NOT touch split state: if the user is in the
+          // middle of the Pisah screen with cuts already placed, a share
+          // arriving must not silently discard that unsaved work.
+          setPendingPages((existing) => [...(existing ?? []), ...images])
+        } else {
+          // Nothing in progress: same as handleStartScan -- a fresh review
+          // session, so stale state from whatever came before is cleared.
+          // Calls exitSplit() itself rather than repeating its reset list,
+          // specifically so this can never drift out of sync with it again
+          // (an earlier draft of this effect hand-copied four of exitSplit's
+          // five resets and missed setSplitSaved(0) -- caught in review).
+          setPendingPages(images)
+          setCurrentPage(0)
+          setReviewPreview(null)
+          exitSplit()
+        }
+      }
+
+      if (skippedCount > 0) {
+        setToast(
+          images.length > 0
+            ? 'Sebagian file tidak bisa diimpor.'
+            : 'Tidak ada file yang bisa diimpor.',
+        )
+      }
+    })
+  }, [])
+
+  useEffect(() => {
     if (!toast) return
-    const timer = setTimeout(() => setToast(null), 2600)
+    const timer = setTimeout(() => setToast(null), toastDurationMs(toast))
     return () => clearTimeout(timer)
   }, [toast])
+
+  /**
+   * Measures what each format would weigh at the chosen level, so the export
+   * sheet can put a number next to every option instead of asking the user to
+   * trade quality against a size they cannot see.
+   *
+   * Held back by a short delay rather than started on every step. Each run
+   * decodes a full-resolution page and encodes it twice — once of that is
+   * cheap, four overlapping copies of it on a low-end phone is not, and a drag
+   * from Kecil to Maksimal passes through every stop on the way. `cancelled`
+   * covers the run already in flight when the next one starts, so a slower
+   * earlier measurement cannot land last and label the wrong level.
+   */
+  useEffect(() => {
+    const doc = documents.find((entry) => entry.id === exportTarget)
+    if (!doc) {
+      setExportEstimate(null)
+      return
+    }
+
+    let cancelled = false
+    // Cleared straight away: a stale number under a level the user just moved
+    // off is worse than no number at all.
+    setExportEstimate(null)
+
+    const timer = setTimeout(() => {
+      estimateExportSizes(doc, exportLevel)
+        .then((sizes) => {
+          if (!cancelled) setExportEstimate(sizes)
+        })
+        .catch(() => {
+          // No number is better than a wrong one; the sheet simply shows none.
+          if (!cancelled) setExportEstimate(null)
+        })
+    }, 220)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [documents, exportTarget, exportLevel, tier])
 
   const runScanner = async (): Promise<string[] | null> => {
     setIsScanning(true)
@@ -118,11 +341,25 @@ function App() {
     }
   }
 
+  /** Leaves split mode and forgets everything it was holding. */
+  const exitSplit = () => {
+    setSplitting(false)
+    setSplitCuts([])
+    setSplitName('')
+    setSplitSaved(0)
+    setSplitProgress(null)
+  }
+
   const handleStartScan = async () => {
     const pages = await runScanner()
     if (!pages) return
     setPendingPages(pages)
     setCurrentPage(0)
+    // A preview left open from the previous scan would reopen over the new one.
+    setReviewPreview(null)
+    // Same reasoning for the split screen: cuts belong to the scan that made
+    // them, and a new scan is a new set of pages.
+    exitSplit()
   }
 
   const handleAddPages = async () => {
@@ -137,6 +374,12 @@ function App() {
       const next = existing.filter((_, i) => i !== index)
       return next.length > 0 ? next : null
     })
+    // The split screen keeps its cuts when it is closed, so they outlive the
+    // page list they were placed against. Left alone, deleting a page here
+    // would silently slide every later separator onto a different boundary the
+    // next time Pisah is opened.
+    const pagesAfter = Math.max((pendingPages?.length ?? 0) - 1, 0)
+    setSplitCuts((cuts) => remapCutsAfterRemoval(cuts, index, pagesAfter))
     setCurrentPage((current) => (current > 0 ? current - 1 : 0))
   }
 
@@ -147,6 +390,7 @@ function App() {
       await saveScanDocument(pendingPages)
       await refreshDocuments()
       setPendingPages(null)
+      exitSplit()
       setTab('documents')
       setToast('Dokumen tersimpan.')
       // Counted per saved document, not per scanner launch: a cancelled scan
@@ -159,9 +403,60 @@ function App() {
     }
   }
 
+  const handleStartSplit = () => {
+    // Opens on "one document per page" — the case the feature exists for — but
+    // only when this split session has nothing of its own yet. Re-entering
+    // after a save that half succeeded (Kembali, then Pisah again) must keep
+    // the cuts rebuilt around what is left, the name that was typed, and
+    // `splitSaved`; resetting the last of those would number the retry from
+    // "(1)" again, straight into the titles round one already saved.
+    setSplitCuts((current) =>
+      current.length > 0 ? current : everyNCuts(pendingPages?.length ?? 0, 1),
+    )
+    setSplitting(true)
+  }
+
+  const handleSplitSave = async (groups: string[][]) => {
+    setIsSaving(true)
+    try {
+      const result = await saveSplitScan(groups, splitName, splitSaved, (done, total) =>
+        setSplitProgress({ done, total }),
+      )
+      await refreshDocuments()
+      setToast(result.message)
+
+      if (result.remaining.length === 0) {
+        setPendingPages(null)
+        exitSplit()
+        setTab('documents')
+      } else {
+        // The groups that failed stay on screen with their cuts rebuilt around
+        // them, so Simpan can be pressed again without scanning anything twice.
+        setPendingPages(result.remaining.flat())
+        setSplitCuts(boundaryCuts(result.remaining))
+        setSplitSaved((count) => count + result.saved.length)
+        setCurrentPage(0)
+      }
+
+      // Once for the whole split session, not once per document: written per
+      // document, a subscription that lapses later would fire eight
+      // interstitials back to back.
+      if (result.saved.length > 0) void maybeShowInterstitial('scan-saved', tier)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal menyimpan dokumen.')
+    } finally {
+      setIsSaving(false)
+      setSplitProgress(null)
+    }
+  }
+
   const handleDelete = async (id: string) => {
     const hadBackup = id in backedUp
     await deleteScanDocument(id)
+    // Signature files live outside any one document because the same signature
+    // is stamped across many. Deleting a document can therefore leave the last
+    // reference to one behind — nothing else would ever collect it.
+    await pruneUnusedSignatures()
     await refreshDocuments()
     setView({ kind: 'tabs' })
     // The cloud copy is deliberately kept — surviving a local delete is the
@@ -171,9 +466,17 @@ function App() {
 
   const handleDeleteAll = async () => {
     if (!confirm('Hapus semua dokumen tersimpan? Tindakan ini tidak bisa dibatalkan.')) return
+    const hadBackups = backups.length > 0
     await deleteAllScanDocuments()
+    await pruneUnusedSignatures()
     await refreshDocuments()
-    setToast('Semua dokumen dihapus.')
+    // Same reasoning as handleDelete: the cloud copies survive on purpose, and
+    // they are about to reappear in the list as restorable — say so first.
+    setToast(
+      hadBackups
+        ? 'Semua dokumen dihapus dari HP. Cadangan di cloud tetap ada.'
+        : 'Semua dokumen dihapus.',
+    )
   }
 
   const handleExport = async (format: ExportFormat) => {
@@ -181,11 +484,16 @@ function App() {
     if (!doc) return
     setIsExporting(true)
     try {
-      const result = await exportDocument(doc, format, tier)
+      const result = await exportDocument(doc, format, tier, {
+        level: exportLevel,
+        destination: exportDestination,
+      })
+      // Closed either way: dismissing the share sheet is the user saying they
+      // are done, so leaving this one up behind it asks the question twice.
       setExportTarget(null)
       setToast(result.message)
-      // After delivery, so the ad never races the Android share sheet.
-      void maybeShowInterstitial('export-finished', tier)
+      // No ad here any more. Exporting stopped being a trigger when Boss Ali
+      // rewrote the policy on 23 Agustus 2026 — see CLAUDE.md Bagian 6.
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Gagal mengekspor dokumen.')
     } finally {
@@ -212,12 +520,174 @@ function App() {
       await refreshDocuments()
       setView({ kind: 'detail', id: merged.id })
       setToast(`Dokumen digabung — ${merged.pageCount} halaman.`)
+      // Fired after the result is on screen, so the user sees what they made
+      // before the ad rather than after dismissing it.
+      void maybeShowInterstitial('merge-finished', tier)
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Gagal menggabungkan dokumen.')
     } finally {
       setIsMerging(false)
     }
   }
+
+  /**
+   * Opens the split screen on a document that is already saved.
+   *
+   * Starts on "one document per page", which is the case it exists for: a
+   * merge done by mistake, or a stack of receipts scanned as one document.
+   * Every separator can still be moved by hand from there.
+   */
+  const handleOpenDocumentSplit = (doc: LocalScanDocument) => {
+    setDocSplitCuts(everyNCuts(doc.pageCount, 1))
+    setDocSplitName(doc.title)
+    // Off every time this opens. Deleting the source is the one irreversible
+    // thing on that screen, so it must never arrive already ticked from a
+    // previous document.
+    setDocSplitDeleteOriginal(false)
+    setView({ kind: 'split', id: doc.id })
+  }
+
+  const handleDocumentSplit = async (doc: LocalScanDocument, groups: number[][]) => {
+    // Read before the split runs: the delete below takes the row out of the
+    // index, and `refreshDocuments` would leave nothing to ask afterwards.
+    const hadBackup = doc.id in backedUp
+
+    setIsSplittingDoc(true)
+    try {
+      const result = await splitDocument(
+        doc,
+        groups,
+        docSplitName,
+        { deleteOriginal: docSplitDeleteOriginal },
+        (done, total) => setDocSplitProgress({ done, total }),
+      )
+      await refreshDocuments()
+      // The cloud copy survives a local delete on purpose — that is what a
+      // backup is for — but saying nothing here makes the original look like
+      // it came back from the dead as a "Di cloud" row a moment later. Same
+      // reasoning as `handleDelete`.
+      setToast(
+        result.originalRemoved && hadBackup
+          ? `${result.message} Cadangan di cloud tetap ada.`
+          : result.message,
+      )
+
+      // Anything that landed is worth showing. Only a run that produced
+      // nothing at all leaves the user on the split screen to try again —
+      // after a partial run the source still holds every page, so pressing
+      // Pisah a second time would duplicate the groups that succeeded.
+      if (result.saved.length > 0) {
+        setTab('documents')
+        setView({ kind: 'tabs' })
+      }
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal memisah dokumen.')
+    } finally {
+      setIsSplittingDoc(false)
+      setDocSplitProgress(null)
+    }
+  }
+
+  const exitSelect = () => {
+    setSelectMode(false)
+    setSelectedIds([])
+  }
+
+  const handleEnterSelect = (id: string) => {
+    setSelectMode(true)
+    // The header's "Pilih" button enters without ticking anything; a long
+    // press ticks the row it was held on.
+    if (id) setSelectedIds([id])
+  }
+
+  const handleBatchExport = async (format: BatchFormat) => {
+    const chosen = summarizeSelection(entries, selectedIds).documents
+    if (chosen.length === 0) return
+
+    const controller = new AbortController()
+    batchAbort.current = controller
+    setIsBatchBusy(true)
+    try {
+      const result = await exportDocumentsBatch(chosen, tier, {
+        level: exportLevel,
+        format,
+        destination: exportDestination,
+        onProgress: setBatchProgress,
+        signal: controller.signal,
+      })
+      setToast(result.message)
+      // The selection survives a partial failure, a stop, or a dismissed share
+      // sheet, so the rest can be retried without re-ticking everything from
+      // scratch. A dismissed sheet delivered nothing at all, which is the case
+      // most likely to be retried immediately.
+      if (result.failed.length === 0 && !result.cancelled && !result.dismissed) exitSelect()
+      setBatchOpen(false)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal mengekspor dokumen.')
+    } finally {
+      batchAbort.current = null
+      setBatchProgress(null)
+      setIsBatchBusy(false)
+    }
+  }
+
+  const handleBatchDelete = async () => {
+    const chosen = summarizeSelection(entries, selectedIds).documents
+    if (chosen.length === 0) return
+    if (
+      !confirm(`Hapus ${chosen.length} dokumen dari HP? Cadangan di cloud tidak ikut terhapus.`)
+    ) {
+      return
+    }
+
+    setIsBatchBusy(true)
+    let removed = 0
+    try {
+      for (const doc of chosen) {
+        try {
+          await deleteScanDocument(doc.id)
+          removed++
+        } catch {
+          // Counted by the gap between chosen.length and removed below; one
+          // document refusing to delete must not hold up the rest.
+        }
+      }
+    } finally {
+      try {
+        // Once at the end, not per document: a signature is shared across
+        // documents, so sweeping it mid-loop could delete a file still
+        // referenced by a document that has not been deleted yet.
+        await pruneUnusedSignatures()
+        await refreshDocuments()
+      } catch {
+        // The documents are already gone from local storage either way; if
+        // this cleanup step fails, the busy flag must still release below
+        // rather than getting stuck open on a best-effort step.
+      }
+      // The busy flag always releases so the action bar never gets stuck
+      // disabled, but the selection itself only clears on a clean run —
+      // `removed` was declared above the try block, so it is still in scope
+      // here even though the count is only known once the loop is done.
+      // Same rule as handleBatchExport: a partial failure keeps the
+      // selection so the stragglers can be retried without re-ticking them.
+      setIsBatchBusy(false)
+      if (removed === chosen.length) exitSelect()
+    }
+
+    const failed = chosen.length - removed
+    setToast(
+      failed > 0
+        ? `${removed} dokumen dihapus, ${failed} gagal.`
+        : `${removed} dokumen dihapus dari HP.`,
+    )
+  }
+
+  // Select mode belongs to the Documents tab. Leaving for Home and coming
+  // back to find the action bar still hanging around would be unexplainable.
+  useEffect(() => {
+    if (tab !== 'documents') exitSelect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
 
   /** Keeps the open detail/editor screen pointed at fresh data after an edit. */
   const activeDocument =
@@ -232,6 +702,32 @@ function App() {
     setDocuments((existing) =>
       existing.map((doc) => (doc.id === updated.id ? updated : doc)),
     )
+  }
+
+  /**
+   * Reads a document's text, page by page.
+   *
+   * `force` is decided here rather than by the row: the row knows how many
+   * pages have text, so a document that is already complete asks for a re-read
+   * and a half-done one asks only for the rest. That is also what makes the
+   * same button the way back after cropping a page, which throws that page's
+   * text away.
+   */
+  const handleRecognizeText = async (doc: LocalScanDocument) => {
+    const complete = doc.pages.every((page) => page.text)
+    setOcrProgress({ done: 0, total: doc.pageCount })
+    try {
+      const outcome = await recognizeDocument(doc.id, tier, {
+        force: complete,
+        onProgress: setOcrProgress,
+      })
+      await refreshDocuments()
+      setToast(describeOcrOutcome(outcome))
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal mengenali teks.')
+    } finally {
+      setOcrProgress(null)
+    }
   }
 
   const handleBackup = async (doc: LocalScanDocument) => {
@@ -264,6 +760,69 @@ function App() {
   }
 
   /**
+   * Pulls one cloud-only document back onto the phone.
+   *
+   * Both lists offer this, and neither hands over the backup itself, so it is
+   * looked up here — the id they pass came out of `backups` to begin with.
+   */
+  const handleRestore = async (id: string) => {
+    const backup = backups.find((entry) => entry.id === id)
+    if (!backup) return
+
+    setRestoringId(id)
+    try {
+      const doc = await restoreBackup(backup)
+      await refreshDocuments()
+      setToast(`"${doc.title}" dipulihkan ke HP — ${doc.pageCount} halaman.`)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal memulihkan dokumen.')
+    } finally {
+      setRestoringId(null)
+    }
+  }
+
+  /**
+   * Restores every document the list shows as cloud-only, one after another.
+   *
+   * Sequential on purpose: these are whole PDFs over a phone connection, and
+   * starting them all at once would only make them compete for the same
+   * bandwidth. One failure does not abandon the rest — a single unreadable
+   * backup should not keep every other document off the phone.
+   */
+  const handleRestoreAll = async () => {
+    const pending = entries.flatMap((entry) => (entry.kind === 'cloud' ? [entry.backup] : []))
+    if (pending.length === 0) return
+
+    setIsRestoringAll(true)
+    let restored = 0
+    try {
+      for (const backup of pending) {
+        setRestoringId(backup.id)
+        try {
+          await restoreBackup(backup)
+          restored++
+        } catch {
+          // Counted by omission — the summary below reports how many failed.
+        }
+      }
+    } finally {
+      setRestoringId(null)
+      setIsRestoringAll(false)
+      // Whatever did land belongs on screen, even if the rest did not.
+      await refreshDocuments()
+    }
+
+    const failed = pending.length - restored
+    if (restored === 0) {
+      setToast('Tidak ada dokumen yang berhasil dipulihkan. Periksa koneksi lalu coba lagi.')
+    } else if (failed > 0) {
+      setToast(`${restored} dokumen dipulihkan, ${failed} gagal. Coba lagi untuk sisanya.`)
+    } else {
+      setToast(`${restored} dokumen dipulihkan ke HP.`)
+    }
+  }
+
+  /**
    * Local-first: the name changes on the phone straight away, then we try to
    * point the cloud copy at it. A failed sync is reported but never rolls the
    * local rename back — and the next backup carries the current name up anyway.
@@ -278,6 +837,17 @@ function App() {
       // listCloudBackups() failed, which would skip the sync for the whole
       // session while still reporting success.
       const result = await renameCloudDocument(id, updated.title)
+      if (result === 'synced') {
+        // Keeps the cloud list from holding the old name: after this document
+        // is deleted from the phone it reappears as a cloud entry, and
+        // restoring it would write that stale name back into local storage.
+        setBackups((current) =>
+          current.map((backup) =>
+            backup.id === id ? { ...backup, title: updated.title } : backup,
+          ),
+        )
+      }
+
       setToast(
         result === 'failed'
           ? 'Nama diubah di HP. Nama di cloud menyusul saat dicadangkan lagi.'
@@ -297,7 +867,7 @@ function App() {
       await signOut()
       // The scan counter is per person, not per device — the next account to
       // sign in should not inherit someone else's progress toward an ad.
-      resetScanCount()
+      resetScanStreak()
       setTab('home')
       setView({ kind: 'tabs' })
       setAuthView({ kind: 'landing' })
@@ -306,14 +876,55 @@ function App() {
     }
   }
 
-  const exportDoc = documents.find((doc) => doc.id === exportTarget) ?? null
   const exportSheet = exportDoc && (
     <ExportSheet
       pageCount={exportDoc.pageCount}
       tier={tier}
       isBusy={isExporting}
+      level={exportLevel}
+      destination={exportDestination}
+      estimate={exportEstimate}
+      hasText={canExportDocx(exportDoc)}
+      onLevelChange={(next) => {
+        setExportLevel(next)
+        writeExportLevel(next)
+      }}
+      onDestinationChange={(next) => {
+        setExportDestination(next)
+        writeExportDestination(next)
+      }}
       onExport={handleExport}
+      onRecognizeText={() => {
+        // The sheet is closed first: the recogniser reports its progress on
+        // the row underneath, which the sheet would be covering.
+        setExportTarget(null)
+        if (tier === 'pro') void handleRecognizeText(exportDoc)
+        else setView({ kind: 'upgrade' })
+      }}
       onClose={() => setExportTarget(null)}
+    />
+  )
+
+  const batchSelection = summarizeSelection(entries, selectedIds)
+  const batchSheet = batchOpen && (
+    <BatchExportSheet
+      count={batchSelection.count}
+      pageCount={batchSelection.pageCount}
+      level={exportLevel}
+      destination={exportDestination}
+      progress={batchProgress}
+      isBusy={isBatchBusy}
+      onLevelChange={(next) => {
+        setExportLevel(next)
+        writeExportLevel(next)
+      }}
+      onDestinationChange={(next) => {
+        setExportDestination(next)
+        writeExportDestination(next)
+      }}
+      onExport={handleBatchExport}
+      onStop={() => batchAbort.current?.abort()}
+      onClose={() => setBatchOpen(false)}
     />
   )
 
@@ -349,24 +960,15 @@ function App() {
     )
   }
 
-  if (pendingPages) {
-    return (
-      <div className="app">
-        <ReviewScreen
-          pages={pendingPages}
-          currentIndex={currentPage}
-          isBusy={isSaving || isScanning}
-          onSelectPage={setCurrentPage}
-          onRemovePage={handleRemovePage}
-          onAddPages={handleAddPages}
-          onCancel={() => setPendingPages(null)}
-          onSave={handleSaveDocument}
-        />
-        {toast && <p className="toast">{toast}</p>}
-      </div>
-    )
-  }
-
+  /*
+    Checked before `pendingPages` on purpose: the review screen returns from
+    inside that block, so anything opened over the top of it has to be handled
+    ahead of it or it never gets a chance to render. Nothing in the review flow
+    opens the paywall any more — splitting stopped being Pro on 25 Agustus 2026
+    — but the ordering still holds for whatever opens it next, and closing the
+    paywall leaves `pendingPages` untouched, so the scan is still waiting
+    underneath.
+  */
   if (view.kind === 'upgrade') {
     return (
       <div className="app">
@@ -379,6 +981,71 @@ function App() {
             refreshBackupState()
           }}
           onNotice={setToast}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
+  if (pendingPages) {
+    if (splitting) {
+      return (
+        <div className="app">
+          <SplitScanScreen
+            pages={pendingPages}
+            cuts={splitCuts}
+            name={splitName}
+            startAt={splitSaved}
+            isBusy={isSaving}
+            progress={splitProgress}
+            onCutsChange={setSplitCuts}
+            onNameChange={setSplitName}
+            onBack={() => setSplitting(false)}
+            /* The screen deals in page indices; the scanner URIs live here. */
+            onSave={(groups) =>
+              handleSplitSave(groups.map((group) => group.map((index) => pendingPages[index])))
+            }
+          />
+          {toast && <p className="toast">{toast}</p>}
+        </div>
+      )
+    }
+
+    // Full-screen look at a page that has not been saved yet. The pages are
+    // still scanner URIs at this point, hence `raw`.
+    if (reviewPreview !== null && reviewPreview < pendingPages.length) {
+      return (
+        <div className="app">
+          <PageViewerScreen
+            title="Hasil Pindai"
+            sources={pendingPages}
+            raw
+            initialIndex={reviewPreview}
+            // Paging inside the preview moves the review screen behind it too,
+            // so closing does not throw away where the user got to.
+            onPageChange={setCurrentPage}
+            onClose={() => setReviewPreview(null)}
+          />
+        </div>
+      )
+    }
+
+    return (
+      <div className="app">
+        <ReviewScreen
+          pages={pendingPages}
+          currentIndex={currentPage}
+          isBusy={isSaving || isScanning}
+          onSelectPage={setCurrentPage}
+          onPreview={setReviewPreview}
+          onRemovePage={handleRemovePage}
+          onAddPages={handleAddPages}
+          onCancel={() => {
+            setPendingPages(null)
+            exitSplit()
+          }}
+          onSave={handleSaveDocument}
+          onSplit={handleStartSplit}
         />
         {toast && <p className="toast">{toast}</p>}
       </div>
@@ -418,14 +1085,108 @@ function App() {
     )
   }
 
+  if (activeDocument && view.kind === 'viewer') {
+    const openPage = view.pageIndex
+    return (
+      <div className="app">
+        <PageViewerScreen
+          title={activeDocument.title}
+          // The same resolution the exporter and the cloud backup use, so the
+          // preview shows the filtered, cropped page rather than the raw scan.
+          sources={activeDocument.pages.map(resolvePage)}
+          initialIndex={openPage}
+          onClose={() => setView({ kind: 'detail', id: activeDocument.id })}
+          actions={
+            <>
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  setEditedInSession(false)
+                  setView({ kind: 'editor', id: activeDocument.id })
+                }}
+              >
+                <CropIcon size={17} />
+                <span>Edit</span>
+              </button>
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={() => setExportTarget(activeDocument.id)}
+              >
+                <ExportIcon size={17} />
+                <span>Ekspor</span>
+              </button>
+            </>
+          }
+        />
+        {exportSheet}
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
+  if (activeDocument && view.kind === 'split') {
+    const splitDoc = activeDocument
+    return (
+      <div className="app">
+        <SplitScanScreen
+          pages={splitDoc.pages.map(resolvePage)}
+          /* Stored paths, not scanner URIs — these still need resolving. */
+          raw={false}
+          cuts={docSplitCuts}
+          name={docSplitName}
+          startAt={0}
+          isBusy={isSplittingDoc}
+          progress={docSplitProgress}
+          heading="Pisah Dokumen"
+          saveLabel={(count) => `Pisah jadi ${count} Dokumen`}
+          busyLabel="Memisah…"
+          options={
+            <label className="split-option">
+              <input
+                type="checkbox"
+                checked={docSplitDeleteOriginal}
+                onChange={(event) => setDocSplitDeleteOriginal(event.target.checked)}
+                disabled={isSplittingDoc}
+              />
+              <span>Hapus dokumen asli setelah dipisah</span>
+            </label>
+          }
+          onCutsChange={setDocSplitCuts}
+          onNameChange={setDocSplitName}
+          onBack={() => setView({ kind: 'detail', id: splitDoc.id })}
+          onSave={(groups) => handleDocumentSplit(splitDoc, groups)}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
   if (activeDocument && view.kind === 'editor') {
     return (
       <div className="app">
         <EditorScreen
           document={activeDocument}
-          onDocumentChange={applyDocumentChange}
-          onClose={() => setView({ kind: 'detail', id: activeDocument.id })}
+          onDocumentChange={(updated) => {
+            setEditedInSession(true)
+            applyDocumentChange(updated)
+          }}
+          onClose={() => {
+            setView({ kind: 'detail', id: activeDocument.id })
+            // Safe only here, once the editor is gone: a signature that is
+            // still in an unsaved annotate draft is not in the index yet, and
+            // pruning while the draft is open would delete it out from under
+            // the overlay showing it.
+            void pruneUnusedSignatures()
+            if (!editedInSession) return
+            setEditedInSession(false)
+            // After the editor has closed, so the document is on screen behind
+            // the ad rather than the ad interrupting the save.
+            void maybeShowInterstitial('document-edited', tier)
+          }}
           onError={setToast}
+          onNotice={setToast}
         />
         {toast && <p className="toast">{toast}</p>}
       </div>
@@ -448,11 +1209,24 @@ function App() {
           isRenaming={renamingId === activeDocument.id}
           onRename={(title) => handleRename(activeDocument.id, title)}
           onBack={() => setView({ kind: 'tabs' })}
-          onEdit={() => setView({ kind: 'editor', id: activeDocument.id })}
+          onPreview={(pageIndex) =>
+            setView({ kind: 'viewer', id: activeDocument.id, pageIndex })
+          }
+          onEdit={() => {
+            // Fresh session: an edit made an hour ago must not make merely
+            // opening the editor now count as editing.
+            setEditedInSession(false)
+            setView({ kind: 'editor', id: activeDocument.id })
+          }}
           onExport={() => setExportTarget(activeDocument.id)}
+          onSplit={() => handleOpenDocumentSplit(activeDocument)}
           onDelete={() => handleDelete(activeDocument.id)}
           onBackup={() => handleBackup(activeDocument)}
           onRemoveBackup={() => handleRemoveBackup(activeDocument.id)}
+          tier={tier}
+          ocrProgress={ocrProgress}
+          onRecognizeText={() => void handleRecognizeText(activeDocument)}
+          onUpgrade={() => setView({ kind: 'upgrade' })}
         />
         {exportSheet}
         {toast && <p className="toast">{toast}</p>}
@@ -467,20 +1241,40 @@ function App() {
       <main className="app__body">
         {tab === 'home' && (
           <HomeScreen
-            documents={documents}
+            entries={entries}
+            restoringId={restoringId}
+            isRestoringAll={isRestoringAll}
             isScanning={isScanning}
             canScan={isNative}
             onScan={handleStartScan}
             onOpenDocuments={() => setTab('documents')}
             onOpenDocument={(id) => setView({ kind: 'detail', id })}
+            onRestore={handleRestore}
           />
         )}
         {tab === 'documents' && (
           <DocumentsScreen
-            documents={documents}
+            entries={entries}
+            tier={tier}
+            restoringId={restoringId}
+            isRestoringAll={isRestoringAll}
+            selectMode={selectMode}
+            selectedIds={selectedIds}
+            isBatchBusy={isBatchBusy}
             onDelete={handleDelete}
             onOpen={(id) => setView({ kind: 'detail', id })}
+            onRestore={handleRestore}
+            onRestoreAll={handleRestoreAll}
             onMerge={() => setView({ kind: 'merge' })}
+            onEnterSelect={handleEnterSelect}
+            onToggleSelect={(id) => setSelectedIds((current) => toggleSelection(current, id))}
+            onToggleSelectAll={() =>
+              setSelectedIds((current) => toggleSelectAll(entries, current))
+            }
+            onExitSelect={exitSelect}
+            onBatchExport={() => setBatchOpen(true)}
+            onBatchDelete={handleBatchDelete}
+            onNotice={setToast}
           />
         )}
         {tab === 'settings' && (
@@ -510,6 +1304,7 @@ function App() {
       )}
 
       {exportSheet}
+      {batchSheet}
 
       {toast && <p className="toast">{toast}</p>}
 

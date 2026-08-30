@@ -18,7 +18,7 @@ vi.mock('./scanStorage', () => ({
     if (failTitles.has(title)) throw new Error('Penyimpanan penuh.')
     created.push({ paths: sources.map((source) => source.pagePath), title, sourceDocumentIds })
     return {
-      schemaVersion: 5,
+      schemaVersion: 6,
       id: `new-${created.length}`,
       title,
       createdAt: '2026-08-25T00:00:00.000Z',
@@ -39,7 +39,7 @@ const { splitDocument, summarizeDocumentSplit } = await import('./documentSplit'
 
 function doc(pages: ScanPage[], title = 'Gabungan'): LocalScanDocument {
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     id: 'source-1',
     title,
     createdAt: '2026-08-25T00:00:00.000Z',

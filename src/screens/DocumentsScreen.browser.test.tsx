@@ -7,7 +7,7 @@ import type { LocalScanDocument } from '../lib/scanIndexMigration'
 
 function local(id: string, title: string): DocumentEntry {
   const document: LocalScanDocument = {
-    schemaVersion: 5,
+    schemaVersion: 6,
     id,
     title,
     createdAt: '2026-08-25T00:00:00.000Z',

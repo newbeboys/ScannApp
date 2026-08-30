@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  annotationSource,
   effectiveFilter,
+  enhanceSource,
   filterSource,
   hasEdits,
   migrateScanIndex,
@@ -23,7 +25,7 @@ describe('migrateScanIndex', () => {
   it('converts Fase 1 documents without losing pages', () => {
     const [doc] = migrateScanIndex([v1Document])
 
-    expect(doc.schemaVersion).toBe(5)
+    expect(doc.schemaVersion).toBe(6)
     expect(doc.title).toBe('Surat Perjanjian')
     expect(doc.createdAt).toBe('2026-07-25T10:00:00.000Z')
     expect(doc.pageCount).toBe(2)
@@ -35,7 +37,7 @@ describe('migrateScanIndex', () => {
 
   it('leaves already-migrated documents alone, including their edits', () => {
     const v4Document = {
-      schemaVersion: 5 as const,
+      schemaVersion: 6 as const,
       id: 'doc-2',
       title: 'Invoice',
       createdAt: '2026-07-26T10:00:00.000Z',
@@ -51,7 +53,7 @@ describe('migrateScanIndex', () => {
    * applied. Upgrading must not change how they look at all — the
    * filter comes back empty, so resolvePage keeps returning the same file.
    */
-  it('upgrades Fase 2 documents to v5 without changing how they look', () => {
+  it('upgrades Fase 2 documents to the current shape without changing how they look', () => {
     const v2Document = {
       schemaVersion: 2,
       id: 'doc-v2',
@@ -63,14 +65,14 @@ describe('migrateScanIndex', () => {
 
     const [doc] = migrateScanIndex([v2Document])
 
-    expect(doc.schemaVersion).toBe(5)
+    expect(doc.schemaVersion).toBe(6)
     expect(doc.filter).toBeUndefined()
     expect(resolvePage(doc.pages[0])).toBe('scans/doc-v2/page-1-edited.jpg')
   })
 
   it('keeps the document filter and per-page exceptions', () => {
     const filtered = {
-      schemaVersion: 5 as const,
+      schemaVersion: 6 as const,
       id: 'doc-f',
       title: 'Berfilter',
       createdAt: '2026-08-23T10:00:00.000Z',
@@ -105,7 +107,7 @@ describe('migrateScanIndex', () => {
 
   it('keeps sourceDocumentIds on merged documents', () => {
     const merged = {
-      schemaVersion: 5 as const,
+      schemaVersion: 6 as const,
       id: 'doc-3',
       title: 'Gabungan',
       createdAt: '2026-07-26T11:00:00.000Z',
@@ -145,7 +147,7 @@ describe('resolvePage', () => {
 
 describe('hasEdits', () => {
   const base = {
-    schemaVersion: 5 as const,
+    schemaVersion: 6 as const,
     id: 'd',
     title: 't',
     createdAt: '2026-07-26T00:00:00.000Z',
@@ -205,7 +207,7 @@ describe('resolvePage & filterSource', () => {
   })
 })
 
-describe('migrateScanIndex — v4 to v5 (OCR)', () => {
+describe('migrateScanIndex — a v4 document, from the OCR upgrade', () => {
   const v4 = [
     {
       schemaVersion: 4,
@@ -217,10 +219,10 @@ describe('migrateScanIndex — v4 to v5 (OCR)', () => {
     },
   ]
 
-  it('lifts a v4 document to v5 without touching a single page', () => {
+  it('lifts a v4 document to the current shape without touching a single page', () => {
     const [doc] = migrateScanIndex(v4)
 
-    expect(doc.schemaVersion).toBe(5)
+    expect(doc.schemaVersion).toBe(6)
     expect(doc.pages).toEqual([{ original: 'a.jpg', edited: 'a-edited.jpg', filtered: 'a-bw.jpg' }])
   })
 
@@ -238,5 +240,103 @@ describe('migrateScanIndex — v4 to v5 (OCR)', () => {
     ])
 
     expect(doc.pages[0]).toEqual({ original: 'a.jpg' })
+  })
+})
+
+describe('schema v6 — Perbaiki Pencahayaan', () => {
+  it('lifts a v5 document to v6 without losing anything', () => {
+    const [doc] = migrateScanIndex([
+      {
+        schemaVersion: 5,
+        id: 'doc-1',
+        title: 'Kontrak',
+        createdAt: '2026-08-25T00:00:00.000Z',
+        pageCount: 1,
+        filter: 'bw',
+        pages: [{ original: 'scans/doc-1/page-1.jpg', edited: 'scans/doc-1/page-1-edited.jpg' }],
+      },
+    ])
+
+    expect(doc.schemaVersion).toBe(6)
+    expect(doc.filter).toBe('bw')
+    expect(doc.pages[0].edited).toBe('scans/doc-1/page-1-edited.jpg')
+    expect(doc.enhance).toBeUndefined()
+  })
+
+  it('keeps the lighting render while the document switch is on', () => {
+    const [doc] = migrateScanIndex([
+      {
+        schemaVersion: 6,
+        id: 'doc-1',
+        title: 'Kontrak',
+        createdAt: '2026-08-30T00:00:00.000Z',
+        pageCount: 1,
+        enhance: true,
+        pages: [
+          { original: 'scans/doc-1/page-1.jpg', enhanced: 'scans/doc-1/page-1-enhanced.jpg' },
+        ],
+      },
+    ])
+
+    expect(doc.enhance).toBe(true)
+    expect(doc.pages[0].enhanced).toBe('scans/doc-1/page-1-enhanced.jpg')
+  })
+
+  /**
+   * The same pairing rule the annotated render already follows. Without it a
+   * document whose switch is off keeps displaying and exporting a corrected
+   * page that nothing left in the index can explain, undo, or re-render.
+   */
+  it('drops the lighting render when the document switch is not on', () => {
+    const [doc] = migrateScanIndex([
+      {
+        schemaVersion: 6,
+        id: 'doc-1',
+        title: 'Kontrak',
+        createdAt: '2026-08-30T00:00:00.000Z',
+        pageCount: 1,
+        pages: [
+          { original: 'scans/doc-1/page-1.jpg', enhanced: 'scans/doc-1/page-1-enhanced.jpg' },
+        ],
+      },
+    ])
+
+    expect(doc.enhance).toBeUndefined()
+    expect(doc.pages[0].enhanced).toBeUndefined()
+  })
+})
+
+describe('the derived chain with lighting in it', () => {
+  const page = {
+    original: 'a.jpg',
+    edited: 'a-edited.jpg',
+    enhanced: 'a-enhanced.jpg',
+    filtered: 'a-filtered.jpg',
+    annotated: 'a-annotated.jpg',
+  }
+
+  it('shows the ink render, which sits on top of everything', () => {
+    expect(resolvePage(page)).toBe('a-annotated.jpg')
+  })
+
+  it('falls back to the lighting render when there is no filter and no ink', () => {
+    expect(
+      resolvePage({ original: 'a.jpg', edited: 'a-edited.jpg', enhanced: 'a-enhanced.jpg' }),
+    ).toBe('a-enhanced.jpg')
+  })
+
+  it('renders a filter from the lighting fix, so the two stack', () => {
+    expect(filterSource(page)).toBe('a-enhanced.jpg')
+  })
+
+  it('renders the lighting fix from geometry alone, never from a filter', () => {
+    expect(enhanceSource(page)).toBe('a-edited.jpg')
+  })
+
+  it('draws ink on the filter first, then the lighting fix, then the crop', () => {
+    expect(annotationSource(page)).toBe('a-filtered.jpg')
+    expect(annotationSource({ original: 'a.jpg', enhanced: 'a-enhanced.jpg' })).toBe(
+      'a-enhanced.jpg',
+    )
   })
 })

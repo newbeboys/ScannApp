@@ -36,16 +36,25 @@ export interface ScanPage {
    * afterwards without losing the crop (design doc, Bagian 2.2).
    */
   edited?: string
+  /**
+   * The lighting-corrected render, derived from `edited ?? original`.
+   *
+   * A stage of its own rather than a sixth filter, so it can be used together
+   * with one — Hitam-Putih on a shadowed page is exactly where it earns its
+   * place (design doc Fase 7A, Bagian 3). Only ever present while the
+   * document's `enhance` switch is on.
+   */
+  enhanced?: string
   /** This page's exception to the document filter. Absent means it follows the document. */
   filter?: PageFilter
-  /** The rendered filter result, derived from `edited ?? original`. */
+  /** The rendered filter result, derived from `enhanced ?? edited ?? original`. */
   filtered?: string
   /**
    * What the user has drawn on this page (Pro). Vectors, not pixels — see the
    * annotate design doc, Bagian 2.1.
    */
   marks?: Mark[]
-  /** The rendered composite of `filtered ?? edited ?? original` plus `marks`. */
+  /** The rendered composite of `filtered ?? enhanced ?? edited ?? original` plus `marks`. */
   annotated?: string
   /**
    * Path to this page's recognised text, laid out in page fractions (Pro).
@@ -66,7 +75,7 @@ export interface ScanPage {
  * raising it in one and not the other made every read rewrite the index — see
  * the test in `scanStorageSave.test.ts`.
  */
-export const CURRENT_SCHEMA_VERSION = 5
+export const CURRENT_SCHEMA_VERSION = 6
 
 export interface LocalScanDocument {
   schemaVersion: typeof CURRENT_SCHEMA_VERSION
@@ -77,6 +86,11 @@ export interface LocalScanDocument {
   pages: ScanPage[]
   /** Applies to every page that does not override it. */
   filter?: DocumentFilter
+  /**
+   * Whether "Perbaiki Pencahayaan" is on for this document. Every tier — there
+   * is deliberately no tier check anywhere on this path (CLAUDE.md Bagian 6).
+   */
+  enhance?: boolean
   /** Set when this document was produced by merging others. */
   sourceDocumentIds?: string[]
 }
@@ -97,12 +111,19 @@ function isV1(doc: UnknownDocument): boolean {
 }
 
 /** Keeps only the fields a page is allowed to carry, dropping anything malformed. */
-function migratePage(page: ScanPage): ScanPage {
+function migratePage(page: ScanPage, enhanceOn: boolean): ScanPage {
   const marks = sanitizeMarks(page.marks)
 
   return {
     original: page.original,
     ...(typeof page.edited === 'string' ? { edited: page.edited } : {}),
+    /*
+      Paired with the document's switch, the way the annotated render is paired
+      with its marks: a page that keeps a lighting render after the switch is
+      off would display and export a correction that nothing left in the index
+      can explain, undo, or re-render.
+    */
+    ...(enhanceOn && typeof page.enhanced === 'string' ? { enhanced: page.enhanced } : {}),
     // A v2 page has neither of these; a v3 page whose stored filter is not one
     // we recognise is treated as having none rather than crashing the list.
     ...(page.filter === 'none' || isDocumentFilter(page.filter) ? { filter: page.filter } : {}),
@@ -126,13 +147,16 @@ function migratePage(page: ScanPage): ScanPage {
 }
 
 /**
- * Brings any stored index entry up to the v5 shape.
+ * Brings any stored index entry up to the v6 shape.
  *
  * Documents scanned during Fase 1 were written as `{ pagePaths: string[] }`
  * with no schemaVersion, Fase 2 documents as v2 with no filters, and v3
  * documents with no annotations. All three must keep working untouched after
  * this upgrade, so every read runs through here and the result is written
  * back. Malformed entries are dropped rather than crashing the whole list.
+ *
+ * A v5 document arrives with no lighting stage at all, which is exactly how a
+ * document whose switch has never been turned on looks anyway.
  *
  * Each older shape arrives simply missing the newer fields, so it looks
  * exactly as it did before — every upgrade is invisible until the user uses
@@ -146,13 +170,15 @@ export function migrateScanIndex(raw: unknown): LocalScanDocument[] {
   for (const entry of raw as UnknownDocument[]) {
     if (!entry || typeof entry.id !== 'string') continue
 
+    const enhanceOn = entry.enhance === true
+
     let pages: ScanPage[]
     if (isV1(entry) && entry.pagePaths) {
       pages = entry.pagePaths.map((path) => ({ original: path }))
     } else if (Array.isArray(entry.pages)) {
       pages = entry.pages
         .filter((page) => page && typeof page.original === 'string')
-        .map(migratePage)
+        .map((page) => migratePage(page, enhanceOn))
     } else {
       continue
     }
@@ -167,6 +193,7 @@ export function migrateScanIndex(raw: unknown): LocalScanDocument[] {
       pageCount: pages.length,
       pages,
       ...(isDocumentFilter(entry.filter) ? { filter: entry.filter } : {}),
+      ...(enhanceOn ? { enhance: true } : {}),
       ...(entry.sourceDocumentIds ? { sourceDocumentIds: entry.sourceDocumentIds } : {}),
     })
   }
@@ -191,15 +218,33 @@ export function effectiveFilter(
  * Resolves which file a page should currently display/export.
  *
  * Every consumer — the document list, the editor, export, merge, backup —
- * goes through here, which is why adding filters needed no change in any of
- * them.
+ * goes through here, which is why adding filters, and later the lighting
+ * stage, needed no change in any of them.
  */
 export function resolvePage(page: ScanPage): string {
-  return page.annotated ?? page.filtered ?? page.edited ?? page.original
+  return page.annotated ?? page.filtered ?? page.enhanced ?? page.edited ?? page.original
 }
 
-/** What a filter render must start from: geometry only, never another filter. */
+/**
+ * What a filter render must start from: the page with its geometry and its
+ * lighting settled, never another filter.
+ *
+ * Reading the lighting render here is what makes the two stack — Hitam-Putih
+ * applied to a page whose shadows have already been flattened, which is the
+ * whole point of keeping them separate.
+ */
 export function filterSource(page: ScanPage): string {
+  return page.enhanced ?? page.edited ?? page.original
+}
+
+/**
+ * What a lighting render must start from: geometry only.
+ *
+ * Never the filter render — correcting a thresholded page means estimating the
+ * light on an image that has already thrown its greys away — and never its own
+ * previous output, which would compound the correction every time.
+ */
+export function enhanceSource(page: ScanPage): string {
   return page.edited ?? page.original
 }
 
@@ -209,7 +254,7 @@ export function filterSource(page: ScanPage): string {
  * second time on top of itself, and undo would never remove anything.
  */
 export function annotationSource(page: ScanPage): string {
-  return page.filtered ?? page.edited ?? page.original
+  return page.filtered ?? page.enhanced ?? page.edited ?? page.original
 }
 
 /** True when at least one page carries an edit that can be reverted. */

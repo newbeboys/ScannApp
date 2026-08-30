@@ -75,7 +75,7 @@ const markRender = async (source: Blob, marks: unknown[]): Promise<Blob> => {
 function seed(pages: Record<string, unknown>[], filter?: string) {
   const index = JSON.stringify([
     {
-      schemaVersion: 5,
+      schemaVersion: 6,
       id: DOC_ID,
       title: 'Kontrak',
       createdAt: '2026-08-23T00:00:00.000Z',

@@ -59,7 +59,7 @@ const { buildPdfFile, exportDocument } = await import('./documentExport')
 
 function doc(pageCount: number, title = 'Nota'): LocalScanDocument {
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     id: 'doc-1',
     title,
     createdAt: '2026-03-04T00:00:00.000Z',

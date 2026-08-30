@@ -832,16 +832,30 @@ tanpa menyentuh schema, storage, atau UI. **PRD Bagian 4 perlu direvisi mengikut
 
 Keputusan desain yang sudah diambil saat brainstorm:
 
-- [ ] **Tahap terpisah, bukan filter keenam.** Rantainya jadi
+- [x] **Tahap terpisah, bukan filter keenam.** Rantainya jadi
   `original → edited → enhanced → filtered → annotated`, jadi Perbaiki Pencahayaan bisa dipakai
   **bersamaan** dengan Hitam-Putih — dan justru di situ nilainya paling terasa, karena
   Hitam-Putih pada halaman berbayang sekarang menghasilkan bercak hitam pekat.
   `ScanPage.enhanced`, `LocalScanDocument.enhance`, `schemaVersion` **5 → 6**.
-- [ ] **Algoritma:** kisi 16×16 ubin di citra kerja ±256 px, persentil ke-95 per ubin,
+
+  **Selesai 30 Agustus 2026** di `scanIndexMigration.ts`. `filterSource()` sekarang
+  membaca `enhanced ?? edited ?? original`, jadi filter dirender **di atas** hasil
+  koreksi cahaya — itulah yang membuat keduanya menumpuk alih-alih saling meniadakan.
+  `enhanceSource()` sengaja tidak membaca `filtered`: mengoreksi cahaya di halaman
+  yang sudah di-threshold berarti menaksir cahaya dari citra yang greys-nya sudah
+  dibuang. Berkas `enhanced` dipasangkan dengan sakelar `enhance` dokumen — sakelar
+  mati, berkasnya ikut dilepas saat migrasi, meniru aturan `annotated`+`marks` yang
+  sudah ada. Dokumen v1–v5 naik ke v6 tanpa kehilangan apa pun; keduanya sekadar
+  datang tanpa field baru ini.
+- [x] **Algoritma:** kisi 16×16 ubin di citra kerja ±256 px, persentil ke-95 per ubin,
   penolakan pencilan **lokal** (median + MAD jendela 5×5, `σ̂ = max(1,4826 × MAD, 4)`,
   tolak bila `p_i < m − 3σ̂`), tambal dari tetangga, katup batal >50% ubin ditolak,
   batas penguatan 2,5×. Latar **tidak pernah dimaterialisasi** seukuran halaman —
   diinterpolasi bilinear langsung dari kisi (halaman 12 MP = buffer 50 MB).
+
+  **Selesai 30 Agustus 2026** di `src/lib/enhance.ts` (murni matematika, tanpa DOM,
+  suite node) dan `enhancePage()` di `src/lib/imageEditor.ts` (sisi kanvas, suite
+  browser).
 - [ ] **Batch dengan `signal`, bukan on-demand.** `applyDocumentFilter` yang ada
   punya `onProgress` tapi **tidak punya pembatalan**; enhance harus punya, karena
   Basic mentok 20 halaman tapi **Pro tidak terbatas**.

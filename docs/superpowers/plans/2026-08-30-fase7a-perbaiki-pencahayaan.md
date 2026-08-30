@@ -909,7 +909,7 @@ EOF
 
   Task 5 memakai `enhanceSource` dan field `enhanced`/`enhance`; Task 7 membaca `page.enhanced` untuk menghitung berapa halaman yang sudah selesai.
 
-- [ ] **Step 1: Tulis tesnya dulu — tambahkan di `src/lib/scanIndexMigration.test.ts`**
+- [x] **Step 1: Tulis tesnya dulu — tambahkan di `src/lib/scanIndexMigration.test.ts`**
 
 ```ts
 describe('schema v6 — Perbaiki Pencahayaan', () => {
@@ -1010,12 +1010,14 @@ describe('the derived chain with lighting in it', () => {
 
 Import di atas berkas tes itu saat ini `{ effectiveFilter, filterSource, hasEdits, migrateScanIndex, resolvePage }` — tambahkan **dua**: `annotationSource` dan `enhanceSource`.
 
-- [ ] **Step 2: Jalankan, pastikan gagal**
+- [x] **Step 2: Jalankan, pastikan gagal**
 
 Run: `npm run test:node -- scanIndexMigration`
 Expected: FAIL — `enhanceSource` tidak ada, dan `schemaVersion` masih 5.
 
-- [ ] **Step 3: Ubah `src/lib/scanIndexMigration.ts`**
+Hasil: 6 gagal / 24 lolos, persis dua sebab itu.
+
+- [x] **Step 3: Ubah `src/lib/scanIndexMigration.ts`**
 
 Di `interface ScanPage`, sisipkan **setelah** `edited` dan **sebelum** `filter`:
 
@@ -1165,11 +1167,15 @@ export function annotationSource(page: ScanPage): string {
 }
 ```
 
-- [ ] **Step 4: Re-export dari `scanStorage.ts`**
+- [x] **Step 4: Re-export dari `scanStorage.ts`**
 
 Tambahkan `enhanceSource` ke dua tempat di `src/lib/scanStorage.ts`: blok `import { ... } from './scanIndexMigration'` di atas, dan blok `export { ... } from './scanIndexMigration'` di bawahnya.
 
-- [ ] **Step 5: Jalankan typecheck untuk menemukan semua fixture yang masih v5**
+Dikerjakan: **blok `export` saja.** Menambahkannya ke blok `import` sekarang gagal
+typecheck (TS6133, `declared but its value is never read`) — `scanStorage.ts` sendiri
+baru memanggilnya di Task 5. Barisnya menyusul di sana.
+
+- [x] **Step 5: Jalankan typecheck untuk menemukan semua fixture yang masih v5**
 
 Run: `npm run build`
 Expected: TypeScript menyebut setiap fixture yang masih menulis `schemaVersion: 5` pada objek bertipe `LocalScanDocument`. Yang sudah diketahui saat plan ini ditulis:
@@ -1187,12 +1193,25 @@ Ubah tiap `schemaVersion: 5` jadi `6` dan tiap `.toBe(5)` jadi `.toBe(6)`. **Jan
 
 Satu lagi yang bukan typecheck tapi wajib: `src/lib/scanStorageSave.test.ts:342` — `expect(writtenIndex()[0].schemaVersion).toBe(5)` jadi `6`, dan fixture v5 di baris 41/248/292 jadi 6.
 
-- [ ] **Step 6: Jalankan kedua suite**
+Ternyata typecheck cuma menemukan **satu** (`DocumentsScreen.browser.test.tsx`) —
+berkas tes suite node tidak ikut `tsc -b`. Sisanya ketahuan dari daftar di atas dan
+dari suite yang gagal.
+
+Satu lagi yang plan ini justru melarang diubah, tapi **wajib** diubah:
+`src/lib/scanStorageFilter.test.ts:78`. Seed itu bukan masukan uji migrasi versi lama
+— ia mewakili "index sebagaimana adanya sekarang", dan tiga tes di berkas itu
+menghitung **berapa kali** index ditulis ulang. Ditinggal di v5, migrasi menulis
+ulang index dan ketiganya gagal (`expected length 1, got 2`). Jadi ikut naik ke 6.
+
+- [x] **Step 6: Jalankan kedua suite**
 
 Run: `npm test`
 Expected: PASS semua. Node naik dari 705 jadi ±715 tes.
 
-- [ ] **Step 7: Lint & commit**
+Hasil: node **727 lolos / 49 berkas** (naik 8 dari 719), browser **127 lolos / 13
+berkas**. `npm run build` dan `npm run lint` bersih.
+
+- [x] **Step 7: Lint & commit**
 
 ```bash
 npm run lint

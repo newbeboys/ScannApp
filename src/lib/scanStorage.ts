@@ -21,6 +21,7 @@ export {
   hasEdits,
   effectiveFilter,
   filterSource,
+  enhanceSource,
   annotationSource,
   markCount,
   DOCUMENT_FILTERS,

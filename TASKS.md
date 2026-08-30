@@ -1007,6 +1007,24 @@ bayangan belang, yang justru diselesaikan 7A; dan noise/ketajaman persis wilayah
 model belajar mengalahkan matematika klasik — jadi itu muatan pertama yang masuk akal
 untuk seam TFLite, bukan tambalan konvolusi hari ini.
 
+**Menunggu uji di device fisik (Xiaomi T15) — ini tugas Boss Ali, bukan Claude:**
+
+- [ ] Dokumen berbayang (foto halaman dengan bayangan tangan) → sakelar **Aktif** → bayangan
+  rata, teks tetap terbaca
+- [ ] Sakelar **Aktif** lalu filter **Hitam-Putih** → tidak ada lagi bercak hitam pekat di
+  daerah bayangan; keduanya berlaku bersamaan, menyalakan salah satu tidak mencabut yang lain
+- [ ] Dokumen 20 halaman → progres berjalan per halaman, tombol **Batal** benar-benar
+  menghentikan (bukan cuma menutup panel)
+- [ ] Setelah **Batal**: panel bilang "N dari 20 halaman diperbaiki", tombol **Lanjutkan**
+  meneruskan dari halaman N+1, bukan mengulang dari awal
+- [ ] Sakelar **Nonaktif** → halaman kembali seperti semula, berkas `-enhanced.jpg` hilang
+- [ ] Crop satu halaman saat sakelar menyala → halaman itu diperbaiki ulang, filternya ikut benar
+- [ ] Tutup & buka ulang aplikasi → sakelar dan hasilnya masih sama
+- [ ] Ekspor PDF dengan sakelar menyala → yang keluar halaman hasil perbaikan
+- [ ] Waktu nyata per halaman di HP dibanding proyeksi Task 3 (265 ms desktop → target
+  di bawah ±1,5 detik/halaman, 20 halaman di bawah ±30 detik)
+- [ ] Tidak ada satu pun kata "AI" di layar mana pun
+
 ### 7B — Auto-deskew & auto-crop presisi (menyusul)
 
 - [ ] Deteksi tepi & koreksi perspektif untuk gambar yang **bukan** dari pemindai

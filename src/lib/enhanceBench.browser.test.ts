@@ -80,17 +80,24 @@ describe('enhancePage cost on a 12 MP page', () => {
 
     const t2 = performance.now()
     correctLighting(image.data, canvas.width, canvas.height, grid)
-    ctx.putImageData(image, 0, 0)
     const correctMs = performance.now() - t2
 
+    // Timed apart from the correction it used to be lumped in with: putImageData
+    // is a fixed cost of writing 12 MP back to a canvas, and counting it as part
+    // of the maths made the loop look more expensive than it is.
     const t3 = performance.now()
+    ctx.putImageData(image, 0, 0)
+    const putMs = performance.now() - t3
+
+    const t4 = performance.now()
     await new Promise<Blob>((resolve) => canvas.toBlob((blob) => resolve(blob!), 'image/jpeg', 0.9))
-    const encodeMs = performance.now() - t3
+    const encodeMs = performance.now() - t4
 
     console.log(
       `[bench] enhancePage 3000x4000 — total ${Math.round(total)}ms ` +
         `(decode+getImageData ${Math.round(decodeMs)}ms, estimate ${Math.round(estimateMs)}ms, ` +
-        `correct ${Math.round(correctMs)}ms, encode ${Math.round(encodeMs)}ms) — ` +
+        `correct ${Math.round(correctMs)}ms, putImageData ${Math.round(putMs)}ms, ` +
+        `encode ${Math.round(encodeMs)}ms) — ` +
         `proyeksi 20 halaman di mid-range: ${Math.round((total * 4 * 20) / 1000)} detik`,
     )
 

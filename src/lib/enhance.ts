@@ -55,6 +55,15 @@ const OUTLIER_K = 3
 /** Past this share of rejected tiles the map is not worth trusting at all. */
 const MAX_REJECTED = 0.5
 
+/**
+ * Pixels between the points along a row where the gain is actually divided out.
+ *
+ * Small enough that the straight line between two of them is indistinguishable
+ * from the curve it replaces — see the comment in `correctLighting` — and large
+ * enough to take three quarters of the divisions out of the page.
+ */
+const GAIN_STEP = 4
+
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   const middle = sorted.length >> 1
@@ -255,6 +264,34 @@ export function correctLighting(
     weightX[x] = gx - x0
   }
 
+  /*
+    One row of the light map, interpolated down the y axis: `cols` numbers,
+    rebuilt once per row.
+
+    Bilinear needs three interpolations per pixel — two across x, one down y.
+    Collapsing the y one here leaves a single one, and it runs `cols` times per
+    row instead of `width` times: 16 against 3000 on a 12 MP page.
+  */
+  const rowLight = new Float64Array(cols)
+
+  /*
+    The same row again as *gains*, sampled every `GAIN_STEP` pixels.
+
+    This is what takes the division out of the inner loop — twelve million of
+    them per page become one per four pixels — and the step size is what keeps
+    that from costing accuracy.
+
+    Sampling the gain at the sixteen grid nodes instead, and interpolating
+    between those, was tried on 30 Agustus 2026 and rejected. `target / light`
+    is convex, so a straight line across a whole 188-pixel cell overshoots it:
+    measured against the exact division, a hard shadow edge came out **24 levels**
+    brighter through the transition — a bright band along exactly the kind of
+    edge this feature exists to remove. Every 16 pixels still left 5 levels.
+    Every 4 leaves 1 to 2 on a full-size page, which `enhance.test.ts` holds it
+    to against the exact form.
+  */
+  const gainNodes = new Float64Array(Math.ceil(width / GAIN_STEP) + 1)
+
   for (let y = 0; y < height; y++) {
     const gy = Math.min(rows - 1, Math.max(0, ((y + 0.5) * rows) / height - 0.5))
     const y0 = Math.floor(gy)
@@ -263,22 +300,36 @@ export function correctLighting(
     const topRow = y0 * cols
     const bottomRow = y1 * cols
 
-    for (let x = 0; x < width; x++) {
-      const x0 = leftIndex[x]
-      const x1 = rightIndex[x]
-      const wx = weightX[x]
+    for (let cell = 0; cell < cols; cell++) {
+      const top = grid[topRow + cell]
+      rowLight[cell] = top + (grid[bottomRow + cell] - top) * wy
+    }
 
-      const top = grid[topRow + x0] + (grid[topRow + x1] - grid[topRow + x0]) * wx
-      const bottom = grid[bottomRow + x0] + (grid[bottomRow + x1] - grid[bottomRow + x0]) * wx
-      const background = top + (bottom - top) * wy
+    for (let node = 0; node < gainNodes.length; node++) {
+      const x = Math.min(node * GAIN_STEP, width - 1)
+      const left = rowLight[leftIndex[x]]
+      const light = left + (rowLight[rightIndex[x]] - left) * weightX[x]
+      gainNodes[node] = Math.min(target / Math.max(light, 1), maxGain)
+    }
 
-      const gain = Math.min(target / Math.max(background, 1), maxGain)
-      if (gain <= 1) continue
+    for (let base = 0; base < width; base += GAIN_STEP) {
+      const node = base / GAIN_STEP
+      const step = (gainNodes[node + 1] - gainNodes[node]) / GAIN_STEP
+      const end = Math.min(base + GAIN_STEP, width)
 
-      const i = (y * width + x) * 4
-      data[i] = data[i] * gain
-      data[i + 1] = data[i + 1] * gain
-      data[i + 2] = data[i + 2] * gain
+      // Walked forward rather than recomputed from (y, x) per pixel: the old
+      // `(y * width + x) * 4` cost two multiplies and an add on every one of
+      // the twelve million pixels, for a number that only ever moves by four.
+      let i = (y * width + base) * 4
+      let gain = gainNodes[node]
+
+      for (let x = base; x < end; x++, i += 4, gain += step) {
+        if (gain <= 1) continue
+
+        data[i] = data[i] * gain
+        data[i + 1] = data[i + 1] * gain
+        data[i + 2] = data[i + 2] * gain
+      }
     }
   }
 }

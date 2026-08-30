@@ -862,15 +862,37 @@ Keputusan desain yang sudah diambil saat brainstorm:
   | jalan 4 | 540 ms | 124 ms | 18 ms | 214 ms | 110 ms |
 
   Proyeksi mid-range (×4) untuk 20 halaman: **39–43 detik**. Gerbang ±30 detik:
-  **TIDAK LOLOS**. Menunggu keputusan Boss Ali sebelum UI dibuat.
+  **TIDAK LOLOS**.
 
   Yang penting dari rinciannya: **koreksi per piksel yang paling mahal** (±260 ms,
   separuh total), bukan decode/encode seperti yang dikhawatirkan saat menulis plan.
-  Artinya opsi (a) "resolusi kerja lebih kecil" memang menyentuh biaya terbesarnya,
-  dan ada satu jalan ketiga yang tidak mengorbankan mutu sama sekali: interpolasi
-  bilinear sekarang dihitung ulang untuk **tiap piksel** di dalam loop terdalam;
-  mengangkatnya jadi satu larik gain per baris membuat loop terdalamnya tinggal
-  tiga perkalian. Estimasi sekarang murah (18–71 ms), jadi bukan di situ masalahnya.
+  (Catatan: angka "koreksi" jalan 1–4 masih memuat `putImageData` di dalamnya;
+  setelah dipisah, `putImageData` ternyata cuma 11–18 ms.)
+
+- [x] **Optimasi loop koreksi — dicoba atas keputusan Boss Ali 30 Agustus 2026,
+  gerbang tetap tidak lolos.** Tiga perubahan, semuanya di `correctLighting`:
+  interpolasi sumbu-y diangkat jadi 16 angka per baris (dari 3 interpolasi per
+  piksel jadi 1), indeks piksel dijalankan maju alih-alih dihitung ulang, dan
+  **pembagian dikeluarkan dari loop terdalam** — gain dihitung tiap 4 piksel lalu
+  diinterpolasi.
+
+  **Hasil (5 kali jalan, mesin yang sama):** koreksi **200–265 ms → 133–187 ms**,
+  total **±500 ms → 397–543 ms (median 437)**, proyeksi **35 detik** (rentang
+  32–43). Gerbang ±30 detik: **masih TIDAK LOLOS**.
+
+  **Kenapa loop tidak bisa menyelamatkannya.** Decode ±150 ms + encode ±140 ms =
+  **±290 ms yang tidak bisa dihindari** selama keluarannya resolusi penuh — itu
+  saja sudah **23 detik** dari jatah 30 detik. Koreksi nol pun proyeksinya masih
+  ±24 detik, dan koreksi seoptimal apa pun hari ini ±140 ms. Jadi sisa pilihannya
+  memang menyentuh rancangan, bukan aritmetika.
+
+  **Satu jalan yang ditolak, dicatat supaya tidak dicoba lagi:** menghitung gain
+  cuma di 16 simpul kisi lalu menginterpolasinya (tanpa langkah 4 piksel) memang
+  paling cepat, tapi `target / cahaya` itu cembung — di tepi bayangan tajam
+  hasilnya **meleset 24 level** dari pembagian eksak, berupa pita terang persis
+  di jenis tepi yang fitur ini ada untuk menghilangkannya. Tiap 16 piksel masih
+  meleset 5 level; tiap 4 piksel meleset 1–2 level di halaman ukuran penuh.
+  Dijaga tes `correctLighting against the exact division` di `enhance.test.ts`.
 - [ ] Toggle on/off per dokumen
 - [x] **Tier & penamaan — final (Boss Ali, 29 Agustus 2026).** **Tier: semua tier**,
   Basic maupun Pro, setara. Argumen paywall di PRD Bagian 4 berdiri di atas **biaya

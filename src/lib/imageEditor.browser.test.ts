@@ -6,9 +6,11 @@ import {
   enhancePage,
   getImageSize,
   rotateImage,
+  warpImage,
 } from './imageEditor'
 import { ENHANCED_EDGE } from './enhance'
 import { COMPRESSION_PRESETS } from './exportLimits'
+import type { Quad } from './perspective'
 
 /**
  * Runs in a real Chromium, not a mocked DOM.
@@ -405,5 +407,96 @@ describe('enhancePage', () => {
     const enhanced = (await enhancePage(await shadowedScan(3000, 2000)))!
 
     expect(await getImageSize(enhanced)).toEqual({ width: ENHANCED_EDGE, height: 1600 })
+  })
+})
+
+/** Four flat colours, one per quadrant, well separated in luminance so `sample()` tells them apart. */
+async function quadrants(width: number, height: number): Promise<Blob> {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')!
+  const halfW = width / 2
+  const halfH = height / 2
+
+  ctx.fillStyle = 'rgb(20, 20, 20)' // top-left, luminance ~20
+  ctx.fillRect(0, 0, halfW, halfH)
+  ctx.fillStyle = 'rgb(85, 85, 85)' // top-right, ~85
+  ctx.fillRect(halfW, 0, halfW, halfH)
+  ctx.fillStyle = 'rgb(170, 170, 170)' // bottom-left, ~170
+  ctx.fillRect(0, halfH, halfW, halfH)
+  ctx.fillStyle = 'rgb(235, 235, 235)' // bottom-right, ~235
+  ctx.fillRect(halfW, halfH, halfW, halfH)
+
+  return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob!), 'image/jpeg', 0.95))
+}
+
+const FULL_QUAD: Quad = {
+  topLeft: { x: 0, y: 0 },
+  topRight: { x: 1, y: 0 },
+  bottomLeft: { x: 0, y: 1 },
+  bottomRight: { x: 1, y: 1 },
+}
+
+describe('warpImage', () => {
+  it('produces a real JPEG', async () => {
+    const out = await warpImage(await quadrants(400, 500), FULL_QUAD)
+    const head = new Uint8Array(await out.slice(0, 3).arrayBuffer())
+
+    expect([head[0], head[1], head[2]]).toEqual([0xff, 0xd8, 0xff])
+  })
+
+  it('leaves the four quadrants where they were for the full-image quad', async () => {
+    const page = await quadrants(400, 400)
+    const out = await warpImage(page, FULL_QUAD)
+
+    expect(await sample(out, 50, 50)).toBeLessThan(50) // top-left, ~20
+    const topRight = await sample(out, 350, 50) // top-right, ~85
+    expect(topRight).toBeGreaterThan(60)
+    expect(topRight).toBeLessThan(120)
+    const bottomLeft = await sample(out, 50, 350) // bottom-left, ~170
+    expect(bottomLeft).toBeGreaterThan(140)
+    expect(bottomLeft).toBeLessThan(200)
+    expect(await sample(out, 350, 350)).toBeGreaterThan(210) // bottom-right, ~235
+  })
+
+  it('extracts just the selected quadrant, filling the whole output with its colour', async () => {
+    const page = await quadrants(400, 400)
+    const topLeftQuadrant: Quad = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 0.5, y: 0 },
+      bottomLeft: { x: 0, y: 0.5 },
+      bottomRight: { x: 0.5, y: 0.5 },
+    }
+
+    const out = await warpImage(page, topLeftQuadrant)
+
+    // Every corner of the *output* should now read close to the top-left
+    // quadrant's own luminance (~20) — the crop-like case of a general warp.
+    const size = await getImageSize(out)
+    expect(await sample(out, 5, 5)).toBeLessThan(50)
+    expect(await sample(out, size.width - 5, size.height - 5)).toBeLessThan(50)
+  })
+
+  it('sizes the output from the quad edges, not the source frame', async () => {
+    const page = await quadrants(800, 1000)
+    const topHalf: Quad = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 1, y: 0 },
+      bottomLeft: { x: 0, y: 0.5 },
+      bottomRight: { x: 1, y: 0.5 },
+    }
+
+    const out = await warpImage(page, topHalf)
+
+    expect(await getImageSize(out)).toEqual({ width: 800, height: 500 })
+  })
+
+  it('rejects a degenerate quad instead of producing garbage', async () => {
+    const page = await quadrants(200, 200)
+    const point = { x: 0.4, y: 0.4 }
+    const collapsed: Quad = { topLeft: point, topRight: point, bottomLeft: point, bottomRight: point }
+
+    await expect(warpImage(page, collapsed)).rejects.toThrow()
   })
 })

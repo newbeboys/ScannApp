@@ -2,8 +2,17 @@ import { HIGHLIGHTER_ALPHA, strokeWidth, type Mark } from './annotations'
 import { correctLighting, ENHANCED_EDGE, estimateLightGrid, WORK_EDGE } from './enhance'
 import { applyFilter } from './filters'
 import { readJpegSize } from './jpegSize'
+import {
+  sampleWarp,
+  unitSquareToQuad,
+  warpedOutputSize,
+  type Quad,
+} from './perspective'
 import type { DocumentFilter } from './scanIndexMigration'
 import { STANDARD_COMPRESSION, type CompressOptions } from './exportLimits'
+
+/** Re-exported so callers that only import from `imageEditor.ts` have one source for the type. */
+export type { Quad } from './perspective'
 
 /** Crop area expressed as fractions of the source image (0..1), so it survives resizing. */
 export interface CropRect {
@@ -106,6 +115,58 @@ export async function cropImage(blob: Blob, rect: CropRect): Promise<Blob> {
   const [canvas, ctx] = draw(sWidth, sHeight)
   ctx.drawImage(bitmap, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height)
   bitmap.close()
+
+  return toBlob(canvas, 0.92)
+}
+
+/**
+ * Straightens a page by warping the quadrilateral `quad` (in the source
+ * image's own coordinates) into a rectangle — "Luruskan Halaman" (Fase 7B).
+ *
+ * Only the canvas work lives here. The maths — the homography and the
+ * per-pixel resampling — is in `perspective.ts`, kept free of the DOM so it
+ * can be tested against known pixels under Node. `imageEditor.warpImage`
+ * does the decoding and encoding around it.
+ *
+ * Always at the source's own resolution — unlike `enhancePage`, this is a
+ * one-off operation (once per imported page, occasionally again from the
+ * editor), not something every export re-runs, so there is no resolution cap
+ * here to begin with (design doc Bagian 6). Task 3 measures whether that
+ * holds up before the UI is designed any further.
+ *
+ * Throws rather than returning `null` on a degenerate quad: `QuadOverlay`
+ * already keeps the user from dragging into one, so reaching this is a bug
+ * report, not a normal outcome the caller should quietly absorb (design doc
+ * Bagian 5.3).
+ */
+export async function warpImage(blob: Blob, quad: Quad): Promise<Blob> {
+  const matrix = unitSquareToQuad(quad)
+  if (!matrix) throw new Error('Empat sudut ini tidak membentuk bidang yang sah.')
+
+  const bitmap = await decode(blob)
+  const [srcCanvas, srcCtx] = draw(bitmap.width, bitmap.height)
+  srcCtx.drawImage(bitmap, 0, 0)
+  bitmap.close()
+  const source = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height)
+
+  const { width: outWidth, height: outHeight } = warpedOutputSize(
+    quad,
+    srcCanvas.width,
+    srcCanvas.height,
+  )
+  const [canvas, ctx] = draw(outWidth, outHeight)
+  const dest = ctx.createImageData(canvas.width, canvas.height)
+
+  sampleWarp(
+    source.data,
+    srcCanvas.width,
+    srcCanvas.height,
+    dest.data,
+    canvas.width,
+    canvas.height,
+    matrix,
+  )
+  ctx.putImageData(dest, 0, 0)
 
   return toBlob(canvas, 0.92)
 }

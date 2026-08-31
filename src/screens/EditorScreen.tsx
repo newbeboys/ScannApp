@@ -4,6 +4,7 @@ import { AnnotateToolbar } from '../components/AnnotateToolbar'
 import { CropOverlay } from '../components/CropOverlay'
 import { EnhancePanel } from '../components/EnhancePanel'
 import { FilterPicker } from '../components/FilterPicker'
+import { QuadOverlay } from '../components/QuadOverlay'
 import { SignaturePad } from '../components/SignaturePad'
 import { activeChip, pickToChoice, type FilterScope } from '../lib/filterChoice'
 import {
@@ -15,6 +16,7 @@ import {
   MergeIcon,
   RotateIcon,
   SignatureIcon,
+  StraightenIcon,
   SunIcon,
   UndoIcon,
 } from '../components/Icons'
@@ -39,8 +41,9 @@ import {
   setDocumentFilter,
   setPageFilter,
   setPageMarks,
+  straightenPage,
 } from '../lib/documentEditing'
-import type { CropRect } from '../lib/imageEditor'
+import type { CropRect, Quad } from '../lib/imageEditor'
 import { markCount, saveSignatureImage, type LocalScanDocument } from '../lib/scanStorage'
 import { useSignatureUris } from '../lib/useSignatureUris'
 
@@ -55,12 +58,21 @@ interface EditorScreenProps {
 
 const FULL_CROP: CropRect = { x: 0.05, y: 0.05, width: 0.9, height: 0.9 }
 
+/** A neutral rectangle a few percent in from every edge — same inset as FULL_CROP, and for the same reason: easy to grab, and close enough to a no-op that applying it untouched changes very little. Never the output of any pixel analysis (design doc, Fase 7B Bagian 2 — v1 has no detection). */
+const FULL_QUAD: Quad = {
+  topLeft: { x: 0.05, y: 0.05 },
+  topRight: { x: 0.95, y: 0.05 },
+  bottomLeft: { x: 0.05, y: 0.95 },
+  bottomRight: { x: 0.95, y: 0.95 },
+}
+
 /** Which tool is open. Only one at a time — they all want the whole screen. */
-type Mode = 'none' | 'crop' | 'filter' | 'enhance' | 'reorder' | 'annotate'
+type Mode = 'none' | 'crop' | 'straighten' | 'filter' | 'enhance' | 'reorder' | 'annotate'
 
 const TITLES: Record<Mode, string> = {
   none: 'Edit Halaman',
   crop: 'Potong Halaman',
+  straighten: 'Luruskan Halaman',
   filter: 'Filter Dokumen',
   enhance: 'Perbaiki Pencahayaan',
   reorder: 'Urutkan Halaman',
@@ -79,6 +91,7 @@ export function EditorScreen({
   const [aspect, setAspect] = useState(1 / Math.SQRT2)
   const [mode, setMode] = useState<Mode>('none')
   const [rect, setRect] = useState<CropRect>(FULL_CROP)
+  const [quad, setQuad] = useState<Quad>(FULL_QUAD)
   const [isBusy, setIsBusy] = useState(false)
   const [scope, setScope] = useState<FilterScope>('document')
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
@@ -175,6 +188,17 @@ export function EditorScreen({
   const startCrop = () => {
     setRect(FULL_CROP)
     setMode('crop')
+  }
+
+  const handleApplyStraighten = async () => {
+    await run(() => straightenPage(doc, pageIndex, quad))
+    setMode('none')
+    setQuad(FULL_QUAD)
+  }
+
+  const startStraighten = () => {
+    setQuad(FULL_QUAD)
+    setMode('straighten')
   }
 
   const handlePick = async (pick: Parameters<typeof pickToChoice>[0]) => {
@@ -318,7 +342,9 @@ export function EditorScreen({
           <p>
             {mode === 'crop'
               ? 'Geser sudut untuk mengatur area'
-              : `Halaman ${pageIndex + 1} dari ${doc.pageCount}`}
+              : mode === 'straighten'
+                ? 'Geser sudut untuk meluruskan'
+                : `Halaman ${pageIndex + 1} dari ${doc.pageCount}`}
           </p>
         </div>
         {/* One badge, and ink wins: it is the more recent and more visible change. */}
@@ -332,7 +358,7 @@ export function EditorScreen({
 
       {mode !== 'reorder' && (
         <div
-          className={`editor-stage${mode === 'crop' ? ' editor-stage--crop' : ''}`}
+          className={`editor-stage${mode === 'crop' || mode === 'straighten' ? ' editor-stage--crop' : ''}`}
           style={{ '--page-aspect': String(aspect) } as CSSProperties}
         >
           {previewUrl && (
@@ -346,6 +372,7 @@ export function EditorScreen({
             />
           )}
           {mode === 'crop' && <CropOverlay rect={rect} onChange={setRect} />}
+          {mode === 'straighten' && <QuadOverlay quad={quad} onChange={setQuad} />}
           {mode === 'annotate' && (
             <AnnotateOverlay
               marks={marks}
@@ -376,6 +403,24 @@ export function EditorScreen({
             type="button"
             className="button button--primary"
             onClick={handleApplyCrop}
+            disabled={isBusy}
+          >
+            <CheckIcon size={17} />
+            <span>{isBusy ? 'Memproses…' : 'Terapkan'}</span>
+          </button>
+        </div>
+      )}
+
+      {mode === 'straighten' && (
+        <div className="editor-actions">
+          <button type="button" className="button" onClick={() => setMode('none')} disabled={isBusy}>
+            <CloseIcon size={17} />
+            <span>Batal</span>
+          </button>
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={handleApplyStraighten}
             disabled={isBusy}
           >
             <CheckIcon size={17} />
@@ -460,6 +505,10 @@ export function EditorScreen({
             <button type="button" className="button" onClick={startCrop} disabled={isBusy}>
               <CropIcon size={17} />
               <span>Potong</span>
+            </button>
+            <button type="button" className="button" onClick={startStraighten} disabled={isBusy}>
+              <StraightenIcon size={17} />
+              <span>Luruskan</span>
             </button>
             <button type="button" className="button" onClick={handleRotate} disabled={isBusy}>
               <RotateIcon size={17} />

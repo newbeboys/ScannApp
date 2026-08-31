@@ -1,6 +1,7 @@
 import {
   remapMarksForCrop,
   remapMarksForRotation,
+  remapMarksForWarp,
   type Mark,
   type SignatureStamp,
 } from './annotations'
@@ -10,7 +11,9 @@ import {
   filterImage,
   renderMarks,
   rotateImage,
+  warpImage,
   type CropRect,
+  type Quad,
   type Rotation,
 } from './imageEditor'
 import {
@@ -168,6 +171,25 @@ export async function cropPage(
     pageIndex,
     (blob) => cropImage(blob, rect),
     (marks) => remapMarksForCrop(marks, rect),
+  )
+}
+
+/**
+ * Straightens a page by warping the quadrilateral `quad` — "Luruskan
+ * Halaman" (Fase 7B). A third sibling of `cropPage`/`rotatePage`: same
+ * `editPage` machinery, so "Reset ke asli" undoes it and every derived
+ * render (lighting, filter, ink) is rebuilt on top of it for free.
+ */
+export async function straightenPage(
+  doc: LocalScanDocument,
+  pageIndex: number,
+  quad: Quad,
+): Promise<LocalScanDocument> {
+  return editPage(
+    doc,
+    pageIndex,
+    (blob) => warpImage(blob, quad),
+    (marks) => remapMarksForWarp(marks, quad),
   )
 }
 

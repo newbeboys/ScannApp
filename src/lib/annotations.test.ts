@@ -8,6 +8,7 @@ import {
   moveSignature,
   remapMarksForCrop,
   remapMarksForRotation,
+  remapMarksForWarp,
   sanitizeMarks,
   resizeSignature,
   signatureAt,
@@ -17,6 +18,7 @@ import {
   type Mark,
   type SignatureStamp,
 } from './annotations'
+import type { Quad } from './perspective'
 
 function stroke(points: number[], overrides: Partial<InkStroke> = {}): InkStroke {
   return { kind: 'ink', tool: 'pen', color: '#1b2740', width: 0.004, points, ...overrides }
@@ -383,5 +385,119 @@ describe('resizeSignature', () => {
 
   it('stops growing at the right edge of the page', () => {
     expect(resizeSignature(stamp, 5).width).toBeCloseTo(0.8, 10)
+  })
+})
+
+describe('remapMarksForWarp', () => {
+  const FULL: Quad = {
+    topLeft: { x: 0, y: 0 },
+    topRight: { x: 1, y: 0 },
+    bottomLeft: { x: 0, y: 1 },
+    bottomRight: { x: 1, y: 1 },
+  }
+
+  it('leaves a stroke untouched through the full-image quad', () => {
+    const marks: Mark[] = [stroke([0.2, 0.3, 0.7, 0.6])]
+    const [remapped] = remapMarksForWarp(marks, FULL) as InkStroke[]
+
+    expect(remapped.points[0]).toBeCloseTo(0.2, 8)
+    expect(remapped.points[1]).toBeCloseTo(0.3, 8)
+    expect(remapped.points[2]).toBeCloseTo(0.7, 8)
+    expect(remapped.points[3]).toBeCloseTo(0.6, 8)
+  })
+
+  it('moves a stroke onto the straightened geometry for a quadrant quad', () => {
+    // Selecting the top-left quadrant is the crop-like case: the *kept
+    // region's own* centre (0.25, 0.25 in source space — the middle of the
+    // quadrant, not the middle of the whole source image, which would be
+    // 0.5, 0.5) becomes the new page's own centre.
+    const quadrant: Quad = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 0.5, y: 0 },
+      bottomLeft: { x: 0, y: 0.5 },
+      bottomRight: { x: 0.5, y: 0.5 },
+    }
+    const marks: Mark[] = [stroke([0.25, 0.25, 0.25, 0.25])]
+
+    const [remapped] = remapMarksForWarp(marks, quadrant) as InkStroke[]
+
+    expect(remapped.points[0]).toBeCloseTo(0.5, 8)
+    expect(remapped.points[1]).toBeCloseTo(0.5, 8)
+  })
+
+  it('thickens the stroke by as much as the quad magnified the page', () => {
+    const quadrant: Quad = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 0.5, y: 0 },
+      bottomLeft: { x: 0, y: 0.5 },
+      bottomRight: { x: 0.5, y: 0.5 },
+    }
+    const [remapped] = remapMarksForWarp(
+      [stroke([0.25, 0.25, 0.25, 0.25])],
+      quadrant,
+    ) as InkStroke[]
+
+    // The quadrant is doubled onto the straightened page, so what was 0.004
+    // of the old page has to become 0.008 of the new one to look unchanged.
+    expect(remapped.width).toBeCloseTo(0.008, 10)
+  })
+
+  it('drops a stroke that lands entirely outside the straightened page', () => {
+    const quadrant: Quad = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 0.5, y: 0 },
+      bottomLeft: { x: 0, y: 0.5 },
+      bottomRight: { x: 0.5, y: 0.5 },
+    }
+    // Entirely in the bottom-right quadrant of the source — nowhere near the
+    // top-left quadrant this quad keeps.
+    const marks: Mark[] = [stroke([0.7, 0.7, 0.9, 0.9])]
+
+    expect(remapMarksForWarp(marks, quadrant)).toEqual([])
+  })
+
+  it('keeps a stroke that only partly survives the warp', () => {
+    const quadrant: Quad = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 0.5, y: 0 },
+      bottomLeft: { x: 0, y: 0.5 },
+      bottomRight: { x: 0.5, y: 0.5 },
+    }
+    // One end inside the kept quadrant, one end outside it.
+    const marks: Mark[] = [stroke([0.1, 0.1, 0.6, 0.6])]
+
+    expect(remapMarksForWarp(marks, quadrant)).toHaveLength(1)
+  })
+
+  it('re-fits a signature box to the bounding box of its warped corners', () => {
+    const quadrant: Quad = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 0.5, y: 0 },
+      bottomLeft: { x: 0, y: 0.5 },
+      bottomRight: { x: 0.5, y: 0.5 },
+    }
+    const [moved] = remapMarksForWarp(
+      [signature({ x: 0.1, y: 0.1, width: 0.2, height: 0.1 })],
+      quadrant,
+    ) as SignatureStamp[]
+
+    // The box sat entirely in the kept quadrant (0..0.5, 0..0.5), doubled
+    // onto the straightened page.
+    expect(moved.x).toBeCloseTo(0.2, 8)
+    expect(moved.y).toBeCloseTo(0.2, 8)
+    expect(moved.width).toBeCloseTo(0.4, 8)
+    expect(moved.height).toBeCloseTo(0.2, 8)
+  })
+
+  it('returns every mark unchanged when the quad is degenerate', () => {
+    const point = { x: 0.4, y: 0.4 }
+    const collapsed: Quad = { topLeft: point, topRight: point, bottomLeft: point, bottomRight: point }
+    const marks: Mark[] = [stroke([0.1, 0.1, 0.2, 0.2])]
+
+    // Unreachable in practice — QuadOverlay and warpImage both refuse this
+    // quad first — but remapMarksForWarp must not crash if it is ever called
+    // standalone with one. Dropping the marks would look like data loss for
+    // no reason; passing them through unchanged is the safer failure.
+    expect(remapMarksForWarp(marks, collapsed)).toEqual(marks)
   })
 })

@@ -1009,27 +1009,131 @@ untuk seam TFLite, bukan tambalan konvolusi hari ini.
 
 **Menunggu uji di device fisik (Xiaomi T15) — ini tugas Boss Ali, bukan Claude:**
 
-- [ ] Dokumen berbayang (foto halaman dengan bayangan tangan) → sakelar **Aktif** → bayangan
+- [x] Dokumen berbayang (foto halaman dengan bayangan tangan) → sakelar **Aktif** → bayangan
   rata, teks tetap terbaca
-- [ ] Sakelar **Aktif** lalu filter **Hitam-Putih** → tidak ada lagi bercak hitam pekat di
+- [x] Sakelar **Aktif** lalu filter **Hitam-Putih** → tidak ada lagi bercak hitam pekat di
   daerah bayangan; keduanya berlaku bersamaan, menyalakan salah satu tidak mencabut yang lain
-- [ ] Dokumen 20 halaman → progres berjalan per halaman, tombol **Batal** benar-benar
+- [x] Dokumen 20 halaman → progres berjalan per halaman, tombol **Batal** benar-benar
   menghentikan (bukan cuma menutup panel)
-- [ ] Setelah **Batal**: panel bilang "N dari 20 halaman diperbaiki", tombol **Lanjutkan**
+- [x] Setelah **Batal**: panel bilang "N dari 20 halaman diperbaiki", tombol **Lanjutkan**
   meneruskan dari halaman N+1, bukan mengulang dari awal
-- [ ] Sakelar **Nonaktif** → halaman kembali seperti semula, berkas `-enhanced.jpg` hilang
-- [ ] Crop satu halaman saat sakelar menyala → halaman itu diperbaiki ulang, filternya ikut benar
-- [ ] Tutup & buka ulang aplikasi → sakelar dan hasilnya masih sama
-- [ ] Ekspor PDF dengan sakelar menyala → yang keluar halaman hasil perbaikan
+- [x] Sakelar **Nonaktif** → halaman kembali seperti semula, berkas `-enhanced.jpg` hilang
+- [x] Crop satu halaman saat sakelar menyala → halaman itu diperbaiki ulang, filternya ikut benar
+- [x] Tutup & buka ulang aplikasi → sakelar dan hasilnya masih sama
+- [~] Ekspor PDF dengan sakelar menyala → yang keluar halaman hasil perbaikan. **Isinya benar,
+  tapi lambat:** 20 halaman makan **lebih dari 1 menit, sekali sampai 1 menit 30 detik**
+  (dilaporkan dari HP, 31 Agustus 2026). Sudah ditelusuri & jalur ekspornya diperbaiki —
+  lihat bagian di bawah. **Perlu diuji ulang** untuk mengukur hasilnya.
 - [ ] Waktu nyata per halaman di HP dibanding proyeksi Task 3 (265 ms desktop → target
   di bawah ±1,5 detik/halaman, 20 halaman di bawah ±30 detik)
-- [ ] Tidak ada satu pun kata "AI" di layar mana pun
+- [x] Tidak ada satu pun kata "AI" di layar mana pun
+
+### Ekspor 20 halaman lambat — ditelusuri & diperbaiki 31 Agustus 2026
+
+Dugaan awal saat melapor: penyebabnya halaman yang sempat di-crop dan diberi filter
+Hitam-Putih. **Diukur, dan dugaan itu tidak terbukti — arahnya justru terbalik.** Diukur di
+Chromium pada halaman foto 3000×4000 yang berbintik (bench sementara, sudah dihapus lagi):
+
+| sumber halaman | kompres 20 halaman | PDF 20 halaman |
+|---|---|---|
+| sakelar **mati** (asli 12 MP) | **6,2 detik** | 25,1 MB |
+| sakelar **hidup** (2400 px) | **2,9 detik** | 29,3 MB |
+| sakelar **hidup** + Hitam-Putih | **2,5 detik** | 31,3 MB |
+
+Sakelar pencahayaan **mempercepat** tahap kompresi, bukan memperlambat — halaman hasil
+perbaikan sudah 2400 px, jadi ekspor tidak perlu lagi menyusutkan 12 MP. Hitam-Putih malah
+yang tercepat. Yang benar-benar berubah karena sakelar cuma satu: **berkasnya ±17% lebih
+besar** (bayangan yang diangkat ikut mengangkat bintik, dan halaman melewati satu putaran
+JPEG lebih banyak).
+
+**Biang yang sebenarnya: berapa banyak byte yang menyeberangi jembatan Capacitor, dan
+berapa salinannya di memori.** Seluruh kerja JavaScript-nya cuma 2,9–6,7 detik di desktop;
+sisanya ada di luar JS. PDF 20 halaman ±25–31 MB dikirim ke Java sebagai **satu string
+base64 33–42 MB dalam sekali panggil** — plugin ini memang hanya menerima base64 di native —
+dan string sebesar itu disalin ulang di tiap tahap: dibangun di JS, disalin `JSON.stringify`,
+diurai lagi jadi `String` di Java, baru didekode jadi byte. Riwayat repo ini sendiri sudah
+menunjuk ke sana: `DERIVED_QUALITY` diturunkan 25 Agustus 2026 justru karena menyimpan
+**satu** halaman 4 MB lewat jembatan yang sama sudah jadi hal paling lambat di editor.
+
+Yang diperbaiki:
+
+- [x] **Halaman dialirkan satu per satu ke pdf-lib.** `buildPdf` sekarang menerima iterable,
+  dan `exportPdf` memberinya generator. Dulu 20 blob **dan** 20 array byte ditahan bersamaan
+  padahal `embedJpg` menyimpan salinannya sendiri — dokumen yang sama ada dua kali sebelum
+  `save()` mengalokasikan yang ketiga.
+- [x] **Salinan cuma-cuma dihapus.** `new Uint8Array(pdf)` hanya ada untuk memuaskan tipe
+  `BlobPart`; diganti cast, hemat satu salinan penuh (±25 MB) persis saat heap paling tinggi.
+- [x] **Penulisan berkas dipotong jadi irisan 1,5 MB** (`WRITE_CHUNK_BYTES` di
+  `exportShare.ts`): `writeFile` untuk irisan pertama, `appendFile` untuk sisanya. Jumlah
+  byte yang menyeberang **identik** (diukur: 41.943.040 karakter base64 di kedua cara,
+  1,5 MB kelipatan 3 jadi tidak ada padding terbuang), tapi string terbesar yang pernah ada
+  di memori turun dari ±42 MB jadi 2 MB.
+- [x] **Penjaga berkas terpotong.** Ukuran di disk dicocokkan dengan ukuran blob sesudah
+  irisan terakhir; kalau kurang, berkasnya dihapus dan ekspornya gagal terang-terangan —
+  PDF terpotong yang "berhasil" jauh lebih berbahaya, apalagi di jalur Simpan ke HP. Kalau
+  `stat` sendiri tidak bisa menjawab, penjaganya diam saja supaya tidak pernah membatalkan
+  ekspor yang sebenarnya sehat.
+
+**Yang belum bisa dipastikan dari mesin dev:** bahwa jembatan itu memang biang 60–90 detiknya.
+Itu cuma bisa diukur di HP. Yang pasti terukur: byte yang menyeberang tidak bertambah,
+puncak memorinya turun jauh, dan hasil PDF-nya byte-for-byte sama (dijaga tes
+`builds the same document from a generator as from an array`).
+
+**Di luar kendali aplikasi:** sesudah lembar Bagikan muncul, aplikasi penerima menyalin
+sendiri berkas 25–31 MB itu. Itu sebabnya menekan **Batal** terasa jauh lebih cepat — yang
+dilewati bukan ekspornya, tapi penyalinan oleh aplikasi tujuan.
 
 ### 7B — Auto-deskew & auto-crop presisi (menyusul)
 
-- [ ] Deteksi tepi & koreksi perspektif untuk gambar yang **bukan** dari pemindai
-  (share sheet, halaman PDF pihak ketiga)
-- [ ] Belum di-brainstorm; spec sendiri saat 7A selesai
+- [x] Spec ditulis & disetujui Boss Ali 31 Agustus 2026:
+  `docs/superpowers/specs/2026-08-31-fase7b-auto-deskew-design.md`. Plan:
+  `docs/superpowers/plans/2026-08-31-fase7b-auto-deskew.md`.
+- [x] **Alat luruskan manual — selesai.** Kuadrilateral 4-sudut bebas
+  (`QuadOverlay`), koreksi perspektif lewat homografi pemetaan-balik
+  (`perspective.ts` + `imageEditor.warpImage()`). Bukan tahap baru di rantai
+  turunan — `straightenPage()` sejajar `cropPage`/`rotatePage`, menulis ke
+  `edited` lewat `editPage()` yang sudah ada. Tidak ada `schemaVersion` baru.
+- [x] Layar `StraightenScreen` menyela jalur impor (share sheet & rasterisasi
+  PDF) sebelum `ReviewScreen` — satu halaman per satu, selalu menunggu
+  konfirmasi (Luruskan/Lewati), tidak pernah auto-terap. Halaman scanner
+  ML Kit tidak pernah masuk layar ini.
+- [x] Tombol **Luruskan** permanen di editor, sejajar Potong/Putar — bisa
+  dipakai ulang kapan saja lewat "Reset ke asli", sama seperti crop/rotate.
+- [x] Semua tier, tanpa gerbang tier di mana pun di jalur ini.
+- [x] **Tidak ada deteksi tepi otomatis di v1** — sudut awal selalu persegi
+  inset 5%, bukan hasil analisis piksel. Fast-follow tercatat sebagai
+  known gap, sama pola dengan noise-reduction di Fase 7A: seam-nya cuma
+  mengganti titik asal sudut default, tidak menyentuh warpImage/
+  straightenPage/data model apa pun.
+- [x] Test bertambah 39 (total 938).
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Impor foto miring dari galeri/aplikasi lain lewat share sheet →
+  `StraightenScreen` muncul otomatis sebelum layar Tinjau, dengan sudut awal
+  persegi inset — geser sudut ke tepi kertas sungguhan, tekan **Luruskan**,
+  hasilnya tampak lurus di layar Tinjau berikutnya
+- [ ] Impor PDF pihak ketiga (bukan buatan ScannApp sendiri) lewat share sheet
+  → tiap halamannya juga melalui `StraightenScreen`
+- [ ] Tekan **Lewati** untuk halaman yang sudah lurus → halaman masuk ke
+  Tinjau apa adanya, tanpa terpotong
+- [ ] Scan biasa lewat kamera pemindai (bukan impor) → **tidak pernah**
+  masuk `StraightenScreen`, langsung ke Tinjau seperti sebelumnya
+- [ ] Share baru datang saat sudah berada di layar Tinjau (sesi campuran) →
+  hanya halaman baru itu yang memicu `StraightenScreen`, bukan yang sudah
+  ada di daftar
+- [ ] Tombol kembali (chevron) di `StraightenScreen` membatalkan **seluruh**
+  impor yang sedang berjalan, bukan cuma halaman itu
+- [ ] Tombol **Luruskan** permanen di editor (sejajar Potong/Putar) pada
+  dokumen yang sudah tersimpan — bekerja dan bisa dibatalkan lewat **Asli**
+- [ ] Waktu nyata meluruskan satu halaman 12 MP di HP dibanding proyeksi
+  Task 3 (bench `warpBench.browser.test.ts`). **Proyeksi acuannya (Chromium
+  desktop, 31 Agustus 2026):** halaman 3000×4000 kuadrilateral realistis, 4
+  kali jalan, median **1151ms** (`1178/1124/904/1206`) → proyeksi mid-range
+  ×4 = **~5 detik per halaman**. Keputusan Boss Ali saat itu: tetap resolusi
+  sumber penuh, terima ~5 detik/halaman, tanpa batas resolusi atau tuas
+  resampler tambahan (lihat plan Task 3 Step 2). Isi angka HP sungguhan di
+  sini setelah diuji, untuk dibandingkan dengan proyeksi di atas.
 
 ## Fase 8 — Program Referral
 

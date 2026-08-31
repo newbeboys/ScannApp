@@ -109,18 +109,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) fail(error)
   }, [])
 
-  const signUp = useCallback(async (address: string, password: string, displayName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email: address.trim(),
-      password,
-      options: { data: { display_name: displayName.trim() } },
-    })
-    if (error) fail(error)
+  const signUp = useCallback(
+    async (address: string, password: string, displayName: string, referredByCode?: string) => {
+      const { data, error } = await supabase.auth.signUp({
+        email: address.trim(),
+        password,
+        options: {
+          data: {
+            display_name: displayName.trim(),
+            ...(referredByCode ? { referred_by_code: referredByCode } : {}),
+          },
+        },
+      })
+      if (error) fail(error)
 
-    // No session means the project still requires email confirmation; the UI
-    // shows a "check your email" step instead of dropping the user inside.
-    return { signedIn: data.session !== null }
-  }, [])
+      // No session means the project still requires email confirmation; the UI
+      // shows a "check your email" step instead of dropping the user inside.
+      return { signedIn: data.session !== null }
+    },
+    [],
+  )
 
   const signOut = useCallback(async () => {
     clearCachedProfile()

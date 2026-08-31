@@ -25,7 +25,12 @@ export interface AuthContextValue {
    */
   tierResolved: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, displayName: string) => Promise<SignUpOutcome>
+  signUp: (
+    email: string,
+    password: string,
+    displayName: string,
+    referredByCode?: string,
+  ) => Promise<SignUpOutcome>
   signOut: () => Promise<void>
   sendPasswordReset: (email: string) => Promise<void>
   /**

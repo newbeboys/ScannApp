@@ -31,6 +31,7 @@ export function AuthScreen({ mode, onModeChange, onBack, onForgotPassword }: Aut
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [referredByCode, setReferredByCode] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
@@ -40,6 +41,7 @@ export function AuthScreen({ mode, onModeChange, onBack, onForgotPassword }: Aut
 
   const switchMode = (next: AuthMode) => {
     setError(null)
+    setReferredByCode('')
     onModeChange(next)
   }
 
@@ -52,7 +54,12 @@ export function AuthScreen({ mode, onModeChange, onBack, onForgotPassword }: Aut
       if (mode === 'signin') {
         await signIn(email, password)
       } else {
-        const { signedIn } = await signUp(email, password, displayName)
+        const { signedIn } = await signUp(
+          email,
+          password,
+          displayName,
+          referredByCode.trim() ? referredByCode.trim().toUpperCase() : undefined,
+        )
         // Nothing more to do when a session came back — App swaps the screen.
         if (!signedIn) setAwaitingConfirmation(true)
       }
@@ -133,6 +140,20 @@ export function AuthScreen({ mode, onModeChange, onBack, onForgotPassword }: Aut
           </label>
         )}
 
+        {mode === 'signup' && (
+          <label className="field">
+            <span className="field__label">Kode referral (opsional)</span>
+            <input
+              className="field__input"
+              type="text"
+              autoCapitalize="characters"
+              placeholder="Contoh: K7M2N9PQ"
+              value={referredByCode}
+              onChange={(event) => setReferredByCode(event.target.value)}
+            />
+          </label>
+        )}
+
         <label className="field">
           <span className="field__label">Email</span>
           <input
@@ -156,6 +177,11 @@ export function AuthScreen({ mode, onModeChange, onBack, onForgotPassword }: Aut
               type={showPassword ? 'text' : 'password'}
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               placeholder={mode === 'signup' ? 'Minimal 6 karakter' : '••••••••'}
+              // The reveal button below shares this <label>, and its own aria-label
+              // ("Tampilkan/Sembunyikan password") would otherwise bleed into this
+              // input's computed accessible name. An explicit aria-label overrides
+              // that so the name stays exactly "Password".
+              aria-label="Password"
               required
               minLength={6}
               value={password}

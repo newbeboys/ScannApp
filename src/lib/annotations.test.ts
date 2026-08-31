@@ -425,6 +425,23 @@ describe('remapMarksForWarp', () => {
     expect(remapped.points[1]).toBeCloseTo(0.5, 8)
   })
 
+  it('thickens the stroke by as much as the quad magnified the page', () => {
+    const quadrant: Quad = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 0.5, y: 0 },
+      bottomLeft: { x: 0, y: 0.5 },
+      bottomRight: { x: 0.5, y: 0.5 },
+    }
+    const [remapped] = remapMarksForWarp(
+      [stroke([0.25, 0.25, 0.25, 0.25])],
+      quadrant,
+    ) as InkStroke[]
+
+    // The quadrant is doubled onto the straightened page, so what was 0.004
+    // of the old page has to become 0.008 of the new one to look unchanged.
+    expect(remapped.width).toBeCloseTo(0.008, 10)
+  })
+
   it('drops a stroke that lands entirely outside the straightened page', () => {
     const quadrant: Quad = {
       topLeft: { x: 0, y: 0 },

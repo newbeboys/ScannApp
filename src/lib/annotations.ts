@@ -218,6 +218,27 @@ export function remapMarksForWarp(marks: Mark[], quad: Quad): Mark[] {
   const inverse = forward && invertMatrix3(forward)
   if (!inverse) return marks
 
+  // Stroke width is scaled by the warp too, same reasoning as
+  // `remapMarksForCrop`'s own `widthScale` — a quad that only kept a quadrant
+  // of the page stretches that quadrant across the whole straightened output,
+  // so ink drawn at the old fraction would come back half as thick as the
+  // user drew it. A true per-point Jacobian would be more exact for a
+  // sheared quad, but an edge-length approximation matches the precision
+  // `remapMarksForCrop` already accepts and mirrors how `warpedOutputSize` in
+  // `perspective.ts` sizes the output the same way: averaging top/bottom and
+  // left/right edges.
+  const edge = (p1: { x: number; y: number }, p2: { x: number; y: number }) =>
+    Math.hypot(p2.x - p1.x, p2.y - p1.y)
+  const fractionWidth = Math.max(
+    (edge(quad.topLeft, quad.topRight) + edge(quad.bottomLeft, quad.bottomRight)) / 2,
+    1e-6,
+  )
+  const fractionHeight = Math.max(
+    (edge(quad.topLeft, quad.bottomLeft) + edge(quad.topRight, quad.bottomRight)) / 2,
+    1e-6,
+  )
+  const widthScale = (1 / fractionWidth + 1 / fractionHeight) / 2
+
   const remapped: Mark[] = []
   for (const mark of marks) {
     if (mark.kind === 'signature') {
@@ -246,7 +267,7 @@ export function remapMarksForWarp(marks: Mark[], quad: Quad): Mark[] {
       points.push(mapped.x, mapped.y)
     }
     if (!touchesPage(points)) continue
-    remapped.push({ ...mark, points })
+    remapped.push({ ...mark, points, width: mark.width * widthScale })
   }
 
   return remapped

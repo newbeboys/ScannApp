@@ -1255,7 +1255,9 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `fetchReferralProgress`, `type ReferralProgress` (Task 8); `useAuth` (untuk `profile.referralCode`, sudah ada); `GiftIcon`, `ChevronLeftIcon` (`Icons.tsx`).
-- Produces: `ReferralScreen({ referralCode, onBack, onError }: ReferralScreenProps)` — dipakai Task 11 (`App.tsx`).
+- Produces: `ReferralScreen({ referralCode, onBack, onError, fetchProgress?, shareCode? }: ReferralScreenProps)` — dipakai Task 11 (`App.tsx`, tanpa perlu mengisi `fetchProgress`/`shareCode`, keduanya default ke fungsi asli).
+
+**Catatan penting sebelum mulai:** Task 9 menemukan `vi.mock(...)` **tidak berfungsi sama sekali** di suite `browser` (Playwright) proyek ini — dikonfirmasi lewat reproduksi minimal terpisah, dan tidak ada satu pun `.browser.test.tsx` di codebase ini yang pernah memakainya. Karena itu Step 2 & Step 4 di bawah **sengaja berbeda** dari draf awal: `ReferralScreen` menerima `fetchProgress`/`shareCode` sebagai prop opsional (default ke `fetchReferralProgress`/`Share.share` asli) alih-alih meng-import & memanggilnya langsung — pola dependency-injection-lewat-prop, bukan `vi.mock`. `App.tsx` (Task 11) tidak perlu tahu soal ini sama sekali karena keduanya opsional dengan default.
 
 - [ ] **Step 1: Tambah `GiftIcon` ke `Icons.tsx`**
 
@@ -1283,16 +1285,7 @@ Create `src/screens/ReferralScreen.browser.test.tsx`:
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import type { ReferralProgress } from '../lib/referralApi'
-
-const fetchReferralProgress = vi.fn<[], Promise<ReferralProgress>>()
-
-vi.mock('../lib/referralApi', () => ({
-  fetchReferralProgress: (...args: []) => fetchReferralProgress(...args),
-}))
-
-vi.mock('@capacitor/share', () => ({ Share: { share: vi.fn() } }))
-
-const { ReferralScreen } = await import('./ReferralScreen')
+import { ReferralScreen } from './ReferralScreen'
 
 const PROGRESS: ReferralProgress = {
   activatedCount: 6,
@@ -1305,41 +1298,67 @@ const PROGRESS: ReferralProgress = {
 
 describe('ReferralScreen', () => {
   it('shows the referral code', async () => {
-    fetchReferralProgress.mockResolvedValue(PROGRESS)
     const screen = await render(
-      <ReferralScreen referralCode="K7M2N9PQ" onBack={() => {}} onError={() => {}} />,
+      <ReferralScreen
+        referralCode="K7M2N9PQ"
+        onBack={() => {}}
+        onError={() => {}}
+        fetchProgress={async () => PROGRESS}
+        shareCode={async () => {}}
+      />,
     )
 
     await expect.element(screen.getByText('K7M2N9PQ')).toBeVisible()
   })
 
   it('marks a milestone already crossed as reached', async () => {
-    fetchReferralProgress.mockResolvedValue(PROGRESS)
     const screen = await render(
-      <ReferralScreen referralCode="K7M2N9PQ" onBack={() => {}} onError={() => {}} />,
+      <ReferralScreen
+        referralCode="K7M2N9PQ"
+        onBack={() => {}}
+        onError={() => {}}
+        fetchProgress={async () => PROGRESS}
+        shareCode={async () => {}}
+      />,
     )
 
     await expect.element(screen.getByText(/5 orang.*7 hari Pro.*Tercapai/)).toBeVisible()
   })
 
   it('does not mark an unreached milestone as reached', async () => {
-    fetchReferralProgress.mockResolvedValue(PROGRESS)
     const screen = await render(
-      <ReferralScreen referralCode="K7M2N9PQ" onBack={() => {}} onError={() => {}} />,
+      <ReferralScreen
+        referralCode="K7M2N9PQ"
+        onBack={() => {}}
+        onError={() => {}}
+        fetchProgress={async () => PROGRESS}
+        shareCode={async () => {}}
+      />,
     )
 
     await expect.element(screen.getByText(/15 orang.*25 hari Pro/)).not.toHaveTextContent('Tercapai')
   })
 
   it('reports an error when progress fails to load', async () => {
-    fetchReferralProgress.mockRejectedValue(new Error('network down'))
     const onError = vi.fn()
-    await render(<ReferralScreen referralCode="K7M2N9PQ" onBack={() => {}} onError={onError} />)
+    await render(
+      <ReferralScreen
+        referralCode="K7M2N9PQ"
+        onBack={() => {}}
+        onError={onError}
+        fetchProgress={async () => {
+          throw new Error('network down')
+        }}
+        shareCode={async () => {}}
+      />,
+    )
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledWith('Gagal memuat progres referral.'))
   })
 })
 ```
+
+Setiap test merender sekali saja (bukan dua kali seperti `AuthScreen.browser.test.tsx`), jadi masalah leak antar-render yang ditemukan Task 9 tidak relevan di sini — tidak perlu `.unmount()`.
 
 - [ ] **Step 3: Run test to verify it fails**
 
@@ -1360,14 +1379,24 @@ interface ReferralScreenProps {
   referralCode: string | null
   onBack: () => void
   onError: (message: string) => void
+  /** Overridable for tests -- defaults to the real Edge Function-backed fetch. */
+  fetchProgress?: () => Promise<ReferralProgress>
+  /** Overridable for tests -- defaults to the real native share sheet. */
+  shareCode?: (options: { title: string; text: string }) => Promise<void>
 }
 
-export function ReferralScreen({ referralCode, onBack, onError }: ReferralScreenProps) {
+export function ReferralScreen({
+  referralCode,
+  onBack,
+  onError,
+  fetchProgress = fetchReferralProgress,
+  shareCode = Share.share,
+}: ReferralScreenProps) {
   const [progress, setProgress] = useState<ReferralProgress | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    fetchReferralProgress()
+    fetchProgress()
       .then((result) => {
         if (!cancelled) setProgress(result)
       })
@@ -1377,12 +1406,12 @@ export function ReferralScreen({ referralCode, onBack, onError }: ReferralScreen
     return () => {
       cancelled = true
     }
-  }, [onError])
+  }, [fetchProgress, onError])
 
   const handleShare = async () => {
     if (!referralCode) return
     try {
-      await Share.share({
+      await shareCode({
         title: 'Ajak teman pakai ScannApp',
         text: `Pakai kode referral ${referralCode} saat daftar di ScannApp -- kita berdua dapat hari Pro gratis! Masukkan kode ini di form Daftar.`,
       })

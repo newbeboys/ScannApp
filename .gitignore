@@ -39,3 +39,6 @@ Thumbs.db
 
 # Git worktree yang dipakai isolasi kerja sesi Claude Code (superpowers)
 .worktrees/
+
+# Scratch workspace subagent-driven-development (ledger, brief, laporan per plan)
+.superpowers/

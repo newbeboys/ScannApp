@@ -611,6 +611,66 @@
   color: #e2554e;
 }
 
+/* ---------- Ajak Teman (referral) ---------- */
+
+.referral-code-card {
+  align-items: center;
+  text-align: center;
+}
+
+.referral-code-card__label {
+  font-size: 0.83rem;
+  color: var(--fg-dim);
+}
+
+.referral-code-card__value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--acc);
+}
+
+.referral-code-card__share {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.referral-milestones {
+  gap: 16px;
+}
+
+.referral-milestone__track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  overflow: hidden;
+}
+
+.referral-milestone__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--acc);
+  transition: width 240ms ease-out;
+}
+
+.referral-milestone--reached .referral-milestone__fill {
+  background: var(--pro-gold);
+}
+
+.referral-milestone__label {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.referral-milestone--reached .referral-milestone__label {
+  color: var(--fg);
+}
+
 .card__row-icon {
   vertical-align: -3px;
   margin-right: 9px;

@@ -308,3 +308,15 @@ export function TextIcon({ size = 24, className }: IconProps) {
     </svg>
   )
 }
+
+export function GiftIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <rect x="4" y="9.5" width="16" height="4" rx="1" />
+      <rect x="5.5" y="13.5" width="13" height="7" rx="1.2" />
+      <path d="M12 9.5v11" />
+      <path d="M12 9.5c-1.4 0-3-1-3-2.6A2.4 2.4 0 0 1 11.4 4.5c1.7 0 2.6 2.6 2.6 5" />
+      <path d="M12 9.5c1.4 0 3-1 3-2.6A2.4 2.4 0 0 0 12.6 4.5c-1.7 0-2.6 2.6-2.6 5" />
+    </svg>
+  )
+}

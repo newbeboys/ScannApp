@@ -1,4 +1,4 @@
-import { handler, json, serviceClient } from '../_shared/http.ts'
+import { errorResponse, handler, json, serviceClient } from '../_shared/http.ts'
 import { extendExpiry, matchedMilestone, nextProPlan, REFERRED_USER_BONUS_DAYS } from '../_shared/referral.ts'
 
 Deno.serve(
@@ -29,13 +29,18 @@ Deno.serve(
     // Flip this event to activated -- but only the first time. Zero rows
     // updated means a previous call already did this; stop here rather than
     // re-granting a reward that already went out.
-    const { data: justActivated } = await db
+    const { data: justActivated, error: activateError } = await db
       .from('referral_events')
       .update({ activated: true, activated_at: new Date().toISOString() })
       .eq('referrer_id', referrerId)
       .eq('referred_id', user.id)
       .eq('activated', false)
       .select('id')
+
+    if (activateError) {
+      console.error(activateError)
+      return errorResponse('DB_ERROR', 'Gagal mencatat aktivasi referral.', 500)
+    }
 
     if (!justActivated || justActivated.length === 0) {
       return json({ activated: false })
@@ -52,7 +57,7 @@ Deno.serve(
       .maybeSingle()
 
     if (referredProfile) {
-      await db
+      const { error: bonusError } = await db
         .from('profiles')
         .update({
           tier: 'pro',
@@ -60,6 +65,11 @@ Deno.serve(
           pro_plan: nextProPlan(referredProfile),
         })
         .eq('id', user.id)
+
+      if (bonusError) {
+        console.error(bonusError)
+        return errorResponse('DB_ERROR', 'Gagal memberikan bonus referral untuk akun ini.', 500)
+      }
     }
 
     // Milestone check for the referrer.
@@ -85,7 +95,7 @@ Deno.serve(
         .maybeSingle()
 
       if (referrerProfile) {
-        await db
+        const { error: milestoneError } = await db
           .from('profiles')
           .update({
             tier: 'pro',
@@ -94,7 +104,21 @@ Deno.serve(
           })
           .eq('id', referrerId)
 
-        await db.from('referral_events').update({ reward_granted: true }).eq('id', eventId)
+        if (milestoneError) {
+          console.error(milestoneError)
+          return errorResponse('DB_ERROR', 'Gagal memberikan bonus milestone referral.', 500)
+        }
+
+        const { error: rewardFlagError } = await db
+          .from('referral_events')
+          .update({ reward_granted: true })
+          .eq('id', eventId)
+
+        if (rewardFlagError) {
+          console.error(rewardFlagError)
+          return errorResponse('DB_ERROR', 'Gagal mencatat status reward referral.', 500)
+        }
+
         milestoneReached = milestone.referral_count_required
       }
     }

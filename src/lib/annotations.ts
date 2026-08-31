@@ -1,4 +1,5 @@
 import type { CropRect, Rotation } from './imageEditor'
+import { applyMatrix3, invertMatrix3, unitSquareToQuad, type Quad } from './perspective'
 
 /**
  * What a user has drawn on top of a page.
@@ -199,6 +200,56 @@ export function remapMarksForRotation(marks: Mark[], degrees: Rotation): Mark[] 
     }
     return { ...mark, points }
   })
+}
+
+/**
+ * Moves marks onto the geometry `warpImage` produces for the same `quad`.
+ *
+ * Marks are stored in the *source* image's coordinates (design doc Bagian
+ * 5.1's convention). `unitSquareToQuad(quad)` maps the straightened page onto
+ * the source, so ink — which lives in the source — needs the *inverse* of
+ * that same matrix to land in the straightened page's space. If the quad is
+ * degenerate, `unitSquareToQuad`/`invertMatrix3` return `null` and the marks
+ * are handed back untouched — `warpImage` already refuses to run on a
+ * degenerate quad, so this path is a safety net, not a real one.
+ */
+export function remapMarksForWarp(marks: Mark[], quad: Quad): Mark[] {
+  const forward = unitSquareToQuad(quad)
+  const inverse = forward && invertMatrix3(forward)
+  if (!inverse) return marks
+
+  const remapped: Mark[] = []
+  for (const mark of marks) {
+    if (mark.kind === 'signature') {
+      const corners = [
+        { x: mark.x, y: mark.y },
+        { x: mark.x + mark.width, y: mark.y },
+        { x: mark.x, y: mark.y + mark.height },
+        { x: mark.x + mark.width, y: mark.y + mark.height },
+      ].map((point) => applyMatrix3(inverse, point))
+      const xs = corners.map((point) => point.x)
+      const ys = corners.map((point) => point.y)
+      const box = {
+        x: Math.min(...xs),
+        y: Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
+      }
+      if (box.x + box.width <= 0 || box.x >= 1 || box.y + box.height <= 0 || box.y >= 1) continue
+      remapped.push({ ...mark, ...box })
+      continue
+    }
+
+    const points: number[] = []
+    for (let i = 0; i < mark.points.length; i += 2) {
+      const mapped = applyMatrix3(inverse, { x: mark.points[i], y: mark.points[i + 1] })
+      points.push(mapped.x, mapped.y)
+    }
+    if (!touchesPage(points)) continue
+    remapped.push({ ...mark, points })
+  }
+
+  return remapped
 }
 
 /** Clockwise rotation of a normalised point inside the unit square. */

@@ -74,7 +74,14 @@ export function QuadOverlay({ quad, onChange }: QuadOverlayProps) {
   }
 
   const corners: Corner[] = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight']
-  const points = corners.map((corner) => `${quad[corner].x * 100},${quad[corner].y * 100}`).join(' ')
+  // Boundary-walk order for the SVG outline only — must trace the quad's
+  // perimeter without crossing, same order `quadArea`/`unitSquareToQuad` use
+  // in perspective.ts. `corners` above stays in its own order because it also
+  // drives the handle `.map()` below, where order doesn't matter.
+  const outlineCorners: Corner[] = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft']
+  const points = outlineCorners
+    .map((corner) => `${quad[corner].x * 100},${quad[corner].y * 100}`)
+    .join(' ')
 
   return (
     <div className="quad-overlay" ref={frameRef} onPointerMove={onPointerMove} onPointerUp={endDrag}>

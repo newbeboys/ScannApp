@@ -120,6 +120,17 @@ export function CropIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function StraightenIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M5 6.5 8 3.5h8l3 3" />
+      <path d="M3.5 20.5h17" />
+      <path d="M5 6.5 3.5 20.5" />
+      <path d="M19 6.5l1.5 14" />
+    </svg>
+  )
+}
+
 export function PencilIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">

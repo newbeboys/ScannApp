@@ -43,6 +43,7 @@ import type { CompressionLevel } from './lib/exportLimits'
 import type { ExportDestination } from './lib/exportShare'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
+import { warpImage, type Quad } from './lib/imageEditor'
 import { onSharedFilesReceived } from './lib/sharedImport'
 import { describeOcrOutcome, recognizeDocument, type OcrProgress } from './lib/ocr'
 import {
@@ -75,7 +76,20 @@ import { ReviewScreen } from './screens/ReviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { SplitScanScreen } from './screens/SplitScanScreen'
 import { SplashScreen } from './screens/SplashScreen'
+import { StraightenScreen } from './screens/StraightenScreen'
 import { UpgradeScreen } from './screens/UpgradeScreen'
+
+/**
+ * Frees the in-memory pages Luruskan produced during this pending-pages
+ * session (StraightenScreen swaps a straightened page's URI for
+ * `URL.createObjectURL(warped)` — see `handleStraightenApply` below). A page
+ * the user chose Lewati for was never replaced, so this is a no-op for it.
+ */
+function revokeStraightenedUris(uris: string[]): void {
+  for (const uri of uris) {
+    if (uri.startsWith('blob:')) URL.revokeObjectURL(uri)
+  }
+}
 
 /** Which full-screen flow is on top of the tabs, if any. */
 type View =
@@ -107,6 +121,14 @@ function App() {
   // current without an extra effect.
   const pendingPagesRef = useRef(pendingPages)
   pendingPagesRef.current = pendingPages
+  /**
+   * Indices into `pendingPages` still waiting on a Luruskan/Lewati decision —
+   * only ever populated by pages that arrived through the share/import path
+   * (`onSharedFilesReceived` below). Scanner pages never enter this queue: they
+   * already arrive perspective-corrected (design doc, Fase 7B Bagian 4).
+   */
+  const [straightenQueue, setStraightenQueue] = useState<number[]>([])
+  const [isStraightening, setIsStraightening] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
   /** Which freshly-scanned page is open full-screen, if any. */
   const [reviewPreview, setReviewPreview] = useState<number | null>(null)
@@ -251,22 +273,24 @@ function App() {
     return onSharedFilesReceived(({ images, skippedCount }) => {
       if (images.length > 0) {
         if (pendingPagesRef.current) {
-          // Mid-review already: same as handleAddPages -- append only.
-          // Deliberately does NOT touch split state: if the user is in the
-          // middle of the Pisah screen with cuts already placed, a share
-          // arriving must not silently discard that unsaved work.
+          // Mid-review already: same as handleAddPages -- append only. The new
+          // pages' indices sit after every page already in the list.
+          const startIndex = pendingPagesRef.current.length
           setPendingPages((existing) => [...(existing ?? []), ...images])
+          setStraightenQueue((queue) => [...queue, ...images.map((_, i) => startIndex + i)])
         } else {
           // Nothing in progress: same as handleStartScan -- a fresh review
-          // session, so stale state from whatever came before is cleared.
-          // Calls exitSplit() itself rather than repeating its reset list,
-          // specifically so this can never drift out of sync with it again
-          // (an earlier draft of this effect hand-copied four of exitSplit's
-          // five resets and missed setSplitSaved(0) -- caught in review).
+          // session. exitSplit() is called *first*, not last: it clears
+          // straightenQueue too (see its own comment), and calling it after
+          // setStraightenQueue below would silently wipe the queue this branch
+          // is trying to fill — React applies same-tick setState calls for one
+          // variable in the order they were made, and exitSplit's own call
+          // would be the last word on straightenQueue if it ran second.
+          exitSplit()
           setPendingPages(images)
+          setStraightenQueue(images.map((_, i) => i))
           setCurrentPage(0)
           setReviewPreview(null)
-          exitSplit()
         }
       }
 
@@ -348,18 +372,21 @@ function App() {
     setSplitName('')
     setSplitSaved(0)
     setSplitProgress(null)
+    // Not split state, but grouped here for the same reason the four lines
+    // above are one function instead of four separate calls scattered at each
+    // call site: every place that resets a pending-pages session already calls
+    // this one function, so a queue left over from an import abandoned
+    // mid-Straighten cannot resurface against a completely different scan.
+    setStraightenQueue([])
   }
 
   const handleStartScan = async () => {
     const pages = await runScanner()
     if (!pages) return
+    exitSplit()
     setPendingPages(pages)
     setCurrentPage(0)
-    // A preview left open from the previous scan would reopen over the new one.
     setReviewPreview(null)
-    // Same reasoning for the split screen: cuts belong to the scan that made
-    // them, and a new scan is a new set of pages.
-    exitSplit()
   }
 
   const handleAddPages = async () => {
@@ -383,12 +410,42 @@ function App() {
     setCurrentPage((current) => (current > 0 ? current - 1 : 0))
   }
 
+  const handleStraightenApply = async (quad: Quad) => {
+    const index = straightenQueue[0]
+    if (index === undefined || !pendingPages) return
+
+    setIsStraightening(true)
+    try {
+      const response = await fetch(pendingPages[index])
+      if (!response.ok) throw new Error(`Gagal membaca halaman (HTTP ${response.status}).`)
+      const warped = await warpImage(await response.blob(), quad)
+      const objectUrl = URL.createObjectURL(warped)
+
+      setPendingPages((existing) => {
+        if (!existing) return existing
+        const next = [...existing]
+        next[index] = objectUrl
+        return next
+      })
+      setStraightenQueue((queue) => queue.slice(1))
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Gagal meluruskan halaman.')
+    } finally {
+      setIsStraightening(false)
+    }
+  }
+
+  const handleStraightenSkip = () => {
+    setStraightenQueue((queue) => queue.slice(1))
+  }
+
   const handleSaveDocument = async () => {
     if (!pendingPages) return
     setIsSaving(true)
     try {
       await saveScanDocument(pendingPages)
       await refreshDocuments()
+      revokeStraightenedUris(pendingPages)
       setPendingPages(null)
       exitSplit()
       setTab('documents')
@@ -432,6 +489,10 @@ function App() {
       } else {
         // The groups that failed stay on screen with their cuts rebuilt around
         // them, so Simpan can be pressed again without scanning anything twice.
+        // Not revoked: any blob: URIs among the pages that succeeded and dropped
+        // out of `remaining` leak until the app is closed. Rare (split + a
+        // straightened page + a partial failure, all at once) and bounded —
+        // see App.tsx's revokeStraightenedUris for the paths that do handle this.
         setPendingPages(result.remaining.flat())
         setSplitCuts(boundaryCuts(result.remaining))
         setSplitSaved((count) => count + result.saved.length)
@@ -988,6 +1049,28 @@ function App() {
   }
 
   if (pendingPages) {
+    if (straightenQueue.length > 0) {
+      const index = straightenQueue[0]
+      return (
+        <div className="app">
+          <StraightenScreen
+            pageUri={pendingPages[index]}
+            pageNumber={index + 1}
+            pageCount={pendingPages.length}
+            isBusy={isStraightening}
+            onApply={(quad) => void handleStraightenApply(quad)}
+            onSkip={handleStraightenSkip}
+            onCancelAll={() => {
+              revokeStraightenedUris(pendingPages)
+              setPendingPages(null)
+              exitSplit()
+            }}
+          />
+          {toast && <p className="toast">{toast}</p>}
+        </div>
+      )
+    }
+
     if (splitting) {
       return (
         <div className="app">
@@ -1041,6 +1124,7 @@ function App() {
           onRemovePage={handleRemovePage}
           onAddPages={handleAddPages}
           onCancel={() => {
+            revokeStraightenedUris(pendingPages)
             setPendingPages(null)
             exitSplit()
           }}

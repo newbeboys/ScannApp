@@ -1139,7 +1139,7 @@ dilewati bukan ekspornya, tapi penyalinan oleh aplikasi tujuan.
 
 - [ ] UI generate & share kode referral
 - [ ] Edge Function `process-referral-activation`
-- [ ] Tabel `referral_milestones` diisi dengan angka final: 5 orang→7 hari, 15 orang→25 hari, 30 orang→60 hari Pro
+- [x] Tabel `referral_milestones` diisi dengan angka final: 5 orang→7 hari, 15 orang→25 hari, 30 orang→60 hari Pro — sudah ter-seed sejak migration `20260725093606_seed_referral_milestones.sql` (Fase 3), baru disadari & dicentang saat mulai Fase 8 (31 Agustus 2026)
 - [ ] Edge Function terjadwal `expire-pro-status`
 - [ ] UI progress referral (berapa orang sudah invite, menuju milestone berikutnya)
 - [ ] Uji anti-abuse: 1 device/akun tidak bisa refer diri sendiri berkali-kali

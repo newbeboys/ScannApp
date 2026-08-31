@@ -483,6 +483,7 @@ function App() {
       setToast(result.message)
 
       if (result.remaining.length === 0) {
+        revokeStraightenedUris(pendingPages ?? [])
         setPendingPages(null)
         exitSplit()
         setTab('documents')

@@ -105,6 +105,102 @@ export async function prepareStaging(): Promise<void> {
   }
 }
 
+/**
+ * How much of a file crosses the Capacitor bridge in one call.
+ *
+ * The plugin only speaks base64 on native (`WriteFileOptions.data` is typed
+ * `string | Blob`, and the Blob half is web-only), and one call carries the
+ * whole string: JS builds it, `JSON.stringify` copies it into the bridge
+ * message, Java parses that back out as a `String`, and only then is it decoded
+ * into bytes. A twenty-page PDF is around 25 MB, which is a 33 MB base64
+ * string — and every one of those steps allocates its own copy of it, on a
+ * phone, at once. That is the shape of the report from the device on
+ * 31 Agustus 2026: a twenty-page export that took over a minute while the same
+ * pages compressed in a couple of seconds.
+ *
+ * The same total still crosses, but in slices, so nothing bigger than this ever
+ * exists on either side. 1.5 MB is a multiple of 3, so each slice encodes to
+ * base64 with no padding and the bytes that come out the far end are exactly
+ * the bytes that went in.
+ *
+ * Technical, not a business number — free to retune.
+ */
+export const WRITE_CHUNK_BYTES = 1_572_864
+
+/**
+ * How many bytes are on disk at this path, or `null` when it will not say.
+ *
+ * Null rather than a throw, because this only ever second-guesses a write that
+ * already reported success. A guard that turned "this platform answers `stat`
+ * differently than expected" into a failed export would be doing more harm than
+ * the truncation it was added to catch — `isTaken` already reads `stat` on the
+ * Documents folder, so it works here, but a check that cannot misfire needs no
+ * such argument to stand on.
+ */
+async function sizeOnDisk(path: string, directory: Directory): Promise<number | null> {
+  try {
+    const { size } = await Filesystem.stat({ path, directory })
+    return typeof size === 'number' ? size : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Writes a whole blob to one path, in slices.
+ *
+ * The first slice creates the file and every later one is appended, so a caller
+ * that wants "create, never overwrite" still gets exactly that from the first
+ * call — which is what keeps `writeToDocuments` below able to catch an EACCES
+ * on a name it does not own and move to the next one.
+ *
+ * A slice that fails partway through takes the half-written file with it.
+ * Anything else would leave a truncated PDF sitting where a whole one belongs,
+ * and would hand `writeToDocuments` a name that now exists for its retry to
+ * append onto.
+ */
+async function writeBlob(
+  blob: Blob,
+  path: string,
+  directory: Directory,
+  recursive: boolean,
+): Promise<void> {
+  if (blob.size <= WRITE_CHUNK_BYTES) {
+    await Filesystem.writeFile({ path, directory, data: await blobToBase64(blob), recursive })
+    return
+  }
+
+  try {
+    for (let offset = 0; offset < blob.size; offset += WRITE_CHUNK_BYTES) {
+      const data = await blobToBase64(blob.slice(offset, offset + WRITE_CHUNK_BYTES))
+      if (offset === 0) {
+        await Filesystem.writeFile({ path, directory, data, recursive })
+      } else {
+        await Filesystem.appendFile({ path, directory, data })
+      }
+    }
+
+    /*
+      Counted back off the disk, because the only failure this path has that
+      the single call did not is a *silent* one. `appendFile` is the plugin's
+      own API and the mode is first class in the layer under it, but if any
+      Android version were to land a slice short without saying so, what would
+      reach the user is a PDF that opens on page eleven — and on the "Simpan ke
+      HP" route, a file that is not looked at again for months. A truncated
+      export must fail like a failed export.
+    */
+    const written = await sizeOnDisk(path, directory)
+    if (written !== null && written !== blob.size) {
+      throw new Error(
+        `Berkas tersimpan tidak utuh (${written} dari ${blob.size} byte). Coba ekspor ulang.`,
+      )
+    }
+  } catch (error) {
+    await Filesystem.deleteFile({ path, directory }).catch(() => {})
+    throw error
+  }
+}
+
 /** True when something already occupies this name in the public Documents folder. */
 async function isTaken(name: string): Promise<boolean> {
   try {
@@ -136,7 +232,7 @@ async function isTaken(name: string): Promise<boolean> {
  * cannot always see a file this install does not own, so a name it reports as
  * free can still be refused by the write that follows.
  */
-async function writeToDocuments(name: string, data: string): Promise<WrittenFile> {
+async function writeToDocuments(name: string, blob: Blob): Promise<WrittenFile> {
   let attempts = 0
   let lastError: unknown = null
 
@@ -144,12 +240,7 @@ async function writeToDocuments(name: string, data: string): Promise<WrittenFile
     if (await isTaken(candidate)) continue
 
     try {
-      await Filesystem.writeFile({
-        path: candidate,
-        directory: Directory.Documents,
-        data,
-        recursive: true,
-      })
+      await writeBlob(blob, candidate, Directory.Documents, true)
       const { uri } = await Filesystem.getUri({ path: candidate, directory: Directory.Documents })
       return { name: candidate, uri }
     } catch (error) {
@@ -164,9 +255,9 @@ async function writeToDocuments(name: string, data: string): Promise<WrittenFile
 }
 
 /** Stages one file in the private cache folder, ready to hand to another app. */
-async function writeToStaging(name: string, data: string): Promise<WrittenFile> {
+async function writeToStaging(name: string, blob: Blob): Promise<WrittenFile> {
   const path = `${STAGING_DIR}/${name}`
-  await Filesystem.writeFile({ path, directory: Directory.Cache, data, recursive: true })
+  await writeBlob(blob, path, Directory.Cache, true)
   const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache })
   return { name, uri }
 }
@@ -194,11 +285,10 @@ export async function writeExportFiles(
 
   const written: WrittenFile[] = []
   for (const file of files) {
-    const data = await blobToBase64(file.blob)
     written.push(
       destination === 'device'
-        ? await writeToDocuments(file.name, data)
-        : await writeToStaging(file.name, data),
+        ? await writeToDocuments(file.name, file.blob)
+        : await writeToStaging(file.name, file.blob),
     )
   }
 

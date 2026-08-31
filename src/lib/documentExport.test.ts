@@ -40,7 +40,14 @@ const layouts: Record<string, unknown> = {}
 const pdfOptions: { text?: unknown[] }[] = []
 
 vi.mock('./pdfExport', () => ({
-  buildPdf: async (_pages: unknown, options: { text?: unknown[] }) => {
+  // Drained, because the real one is: pages now arrive as a generator that
+  // encodes each one only as it is pulled, so a stand-in that ignores them
+  // would report that nothing was ever encoded.
+  buildPdf: async (
+    pages: Iterable<Uint8Array> | AsyncIterable<Uint8Array>,
+    options: { text?: unknown[] },
+  ) => {
+    for await (const _page of pages) void _page
     pdfOptions.push(options)
     return new Uint8Array([1, 2, 3])
   },

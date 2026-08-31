@@ -242,3 +242,53 @@ describe('buildPdf — invisible text layer', () => {
     expect(await contentStream(pdf, 1)).toContain(`<${hexOf('Kedua')}> Tj`)
   })
 })
+
+/**
+ * Pages arrive as a generator from `exportPdf` since 31 Agustus 2026, so that a
+ * twenty-page document does not sit in a list while pdf-lib holds its own copy
+ * of the same bytes. These hold the change to being invisible in the file.
+ */
+describe('buildPdf — pages that arrive one at a time', () => {
+  async function* stream(pages: Uint8Array[]): AsyncGenerator<Uint8Array> {
+    for (const page of pages) yield page
+  }
+
+  it('builds the same document from a generator as from an array', async () => {
+    const pages = [jpegPage(), jpegPage(), jpegPage()]
+    const scannedAt = '2026-03-04T00:00:00.000Z'
+
+    const fromArray = await buildPdf(pages, { watermark: true, title: 'Nota', scannedAt })
+    const fromStream = await buildPdf(stream(pages), { watermark: true, title: 'Nota', scannedAt })
+
+    expect(fromStream).toEqual(fromArray)
+  })
+
+  /**
+   * The empty check moved to the end of the loop when the length stopped being
+   * knowable up front. It still has to refuse rather than write a blank file.
+   */
+  it('still refuses a generator that yields nothing', async () => {
+    await expect(buildPdf(stream([]), { watermark: false })).rejects.toThrow(
+      'Tidak ada halaman untuk diekspor.',
+    )
+  })
+
+  /** The text layer is matched to pages by position, which a counter must keep. */
+  it('keeps every page text on the page it belongs to', async () => {
+    const word = (text: string) => ({
+      blocks: [{ lines: [{ words: [{ text, x: 0.1, y: 0.1, w: 0.3, h: 0.05 }] }] }],
+    })
+    const pages = [jpegPage(), jpegPage()]
+
+    const fromArray = await buildPdf(pages, {
+      watermark: false,
+      text: [word('satu'), word('dua')],
+    })
+    const fromStream = await buildPdf(stream(pages), {
+      watermark: false,
+      text: [word('satu'), word('dua')],
+    })
+
+    expect(fromStream).toEqual(fromArray)
+  })
+})

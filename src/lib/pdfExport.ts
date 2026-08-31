@@ -99,16 +99,20 @@ function drawTextLayer(page: PDFPage, text: PageText, font: PDFFont, image: Draw
  * wider than tall) and centred with a small margin, so the result prints
  * and shares predictably regardless of the source aspect ratio.
  *
+ * Takes anything iterable rather than an array, so the caller can *produce*
+ * pages as this consumes them. An array still works and every existing caller
+ * still passes one; `exportPdf` now hands in an async generator instead. A
+ * twenty-page document is around 25 MB of JPEG, and holding all of it in a
+ * list while pdf-lib holds its own copy of the same bytes meant two whole
+ * documents sat in the WebView's heap before `save()` had allocated the third
+ * (diukur 31 Agustus 2026 — see the note on `exportPdf`).
+ *
  * Deliberately free of DOM APIs so it can be unit-tested under Node.
  */
 export async function buildPdf(
-  jpegPages: Uint8Array[],
+  jpegPages: Iterable<Uint8Array> | AsyncIterable<Uint8Array>,
   options: BuildPdfOptions,
 ): Promise<Uint8Array> {
-  if (jpegPages.length === 0) {
-    throw new Error('Tidak ada halaman untuk diekspor.')
-  }
-
   const pdf = await PDFDocument.create()
   pdf.setProducer('ScannApp')
   if (options.title) pdf.setTitle(options.title)
@@ -125,7 +129,11 @@ export async function buildPdf(
   const hasText = options.text?.some((page) => page && page.blocks.length > 0) ?? false
   const textFont = hasText ? await pdf.embedFont(StandardFonts.Helvetica) : null
 
-  for (const [index, bytes] of jpegPages.entries()) {
+  // Counted rather than read off a length: the source may be a generator that
+  // does not know how many pages it has until it has finished producing them.
+  let index = 0
+
+  for await (const bytes of jpegPages) {
     const image = await pdf.embedJpg(bytes)
     const landscape = image.width > image.height
     const pageWidth = landscape ? A4.height : A4.width
@@ -152,7 +160,13 @@ export async function buildPdf(
     }
 
     if (font) drawWatermark(page, font)
+    index++
   }
+
+  // Checked at the end rather than up front, for the same reason the counter
+  // exists: an empty generator only says so by finishing. A blank PDF is still
+  // never produced — nothing has left this function yet.
+  if (index === 0) throw new Error('Tidak ada halaman untuk diekspor.')
 
   return pdf.save()
 }

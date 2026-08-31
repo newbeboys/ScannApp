@@ -179,6 +179,29 @@ async function compressedPages(doc: LocalScanDocument, options: CompressOptions)
 }
 
 /**
+ * The same re-encode, one page at a time, for the PDF path.
+ *
+ * A generator rather than an array because the consumer copies what it is
+ * given: `pdf-lib.embedJpg` keeps its own copy of every page's bytes, so an
+ * array here means the whole document exists twice over — once as the list and
+ * once inside the document being built — before `save()` allocates it a third
+ * time. Measured on a page of noisy body text, twenty pages come to about
+ * 25 MB, which made that a 50 MB peak for nothing (diukur 31 Agustus 2026).
+ *
+ * Yielding instead lets each page's blob and bytes fall out of reach as soon
+ * as pdf-lib has taken them. Nothing else changes: the pages arrive in the same
+ * order and are encoded exactly as before.
+ */
+async function* compressedPageBytes(
+  doc: LocalScanDocument,
+  options: CompressOptions,
+): AsyncGenerator<Uint8Array> {
+  for (const page of doc.pages) {
+    yield await blobToBytes(await compressImage(await loadPageBlob(page), options))
+  }
+}
+
+/**
  * Exported so the cloud backup uploads byte-for-byte the same PDF the export
  * sheet would produce at the standard level — watermark and compression
  * included.
@@ -201,15 +224,11 @@ async function exportPdf(
   // Loaded on demand so pdf-lib stays out of the initial app bundle.
   const { buildPdf } = await import('./pdfExport')
 
-  const pages = await compressedPages(doc, { ...options, mimeType: 'image/jpeg' })
-  const bytes: Uint8Array[] = []
-  for (const page of pages) {
-    bytes.push(await blobToBytes(page))
-  }
-
+  // Read before the pages rather than after, so no page bytes are alive while
+  // this walks the document's text files.
   const text = await pageTexts(doc)
 
-  const pdf = await buildPdf(bytes, {
+  const pdf = await buildPdf(compressedPageBytes(doc, { ...options, mimeType: 'image/jpeg' }), {
     watermark: shouldWatermark(tier),
     title: doc.title,
     // Carried into the file so a backup can hand the date back on restore —
@@ -221,8 +240,14 @@ async function exportPdf(
   return [
     {
       name: `${toSafeFilename(doc.title)}.pdf`,
-      // Copied into a fresh buffer so the Blob gets a plain ArrayBuffer view.
-      blob: new Blob([new Uint8Array(pdf)], { type: 'application/pdf' }),
+      // Cast rather than copied. This used to be `new Uint8Array(pdf)`, which
+      // satisfied the same type by duplicating the finished document — another
+      // 25 MB on a twenty-page export, allocated at the moment the heap is
+      // already at its highest. The cast is safe for the reason the copy was
+      // unnecessary: `save()` returns a freshly allocated view over a plain
+      // ArrayBuffer, and only `SharedArrayBuffer` — which nothing here can
+      // produce — is what `BlobPart` is narrower than `Uint8Array` to exclude.
+      blob: new Blob([pdf as BlobPart], { type: 'application/pdf' }),
     },
   ]
 }

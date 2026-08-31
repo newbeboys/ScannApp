@@ -954,6 +954,16 @@ Read the `[bench]` line. This is a human decision point, not an automated pass/f
 
 Record the measured numbers directly in this plan file (edit this step in place) and in `TASKS.md` Fase 7B once Task 10 writes that section, exactly as Fase 7A Bagian 8.1 did — the number is part of the record, not just terminal scrollback.
 
+**Angka terukur (dicatat 31 Agustus 2026):** Chromium desktop, halaman 3000×4000
+dengan kuadrilateral realistis (`REALISTIC_QUAD`), 4 kali jalan: `1178/1124/904/1206`
+ms, median **1151ms**. Proyeksi mid-range ×4 = **~5 detik per halaman**
+(`Math.round(1151*4/1000)`) — jauh di atas ambang nyaman ~2 detik/halaman di atas,
+jadi eksekusi berhenti di sini dan bertanya ke Boss Ali sebelum lanjut ke Task 4,
+persis seperti diinstruksikan. **Keputusan Boss Ali:** tetap pakai resolusi sumber
+penuh, terima ~5 detik/halaman — tidak ada batas resolusi ditambahkan, tidak ada
+tuas kualitas resampler ditambahkan. Task 4–10 lanjut persis seperti rencana di
+atas atas dasar keputusan ini.
+
 - [ ] **Step 3: Commit**
 
 ```bash

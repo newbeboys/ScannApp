@@ -1127,8 +1127,13 @@ dilewati bukan ekspornya, tapi penyalinan oleh aplikasi tujuan.
 - [ ] Tombol **Luruskan** permanen di editor (sejajar Potong/Putar) pada
   dokumen yang sudah tersimpan — bekerja dan bisa dibatalkan lewat **Asli**
 - [ ] Waktu nyata meluruskan satu halaman 12 MP di HP dibanding proyeksi
-  Task 3 (bench `warpBench.browser.test.ts`) — isi angkanya di sini setelah
-  diuji
+  Task 3 (bench `warpBench.browser.test.ts`). **Proyeksi acuannya (Chromium
+  desktop, 31 Agustus 2026):** halaman 3000×4000 kuadrilateral realistis, 4
+  kali jalan, median **1151ms** (`1178/1124/904/1206`) → proyeksi mid-range
+  ×4 = **~5 detik per halaman**. Keputusan Boss Ali saat itu: tetap resolusi
+  sumber penuh, terima ~5 detik/halaman, tanpa batas resolusi atau tuas
+  resampler tambahan (lihat plan Task 3 Step 2). Isi angka HP sungguhan di
+  sini setelah diuji, untuk dibandingkan dengan proyeksi di atas.
 
 ## Fase 8 — Program Referral
 

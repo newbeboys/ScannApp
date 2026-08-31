@@ -195,31 +195,32 @@ describe('straightenPage', () => {
   })
 
   it('moves the ink onto the warped geometry', async () => {
-    const doc = { id: 'd', pages: [{ original: 'a.jpg', marks: [INK] }] }
-    scanStorage.savePageEdit.mockResolvedValue({
-      ...doc,
-      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', marks: [INK] }],
-    })
-    scanStorage.applyPageDerived.mockResolvedValue(doc)
-
-    // Selecting the top-left quadrant sends the page's centre to the
-    // straightened page's bottom-right corner — same fixture reasoning as
-    // remapMarksForWarp's own tests.
+    // Selecting the top-left quadrant is the crop-like case: the *kept
+    // region's own* centre (0.25, 0.25 in source space — the middle of the
+    // quadrant, not the middle of the whole source image, which would be
+    // 0.5, 0.5) becomes the new page's own centre — same fixture reasoning
+    // as remapMarksForWarp's own tests.
     const quadrant = {
       topLeft: { x: 0, y: 0 },
       topRight: { x: 0.5, y: 0 },
       bottomLeft: { x: 0, y: 0.5 },
       bottomRight: { x: 0.5, y: 0.5 },
     }
-    await straightenPage(
-      { id: 'd', pages: [{ original: 'a.jpg', marks: [{ ...INK, points: [0.25, 0.25, 0.25, 0.25] }] }] },
-      0,
-      quadrant,
-    )
+    const doc = {
+      id: 'd',
+      pages: [{ original: 'a.jpg', marks: [{ ...INK, points: [0.25, 0.25, 0.25, 0.25] }] }],
+    }
+    scanStorage.savePageEdit.mockResolvedValue({
+      ...doc,
+      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', marks: doc.pages[0].marks }],
+    })
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
+
+    await straightenPage(doc, 0, quadrant)
 
     const marks = scanStorage.applyPageDerived.mock.calls[0][2]
-    expect(marks[0].points[0]).toBeCloseTo(1, 8)
-    expect(marks[0].points[1]).toBeCloseTo(1, 8)
+    expect(marks[0].points[0]).toBeCloseTo(0.5, 8)
+    expect(marks[0].points[1]).toBeCloseTo(0.5, 8)
   })
 
   it('reads from the geometry chain, not from a filtered render, so a filter never gets baked in', async () => {

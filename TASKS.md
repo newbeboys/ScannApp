@@ -1085,9 +1085,50 @@ dilewati bukan ekspornya, tapi penyalinan oleh aplikasi tujuan.
 
 ### 7B — Auto-deskew & auto-crop presisi (menyusul)
 
-- [ ] Deteksi tepi & koreksi perspektif untuk gambar yang **bukan** dari pemindai
-  (share sheet, halaman PDF pihak ketiga)
-- [ ] Belum di-brainstorm; spec sendiri saat 7A selesai
+- [x] Spec ditulis & disetujui Boss Ali 31 Agustus 2026:
+  `docs/superpowers/specs/2026-08-31-fase7b-auto-deskew-design.md`. Plan:
+  `docs/superpowers/plans/2026-08-31-fase7b-auto-deskew.md`.
+- [x] **Alat luruskan manual — selesai.** Kuadrilateral 4-sudut bebas
+  (`QuadOverlay`), koreksi perspektif lewat homografi pemetaan-balik
+  (`perspective.ts` + `imageEditor.warpImage()`). Bukan tahap baru di rantai
+  turunan — `straightenPage()` sejajar `cropPage`/`rotatePage`, menulis ke
+  `edited` lewat `editPage()` yang sudah ada. Tidak ada `schemaVersion` baru.
+- [x] Layar `StraightenScreen` menyela jalur impor (share sheet & rasterisasi
+  PDF) sebelum `ReviewScreen` — satu halaman per satu, selalu menunggu
+  konfirmasi (Luruskan/Lewati), tidak pernah auto-terap. Halaman scanner
+  ML Kit tidak pernah masuk layar ini.
+- [x] Tombol **Luruskan** permanen di editor, sejajar Potong/Putar — bisa
+  dipakai ulang kapan saja lewat "Reset ke asli", sama seperti crop/rotate.
+- [x] Semua tier, tanpa gerbang tier di mana pun di jalur ini.
+- [x] **Tidak ada deteksi tepi otomatis di v1** — sudut awal selalu persegi
+  inset 5%, bukan hasil analisis piksel. Fast-follow tercatat sebagai
+  known gap, sama pola dengan noise-reduction di Fase 7A: seam-nya cuma
+  mengganti titik asal sudut default, tidak menyentuh warpImage/
+  straightenPage/data model apa pun.
+- [x] Test bertambah 39 (total 938).
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Impor foto miring dari galeri/aplikasi lain lewat share sheet →
+  `StraightenScreen` muncul otomatis sebelum layar Tinjau, dengan sudut awal
+  persegi inset — geser sudut ke tepi kertas sungguhan, tekan **Luruskan**,
+  hasilnya tampak lurus di layar Tinjau berikutnya
+- [ ] Impor PDF pihak ketiga (bukan buatan ScannApp sendiri) lewat share sheet
+  → tiap halamannya juga melalui `StraightenScreen`
+- [ ] Tekan **Lewati** untuk halaman yang sudah lurus → halaman masuk ke
+  Tinjau apa adanya, tanpa terpotong
+- [ ] Scan biasa lewat kamera pemindai (bukan impor) → **tidak pernah**
+  masuk `StraightenScreen`, langsung ke Tinjau seperti sebelumnya
+- [ ] Share baru datang saat sudah berada di layar Tinjau (sesi campuran) →
+  hanya halaman baru itu yang memicu `StraightenScreen`, bukan yang sudah
+  ada di daftar
+- [ ] Tombol kembali (chevron) di `StraightenScreen` membatalkan **seluruh**
+  impor yang sedang berjalan, bukan cuma halaman itu
+- [ ] Tombol **Luruskan** permanen di editor (sejajar Potong/Putar) pada
+  dokumen yang sudah tersimpan — bekerja dan bisa dibatalkan lewat **Asli**
+- [ ] Waktu nyata meluruskan satu halaman 12 MP di HP dibanding proyeksi
+  Task 3 (bench `warpBench.browser.test.ts`) — isi angkanya di sini setelah
+  diuji
 
 ## Fase 8 — Program Referral
 

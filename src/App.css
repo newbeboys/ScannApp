@@ -1086,6 +1086,43 @@ body.scroll-locked .app__body {
   cursor: nwse-resize;
 }
 
+.quad-overlay {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.quad-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.quad-outline polygon {
+  fill: var(--acc-soft);
+  stroke: #fff;
+  stroke-width: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.quad-handle {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 999px;
+  border: 3px solid #fff;
+  background: var(--acc);
+  cursor: grab;
+  touch-action: none;
+}
+
+.quad-handle:active {
+  cursor: grabbing;
+}
+
 .doc-row__open {
   flex: 1 1 auto;
   min-width: 0;

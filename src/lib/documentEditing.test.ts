@@ -5,6 +5,7 @@ const imageEditor = {
   rotateImage: vi.fn(async () => new Blob(['rotated'])),
   filterImage: vi.fn(async () => new Blob(['filtered'])),
   enhancePage: vi.fn(async () => new Blob(['enhanced'])),
+  warpImage: vi.fn(async () => new Blob(['warped'])),
 }
 vi.mock('./imageEditor', () => imageEditor)
 
@@ -51,9 +52,16 @@ const {
   setDocumentEnhance,
   setDocumentFilter,
   setPageFilter,
+  straightenPage,
 } = await import('./documentEditing')
 
 const RECT = { x: 0, y: 0, width: 1, height: 1 }
+const QUAD = {
+  topLeft: { x: 0, y: 0 },
+  topRight: { x: 1, y: 0 },
+  bottomLeft: { x: 0, y: 1 },
+  bottomRight: { x: 1, y: 1 },
+}
 
 const INK = {
   kind: 'ink',
@@ -159,6 +167,71 @@ describe('cropPage / rotatePage — rebuilding the derived files after a geometr
     scanStorage.applyPageDerived.mockResolvedValue(doc)
 
     await cropPage(doc, 0, RECT)
+
+    expect(scanStorage.readPageBlob).toHaveBeenCalledWith('a-edited.jpg')
+  })
+})
+
+describe('straightenPage', () => {
+  it('rebuilds the derived files after straightening', async () => {
+    const doc = { id: 'd', filter: 'bw', pages: [{ original: 'a.jpg' }] }
+    scanStorage.savePageEdit.mockResolvedValue({
+      ...doc,
+      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg' }],
+    })
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
+
+    await straightenPage(doc, 0, QUAD)
+
+    expect(imageEditor.warpImage).toHaveBeenCalledWith(expect.any(Blob), QUAD)
+    expect(scanStorage.savePageEdit).toHaveBeenCalledWith('d', 0, expect.any(Blob))
+    expect(scanStorage.applyPageDerived).toHaveBeenCalledWith(
+      'd',
+      0,
+      [],
+      imageEditor.filterImage,
+      expect.any(Function),
+    )
+  })
+
+  it('moves the ink onto the warped geometry', async () => {
+    const doc = { id: 'd', pages: [{ original: 'a.jpg', marks: [INK] }] }
+    scanStorage.savePageEdit.mockResolvedValue({
+      ...doc,
+      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', marks: [INK] }],
+    })
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
+
+    // Selecting the top-left quadrant sends the page's centre to the
+    // straightened page's bottom-right corner — same fixture reasoning as
+    // remapMarksForWarp's own tests.
+    const quadrant = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 0.5, y: 0 },
+      bottomLeft: { x: 0, y: 0.5 },
+      bottomRight: { x: 0.5, y: 0.5 },
+    }
+    await straightenPage(
+      { id: 'd', pages: [{ original: 'a.jpg', marks: [{ ...INK, points: [0.25, 0.25, 0.25, 0.25] }] }] },
+      0,
+      quadrant,
+    )
+
+    const marks = scanStorage.applyPageDerived.mock.calls[0][2]
+    expect(marks[0].points[0]).toBeCloseTo(1, 8)
+    expect(marks[0].points[1]).toBeCloseTo(1, 8)
+  })
+
+  it('reads from the geometry chain, not from a filtered render, so a filter never gets baked in', async () => {
+    const doc = {
+      id: 'd',
+      filter: 'bw',
+      pages: [{ original: 'a.jpg', edited: 'a-edited.jpg', filtered: 'a-filtered.jpg' }],
+    }
+    scanStorage.savePageEdit.mockResolvedValue(doc)
+    scanStorage.applyPageDerived.mockResolvedValue(doc)
+
+    await straightenPage(doc, 0, QUAD)
 
     expect(scanStorage.readPageBlob).toHaveBeenCalledWith('a-edited.jpg')
   })

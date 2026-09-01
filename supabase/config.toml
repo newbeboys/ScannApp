@@ -30,3 +30,10 @@ verify_jwt = true
 # REVENUECAT_WEBHOOK_SECRET (signing secret-nya) belum di-set.
 [functions.revenuecat-webhook]
 verify_jwt = false
+
+# Pemanggilnya pg_cron lewat pg_net, bukan user — tidak ada JWT Supabase yang
+# bisa dikirim. Endpoint ini menolak sendiri (401) request yang header
+# x-cron-secret-nya tidak cocok dengan CRON_SECRET (lihat
+# _shared/orphanCleanup.ts verifyCronSecret dan migration cron-nya).
+[functions.cleanup-orphan-r2]
+verify_jwt = false

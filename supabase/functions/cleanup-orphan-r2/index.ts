@@ -10,6 +10,7 @@
  * days of reviewing the logged candidates. See
  * docs/superpowers/specs/2026-09-01-fase9-cleanup-orphan-r2-design.md.
  */
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { serviceClient } from '../_shared/http.ts'
 import {
   planCleanup,
@@ -26,6 +27,37 @@ const USERS_PREFIX = 'users/'
  *  limit meant to ever actually bind. */
 const MAX_LIST_PAGES = 1000
 
+/**
+ * PostgREST caps an unbounded `select` at 1000 rows and returns no error for
+ * it — a query without `.range()` silently truncates. Past 1000 backed-up
+ * documents, that would drop real, still-referenced keys out of the set this
+ * job treats as "safe to keep", which is exactly the "partial reference set"
+ * scenario the design spec says must never be allowed to reach a delete.
+ */
+const DB_PAGE_SIZE = 1000
+
+async function fetchAllReferencedKeys(db: SupabaseClient): Promise<Set<string>> {
+  const referencedKeys = new Set<string>()
+  let offset = 0
+
+  while (true) {
+    const { data: rows, error } = await db
+      .from('scan_documents')
+      .select('r2_object_key')
+      .not('r2_object_key', 'is', null)
+      .order('id', { ascending: true })
+      .range(offset, offset + DB_PAGE_SIZE - 1)
+
+    if (error) throw error
+
+    for (const row of rows ?? []) referencedKeys.add(row.r2_object_key as string)
+    if (!rows || rows.length < DB_PAGE_SIZE) break
+    offset += DB_PAGE_SIZE
+  }
+
+  return referencedKeys
+}
+
 async function listAllObjects(): Promise<{ objects: ListedR2Object[]; truncatedAtCap: boolean }> {
   const objects: ListedR2Object[] = []
   let continuationToken: string | undefined
@@ -41,20 +73,34 @@ async function listAllObjects(): Promise<{ objects: ListedR2Object[]; truncatedA
   return { objects, truncatedAtCap: Boolean(continuationToken) }
 }
 
+/** Deletes at most this many objects at once — enough to keep a large batch
+ *  well clear of the Edge Function's wall-clock limit, not so many that a
+ *  burst of DELETEs looks like abuse to R2. */
+const DELETE_CONCURRENCY = 10
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size))
+  return chunks
+}
+
 async function deleteCandidates(
   plan: CleanupPlan,
 ): Promise<{ deletedCount: number; deleteFailures: string[] }> {
   const deleteFailures: string[] = []
   let deletedCount = 0
 
-  for (const candidate of plan.candidates) {
-    try {
-      await deleteObject(candidate.key)
-      deletedCount += 1
-    } catch (caught) {
-      console.error(`Gagal menghapus ${candidate.key}:`, caught)
-      deleteFailures.push(candidate.key)
-    }
+  for (const batch of chunk(plan.candidates, DELETE_CONCURRENCY)) {
+    const results = await Promise.allSettled(batch.map((candidate) => deleteObject(candidate.key)))
+
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        deletedCount += 1
+      } else {
+        console.error(`Gagal menghapus ${batch[i].key}:`, result.reason)
+        deleteFailures.push(batch[i].key)
+      }
+    })
   }
 
   return { deletedCount, deleteFailures }
@@ -77,17 +123,15 @@ Deno.serve(async (request) => {
 
   try {
     const db = serviceClient()
-    const { data: rows, error } = await db
-      .from('scan_documents')
-      .select('r2_object_key')
-      .not('r2_object_key', 'is', null)
 
-    if (error) {
-      console.error('Gagal membaca scan_documents:', error)
+    let referencedKeys: Set<string>
+    try {
+      referencedKeys = await fetchAllReferencedKeys(db)
+    } catch (caught) {
+      console.error('Gagal membaca scan_documents:', caught)
       return new Response(JSON.stringify({ error: 'DB_ERROR' }), { status: 500 })
     }
 
-    const referencedKeys = new Set((rows ?? []).map((row) => row.r2_object_key as string))
     const { objects: listed, truncatedAtCap } = await listAllObjects()
 
     if (truncatedAtCap) {

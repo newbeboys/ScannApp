@@ -16,6 +16,7 @@
  * Edge Function runtime and Node 19+, so this file needs no Deno-only APIs and
  * the same test suite that covers it in Vitest covers the real code path.
  */
+import { constantTimeEqual } from './constantTimeEqual.ts'
 
 export interface ParsedSignature {
   timestampSeconds: number
@@ -89,24 +90,6 @@ async function computeSignature(
   return toHex(digest)
 }
 
-/**
- * Constant-time comparison of two equal-shape hex strings.
- *
- * Both inputs come from `[0-9a-f]+` sources (the parsed header and our own hex
- * encoder), so a length mismatch is a genuine "different value" rather than an
- * attempt to leak length through an early return — see the identical
- * reasoning historically used for the bearer-secret comparison this replaces.
- */
-function hexEqual(a: string, b: string): boolean {
-  const bytesA = new TextEncoder().encode(a)
-  const bytesB = new TextEncoder().encode(b)
-  if (bytesA.length !== bytesB.length) return false
-
-  let diff = 0
-  for (let i = 0; i < bytesA.length; i += 1) diff |= bytesA[i] ^ bytesB[i]
-  return diff === 0
-}
-
 export type VerifyFailureReason =
   | 'missing_header'
   | 'malformed_header'
@@ -138,7 +121,7 @@ export async function verifyWebhookSignature(
   }
 
   const expected = await computeSignature(secret, parsed.timestampSeconds, rawBody)
-  if (!hexEqual(parsed.signatureHex, expected)) {
+  if (!constantTimeEqual(parsed.signatureHex, expected)) {
     return { ok: false, reason: 'signature_mismatch' }
   }
 

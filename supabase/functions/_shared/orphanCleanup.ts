@@ -5,6 +5,7 @@
  * instead, the same split every other `_shared/*.ts` module in this project
  * uses.
  */
+import { constantTimeEqual } from './constantTimeEqual.ts'
 import type { ListedR2Object } from './r2ListParser.ts'
 
 /** An object younger than this might still be mid-upload; never touch it. */
@@ -61,16 +62,6 @@ export function planCleanup(
 /** Only the exact literal `"false"` turns real deletion on; anything else — unset, `"true"`, a typo — stays safe. */
 export function resolveDryRun(rawEnvValue: string | undefined): boolean {
   return rawEnvValue !== 'false'
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const bytesA = new TextEncoder().encode(a)
-  const bytesB = new TextEncoder().encode(b)
-  if (bytesA.length !== bytesB.length) return false
-
-  let diff = 0
-  for (let i = 0; i < bytesA.length; i += 1) diff |= bytesA[i] ^ bytesB[i]
-  return diff === 0
 }
 
 /** Cron's only credential: a shared secret header, not a user JWT. */

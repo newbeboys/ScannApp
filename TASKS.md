@@ -1146,11 +1146,13 @@ dilewati bukan ekspornya, tapi penyalinan oleh aplikasi tujuan.
 
 ### Uji device (checklist manual sebelum dianggap tuntas)
 
-- [ ] Dua akun test: A share kode ke B lewat tombol Bagikan, B daftar dengan kode itu terisi (form Daftar) sebelum konfirmasi email.
-- [ ] B scan 1 dokumen pertama kalinya → cek A menerima 7 hari Pro setelah 5 referral aktif ter-akumulasi (perlu 5 akun B berbeda untuk cek milestone pertama secara penuh; minimal cek 1 aktivasi tercatat & B sendiri dapat 1 hari Pro).
-- [ ] B yang sudah Pro bulanan sebelum diundang: aktivasi tidak menurunkan `pro_plan`-nya jadi `'referral'` (quota tetap 500MB/1GB sesuai plan aslinya).
-- [ ] Coba `PATCH` `first_scan_completed_at`/`referred_by`/`referral_code` langsung ke REST API Supabase sebagai user biasa (bukan lewat app) → harus ditolak RLS.
-- [ ] Cek `cron.job` di dashboard Supabase menunjukkan `expire-pro-status` aktif dan pernah berjalan (tunggu ≥1 hari, atau uji manual lewat `execute_sql`).
+Dites & dinyatakan berhasil oleh Boss Ali di HP fisik, 1 September 2026 — branch `fase8-program-referral` sudah di-merge ke `main` (fast-forward) setelah ini.
+
+- [x] Dua akun test: A share kode ke B lewat tombol Bagikan, B daftar dengan kode itu terisi (form Daftar) sebelum konfirmasi email.
+- [x] B scan 1 dokumen pertama kalinya → cek A menerima 7 hari Pro setelah 5 referral aktif ter-akumulasi (perlu 5 akun B berbeda untuk cek milestone pertama secara penuh; minimal cek 1 aktivasi tercatat & B sendiri dapat 1 hari Pro).
+- [x] B yang sudah Pro bulanan sebelum diundang: aktivasi tidak menurunkan `pro_plan`-nya jadi `'referral'` (quota tetap 500MB/1GB sesuai plan aslinya).
+- [x] Coba `PATCH` `first_scan_completed_at`/`referred_by`/`referral_code` langsung ke REST API Supabase sebagai user biasa (bukan lewat app) → harus ditolak RLS.
+- [x] Cek `cron.job` di dashboard Supabase menunjukkan `expire-pro-status` aktif dan pernah berjalan (tunggu ≥1 hari, atau uji manual lewat `execute_sql`).
 
 ## Fase 9 — QA & Hardening
 

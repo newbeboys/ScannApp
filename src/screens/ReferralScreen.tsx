@@ -10,7 +10,7 @@ interface ReferralScreenProps {
   /** Overridable for tests -- defaults to the real Edge Function-backed fetch. */
   fetchProgress?: () => Promise<ReferralProgress>
   /** Overridable for tests -- defaults to the real native share sheet. */
-  shareCode?: (options: { title: string; text: string }) => Promise<void>
+  shareCode?: (options: { title: string; text: string }) => Promise<unknown>
 }
 
 export function ReferralScreen({

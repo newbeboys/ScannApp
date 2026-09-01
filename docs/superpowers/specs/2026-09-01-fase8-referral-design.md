@@ -121,7 +121,7 @@ Helper tanggal (`extendExpiry(current, days)`) ditulis sebagai fungsi murni terp
 - 1 email = 1 akun (Supabase Auth bawaan).
 - 1 kode referral per akun (`generate_referral_code()`, sudah ada).
 - `referred_by` diisi sekali di signup, dibekukan setelahnya (Bagian 3/4.3) — tidak bisa diubah lewat REST API.
-- `first_scan_completed_at` hanya bisa ditulis service role (Bagian 3/4.3) — reward tidak bisa dipicu tanpa scan sungguhan lewat app.
+- `first_scan_completed_at` hanya bisa ditulis service role (Bagian 3/4.3), tapi ini sinyal laporan-sendiri dari client, bukan bukti tervalidasi server bahwa scan benar-benar terjadi — akun mana pun yang sudah diautentikasi bisa memanggil `process-referral-activation` langsung (curl, devtools, client hasil modifikasi) dan mendapat bonus 1 hari Pro untuk dirinya sendiri tanpa pernah scan. Dampaknya kecil dan sudah tercakup oleh known-gap di baris berikutnya (satu orang, satu akun, maksimal untung 1 hari Pro sekali) — dicatat di sini supaya pembaca berikutnya tidak salah anggap ini verifikasi kuat.
 - Reward idempotent lewat flag `activated`/`reward_granted` per baris `referral_events` (Bagian 5 langkah 4-5).
 - **Known gap, dicatat di `TASKS.md` Fase 9**: tidak ada deteksi device-level (satu orang bikin banyak akun email untuk refer diri sendiri berkali-kali). Butuh plugin native baru (`@capacitor/device` atau setara) — di luar cakupan Fase 8.
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   extendExpiry,
-  matchedMilestone,
   nextProPlan,
   REFERRED_USER_BONUS_DAYS,
+  unclaimedMilestones,
   type Milestone,
   type ProProfileRow,
 } from './referral.ts'
@@ -65,29 +65,42 @@ describe('nextProPlan', () => {
   })
 })
 
-describe('matchedMilestone', () => {
+describe('unclaimedMilestones', () => {
   const milestones: Milestone[] = [
     { referral_count_required: 5, pro_days_reward: 7 },
     { referral_count_required: 15, pro_days_reward: 25 },
     { referral_count_required: 30, pro_days_reward: 60 },
   ]
 
-  it('matches the exact count', () => {
-    expect(matchedMilestone(5, milestones)).toEqual(milestones[0])
-    expect(matchedMilestone(15, milestones)).toEqual(milestones[1])
-    expect(matchedMilestone(30, milestones)).toEqual(milestones[2])
+  it('returns the milestone when the count exactly reaches its threshold, nothing granted yet', () => {
+    expect(unclaimedMilestones(5, milestones, [])).toEqual([milestones[0]])
+    // Lower thresholds are pre-granted here so the assertion isolates just the
+    // milestone being reached -- with grantedCounts=[], count=15 also still
+    // owes milestone-5, which is covered separately below.
+    expect(unclaimedMilestones(15, milestones, [5])).toEqual([milestones[1]])
+    expect(unclaimedMilestones(30, milestones, [5, 15])).toEqual([milestones[2]])
   })
 
-  it('returns null for a count between milestones', () => {
-    expect(matchedMilestone(6, milestones)).toBeNull()
-    expect(matchedMilestone(29, milestones)).toBeNull()
+  it('regression: a count between milestones still returns the passed-but-unclaimed one (race that skipped the exact value)', () => {
+    // The old exact-match matchedMilestone(6, milestones) returned null here --
+    // this is the case that let a referrer silently and permanently lose a
+    // milestone reward under concurrent activation (branch review, 2026-09-01).
+    expect(unclaimedMilestones(6, milestones, [])).toEqual([milestones[0]])
   })
 
-  it('returns null past the last milestone (no >= matching)', () => {
-    expect(matchedMilestone(31, milestones)).toBeNull()
+  it('excludes a milestone already in grantedCounts even though its threshold is <= the count', () => {
+    expect(unclaimedMilestones(6, milestones, [5])).toEqual([])
   })
 
-  it('returns null for zero activations', () => {
-    expect(matchedMilestone(0, milestones)).toBeNull()
+  it('returns every threshold passed at once, ascending, when none are granted yet', () => {
+    expect(unclaimedMilestones(16, milestones, [])).toEqual([milestones[0], milestones[1]])
+  })
+
+  it('returns an empty array for zero activations', () => {
+    expect(unclaimedMilestones(0, milestones, [])).toEqual([])
+  })
+
+  it('returns an empty array once every milestone up to the count is already granted', () => {
+    expect(unclaimedMilestones(31, milestones, [5, 15, 30])).toEqual([])
   })
 })

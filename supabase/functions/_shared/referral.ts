@@ -44,10 +44,32 @@ export interface Milestone {
 }
 
 /**
- * Finds the milestone this activation count exactly matches. Activations are
- * processed one referred user at a time, so the count only ever advances by
- * 1 per call -- an exact match is enough, no need for >= (design doc Bagian 5).
+ * Which milestones this referrer has newly earned but not yet been granted:
+ * every milestone whose threshold the activated count has reached or passed
+ * (>=, not exact match), excluding milestones already recorded in the grants
+ * ledger. >= instead of exact match matters under concurrency: two different
+ * referred users activating close together can make both requests' COUNT
+ * query observe the same post-both-increments total, so neither ever sees an
+ * intermediate exact value -- >= plus an idempotent per-milestone ledger
+ * means the reward still lands the next time anything reads a count that has
+ * passed the threshold (branch review, 2026-09-01).
+ *
+ * Sorted ascending. Normally at most one entry, but tolerates more than one
+ * being unclaimed at once (e.g. several checks in a row all raced and lost)
+ * by granting each in turn -- the caller applies them additively via
+ * extendExpiry, one at a time.
  */
-export function matchedMilestone(activatedCount: number, milestones: Milestone[]): Milestone | null {
-  return milestones.find((milestone) => milestone.referral_count_required === activatedCount) ?? null
+export function unclaimedMilestones(
+  activatedCount: number,
+  milestones: Milestone[],
+  grantedCounts: number[],
+): Milestone[] {
+  const granted = new Set(grantedCounts)
+  return milestones
+    .filter(
+      (milestone) =>
+        milestone.referral_count_required <= activatedCount &&
+        !granted.has(milestone.referral_count_required),
+    )
+    .sort((a, b) => a.referral_count_required - b.referral_count_required)
 }

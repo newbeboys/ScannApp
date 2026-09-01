@@ -1157,7 +1157,7 @@ dilewati bukan ekspornya, tapi penyalinan oleh aplikasi tujuan.
 - [ ] Uji limit merge dokumen Basic (20 halaman) & quota storage R2 per tier (100MB/500MB/1GB) sesuai angka final
 - [ ] Uji job pembersihan object R2 yatim (tidak punya referensi di `scan_documents`)
 - [~] Security review RLS policy (pastikan tidak ada cross-user data leak) — dimajukan sebagian, lihat di bawah
-- [ ] **Anti-abuse referral device-level** — Fase 8 v1 cuma menegakkan email unik + `referred_by`/`first_scan_completed_at` dibekukan RLS. Satu orang masih bisa bikin banyak akun email untuk refer diri sendiri berkali-kali. Butuh plugin native baru (`@capacitor/device` atau setara), known gap yang disengaja — lihat `docs/superpowers/specs/2026-09-01-fase8-referral-design.md` Bagian 2 & 7.
+- [ ] **Anti-abuse referral device-level** — Fase 8 v1 cuma menegakkan email unik + `referred_by`/`first_scan_completed_at` dibekukan RLS. Satu orang masih bisa bikin banyak akun email untuk refer diri sendiri berkali-kali, dan `first_scan_completed_at` sendiri adalah laporan-sendiri client (bukan bukti scan tervalidasi server) — dampaknya kecil (maksimal 1 hari Pro per akun, sekali). Butuh plugin native baru (`@capacitor/device` atau setara), known gap yang disengaja — lihat `docs/superpowers/specs/2026-09-01-fase8-referral-design.md` Bagian 2 & 7.
 - [ ] Nyalakan **Leaked Password Protection** di Supabase (Authentication → Policies) — cek password terhadap HaveIBeenPwned, satu-satunya temuan advisor yang tersisa per 26 Juli 2026
 - [ ] Tinjau ulang setelan **Confirm email** sebelum rilis publik (lihat catatan Fase 3)
 - [ ] Uji auto-pause Supabase free tier (setup keep-alive kalau perlu, mengingat riwayat kebijakan pause di Supabase/Appwrite)

@@ -62,6 +62,40 @@ describe('fetchReferralProgress', () => {
 
     expect((await fetchReferralProgress()).activatedCount).toBe(0)
   })
+
+  /** A failed query used to be silently swallowed, rendering identically to "zero referrals". */
+  function failingCountBuilder() {
+    const builder = {
+      select: vi.fn(() => builder),
+      eq: vi.fn(async () => ({ data: null, count: null, error: new Error('boom') })),
+    }
+    return builder
+  }
+
+  function failingMilestoneBuilder() {
+    const builder = {
+      select: vi.fn(() => builder),
+      eq: vi.fn(() => builder),
+      order: vi.fn(async () => ({ data: null, error: new Error('boom') })),
+    }
+    return builder
+  }
+
+  it('rejects when the activated-count query reports an error', async () => {
+    from.mockImplementation((table: string) =>
+      table === 'referral_events' ? failingCountBuilder() : milestoneBuilder([]),
+    )
+
+    await expect(fetchReferralProgress()).rejects.toThrow('boom')
+  })
+
+  it('rejects when the milestone query reports an error', async () => {
+    from.mockImplementation((table: string) =>
+      table === 'referral_events' ? countBuilder(6) : failingMilestoneBuilder(),
+    )
+
+    await expect(fetchReferralProgress()).rejects.toThrow('boom')
+  })
 })
 
 describe('triggerReferralActivation', () => {

@@ -22,7 +22,10 @@ interface MilestoneRow {
  * caller is the referrer, so no id has to be passed in.
  */
 export async function fetchReferralProgress(): Promise<ReferralProgress> {
-  const [{ count }, { data: milestoneRows }] = await Promise.all([
+  const [
+    { count, error: countError },
+    { data: milestoneRows, error: milestonesError },
+  ] = await Promise.all([
     supabase.from('referral_events').select('id', { count: 'exact', head: true }).eq('activated', true),
     supabase
       .from('referral_milestones')
@@ -30,6 +33,9 @@ export async function fetchReferralProgress(): Promise<ReferralProgress> {
       .eq('active', true)
       .order('referral_count_required', { ascending: true }),
   ])
+
+  if (countError) throw countError
+  if (milestonesError) throw milestonesError
 
   return {
     activatedCount: count ?? 0,

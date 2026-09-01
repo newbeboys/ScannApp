@@ -1,5 +1,5 @@
 import { useAuth } from '../auth/useAuth'
-import { ChevronRightIcon, CloudIcon, LogoutIcon, ScanIcon, TrashIcon } from '../components/Icons'
+import { ChevronRightIcon, CloudIcon, GiftIcon, LogoutIcon, ScanIcon, TrashIcon } from '../components/Icons'
 import { QuotaBar } from '../components/QuotaBar'
 import { proDaysRemaining, tierLabel } from '../lib/tier'
 import { THEMES, THEME_ORDER } from '../theme/themes'
@@ -12,6 +12,7 @@ interface SettingsScreenProps {
   onDeleteAll: () => void
   onSignOut: () => void
   onOpenBackups: () => void
+  onOpenReferral: () => void
   onUpgrade: () => void
 }
 
@@ -22,6 +23,7 @@ export function SettingsScreen({
   onDeleteAll,
   onSignOut,
   onOpenBackups,
+  onOpenReferral,
   onUpgrade,
 }: SettingsScreenProps) {
   const { themeId, setThemeId, theme } = useTheme()
@@ -77,6 +79,16 @@ export function SettingsScreen({
           <span className="card__row-label">
             <CloudIcon size={17} className="card__row-icon" />
             Cadangan di cloud
+          </span>
+          <ChevronRightIcon size={18} />
+        </button>
+      </section>
+
+      <section className="card">
+        <button type="button" className="card__row card__row--button" onClick={onOpenReferral}>
+          <span className="card__row-label">
+            <GiftIcon size={17} className="card__row-icon" />
+            Ajak Teman
           </span>
           <ChevronRightIcon size={18} />
         </button>

@@ -62,6 +62,8 @@ import {
   saveScanDocument,
   type LocalScanDocument,
 } from './lib/scanStorage'
+import { hasSentReferralActivation, markReferralActivationSent } from './lib/referralActivation'
+import { triggerReferralActivation } from './lib/referralApi'
 import { AuthScreen, type AuthMode } from './screens/AuthScreen'
 import { CloudBackupScreen } from './screens/CloudBackupScreen'
 import { DocumentDetailScreen } from './screens/DocumentDetailScreen'
@@ -72,6 +74,7 @@ import { HomeScreen } from './screens/HomeScreen'
 import { LandingScreen } from './screens/LandingScreen'
 import { MergeScreen } from './screens/MergeScreen'
 import { PageViewerScreen } from './screens/PageViewerScreen'
+import { ReferralScreen } from './screens/ReferralScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { SplitScanScreen } from './screens/SplitScanScreen'
@@ -100,6 +103,7 @@ type View =
   | { kind: 'viewer'; id: string; pageIndex: number }
   | { kind: 'merge' }
   | { kind: 'backups' }
+  | { kind: 'referral' }
   | { kind: 'upgrade' }
 
 /** Which screen the signed-out visitor is looking at. */
@@ -444,6 +448,17 @@ function App() {
     setIsSaving(true)
     try {
       await saveScanDocument(pendingPages)
+
+      // Fire-and-forget: a referral (if any) activates after the first ever
+      // scan. Failure here must never surface as "Gagal menyimpan dokumen" --
+      // the document is already saved. Retried next scan if it fails, since
+      // the local flag is only set on success.
+      if (!hasSentReferralActivation()) {
+        triggerReferralActivation()
+          .then(() => markReferralActivationSent())
+          .catch((error) => console.error('Referral activation failed:', error))
+      }
+
       await refreshDocuments()
       revokeStraightenedUris(pendingPages)
       setPendingPages(null)
@@ -756,6 +771,7 @@ function App() {
     view.kind === 'tabs' ||
     view.kind === 'merge' ||
     view.kind === 'backups' ||
+    view.kind === 'referral' ||
     view.kind === 'upgrade'
       ? null
       : (documents.find((doc) => doc.id === view.id) ?? null)
@@ -1154,6 +1170,19 @@ function App() {
     )
   }
 
+  if (view.kind === 'referral') {
+    return (
+      <div className="app">
+        <ReferralScreen
+          referralCode={profile?.referralCode ?? null}
+          onBack={() => setView({ kind: 'tabs' })}
+          onError={setToast}
+        />
+        {toast && <p className="toast">{toast}</p>}
+      </div>
+    )
+  }
+
   if (view.kind === 'merge') {
     return (
       <div className="app">
@@ -1370,6 +1399,7 @@ function App() {
             onDeleteAll={handleDeleteAll}
             onSignOut={handleSignOut}
             onOpenBackups={() => setView({ kind: 'backups' })}
+            onOpenReferral={() => setView({ kind: 'referral' })}
             onUpgrade={() => setView({ kind: 'upgrade' })}
           />
         )}

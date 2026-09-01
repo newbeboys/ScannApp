@@ -36,6 +36,17 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Unit tests
+        # VITE_* WAJIB ada di sini juga (bukan cuma di step build di bawah):
+        # ReferralScreen.browser.test.tsx meng-import ReferralScreen.tsx, yang
+        # meng-import referralApi.ts, yang meng-import supabase.ts -- dan
+        # src/lib/supabase.ts throw di top-level module kalau kosong (lihat
+        # komentar di step "Typecheck & build"). Nilainya anon key + URL
+        # publik yang sudah ikut terkirim di dalam APK ke semua user, jadi
+        # bukan credential rahasia (beda dari R2/service-role secret) --
+        # bukan pelanggaran Aturan Keras #1.
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm test
 
       - name: Typecheck & build

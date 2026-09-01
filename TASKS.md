@@ -1137,18 +1137,27 @@ dilewati bukan ekspornya, tapi penyalinan oleh aplikasi tujuan.
 
 ## Fase 8 — Program Referral
 
-- [ ] UI generate & share kode referral
-- [ ] Edge Function `process-referral-activation`
+- [x] UI generate & share kode referral — `ReferralScreen`, tombol Bagikan lewat `@capacitor/share`
+- [x] Edge Function `process-referral-activation`
 - [x] Tabel `referral_milestones` diisi dengan angka final: 5 orang→7 hari, 15 orang→25 hari, 30 orang→60 hari Pro — sudah ter-seed sejak migration `20260725093606_seed_referral_milestones.sql` (Fase 3), baru disadari & dicentang saat mulai Fase 8 (31 Agustus 2026)
-- [ ] Edge Function terjadwal `expire-pro-status`
-- [ ] UI progress referral (berapa orang sudah invite, menuju milestone berikutnya)
-- [ ] Uji anti-abuse: 1 device/akun tidak bisa refer diri sendiri berkali-kali
+- [x] Edge Function terjadwal `expire-pro-status` — diimplementasikan sebagai `pg_cron` job langsung, bukan Edge Function terjadwal (isinya cuma satu UPDATE, lihat spec Bagian 4.4)
+- [x] UI progress referral (berapa orang sudah invite, menuju milestone berikutnya)
+- [ ] Uji anti-abuse: 1 device/akun tidak bisa refer diri sendiri berkali-kali — **anti-abuse v1 sengaja terbatas** (email + activation saja, lihat spec Bagian 2 keputusan #2); device-fingerprint di luar cakupan Fase 8, jadi **known gap**, dicatat di Fase 9 di bawah
+
+### Uji device (checklist manual sebelum dianggap tuntas)
+
+- [ ] Dua akun test: A share kode ke B lewat tombol Bagikan, B daftar dengan kode itu terisi (form Daftar) sebelum konfirmasi email.
+- [ ] B scan 1 dokumen pertama kalinya → cek A menerima 7 hari Pro setelah 5 referral aktif ter-akumulasi (perlu 5 akun B berbeda untuk cek milestone pertama secara penuh; minimal cek 1 aktivasi tercatat & B sendiri dapat 1 hari Pro).
+- [ ] B yang sudah Pro bulanan sebelum diundang: aktivasi tidak menurunkan `pro_plan`-nya jadi `'referral'` (quota tetap 500MB/1GB sesuai plan aslinya).
+- [ ] Coba `PATCH` `first_scan_completed_at`/`referred_by`/`referral_code` langsung ke REST API Supabase sebagai user biasa (bukan lewat app) → harus ditolak RLS.
+- [ ] Cek `cron.job` di dashboard Supabase menunjukkan `expire-pro-status` aktif dan pernah berjalan (tunggu ≥1 hari, atau uji manual lewat `execute_sql`).
 
 ## Fase 9 — QA & Hardening
 
 - [ ] Uji limit merge dokumen Basic (20 halaman) & quota storage R2 per tier (100MB/500MB/1GB) sesuai angka final
 - [ ] Uji job pembersihan object R2 yatim (tidak punya referensi di `scan_documents`)
 - [~] Security review RLS policy (pastikan tidak ada cross-user data leak) — dimajukan sebagian, lihat di bawah
+- [ ] **Anti-abuse referral device-level** — Fase 8 v1 cuma menegakkan email unik + `referred_by`/`first_scan_completed_at` dibekukan RLS. Satu orang masih bisa bikin banyak akun email untuk refer diri sendiri berkali-kali. Butuh plugin native baru (`@capacitor/device` atau setara), known gap yang disengaja — lihat `docs/superpowers/specs/2026-09-01-fase8-referral-design.md` Bagian 2 & 7.
 - [ ] Nyalakan **Leaked Password Protection** di Supabase (Authentication → Policies) — cek password terhadap HaveIBeenPwned, satu-satunya temuan advisor yang tersisa per 26 Juli 2026
 - [ ] Tinjau ulang setelan **Confirm email** sebelum rilis publik (lihat catatan Fase 3)
 - [ ] Uji auto-pause Supabase free tier (setup keep-alive kalau perlu, mengingat riwayat kebijakan pause di Supabase/Appwrite)

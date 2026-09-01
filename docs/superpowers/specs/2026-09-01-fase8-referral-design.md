@@ -127,6 +127,6 @@ Helper tanggal (`extendExpiry(current, days)`) ditulis sebagai fungsi murni terp
 
 ## 8. Testing
 
-- **Suite `node`**: `extendExpiry()` (perpanjangan tanggal, termasuk kasus belum-Pro vs sudah-Pro), logika pencocokan milestone (persis, bukan `>=`), flag `referralActivation.ts` (localStorage disuntik), `edgeFunctionClient.ts` (mock `fetch`/response shape, pola sama seperti test `backupApi` yang sudah ada).
+- **Suite `node`**: `extendExpiry()` (perpanjangan tanggal, termasuk kasus belum-Pro vs sudah-Pro), logika pencocokan milestone (`unclaimedMilestones()` — ambang `>=` dikurangi yang sudah tercatat di ledger `referral_milestone_grants`, bukan lagi persis `=`; diganti 1 September 2026 malam setelah review akhir menemukan race dua referred user berbeda dari referrer yang sama bisa melompati angka pas), flag `referralActivation.ts` (localStorage disuntik), `edgeFunctionClient.ts` (mock `fetch`/response shape, pola sama seperti test `backupApi` yang sudah ada).
 - **Suite `browser`**: render `ReferralScreen` (vitest-browser-react) — kode tampil, milestone ter-render benar dari data mock; field kode referral di `AuthScreen` (muncul hanya di mode signup, terkirim ke `signUp()`).
 - Edge Function TypeScript (`supabase/functions/process-referral-activation/*.test.ts`) ikut suite `node` (`vitest.config.ts` sudah meng-include `supabase/functions/**/*.test.ts`) — logika murni yang bisa dipisah dari `Deno.serve`.

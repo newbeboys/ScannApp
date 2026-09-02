@@ -7,6 +7,7 @@ const onTabs: BannerContext = {
   onTabs: true,
   reviewingScan: false,
   sheetOpen: false,
+  searchActive: false,
 }
 
 describe('shouldShowBanner', () => {
@@ -33,5 +34,14 @@ describe('shouldShowBanner', () => {
    */
   test('mati saat ada lembar yang menutupi layar tab', () => {
     expect(shouldShowBanner({ ...onTabs, sheetOpen: true })).toBe(false)
+  })
+
+  /**
+   * Temuan Boss Ali dari HP (2 September 2026): fokus ke kolom pencarian
+   * membuka keyboard, dan banner native ikut "naik" menimpa konten di tengah
+   * layar alih-alih diam di bawah.
+   */
+  test('mati saat kolom pencarian difokus', () => {
+    expect(shouldShowBanner({ ...onTabs, searchActive: true })).toBe(false)
   })
 })

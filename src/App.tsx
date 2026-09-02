@@ -195,6 +195,8 @@ function App() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   /** Open when the batch export sheet is showing. */
   const [batchOpen, setBatchOpen] = useState(false)
+  /** Search field on Dokumen is focused (keyboard open) — see bannerGate.ts. */
+  const [searchActive, setSearchActive] = useState(false)
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null)
   const [isBatchBusy, setIsBatchBusy] = useState(false)
   const batchAbort = useRef<AbortController | null>(null)
@@ -231,6 +233,7 @@ function App() {
       onTabs: view.kind === 'tabs',
       reviewingScan: pendingPages !== null,
       sheetOpen,
+      searchActive,
     }),
     tier,
   )
@@ -1423,6 +1426,7 @@ function App() {
             onNotice={setToast}
             onImportFiles={handleImportFiles}
             isImporting={isImporting}
+            onSearchActiveChange={setSearchActive}
           />
         )}
         {tab === 'settings' && (

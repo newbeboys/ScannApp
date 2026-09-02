@@ -1283,6 +1283,42 @@ prop yang belum diteruskan di `App.tsx`.
       kembali → TIDAK boleh ada App Open ad.** Ini temuan review #1; kalau
       iklan tetap muncul, penanda alur internalnya tidak bekerja
 
+## Perbaikan Uji Device — 2 September 2026
+
+Dua temuan Boss Ali di HP fisik saat menguji "Impor File Aktif" & "Pencarian
+Dokumen" (tangkapan layar), di luar dua checklist di atas.
+
+- [x] **Banner iklan naik menimpa konten saat kolom pencarian difokus.**
+      Banner AdMob adalah native view yang posisinya dihitung dari tinggi
+      window, bukan layout WebView — saat keyboard terbuka, area terlihat
+      menyusut dan banner ikut "naik", berakhir di tengah layar alih-alih
+      diam di bawah. Ditutup dengan field baru `BannerContext.searchActive`
+      di `bannerGate.ts`: `DocumentsScreen` melaporkan fokus/blur kolom
+      pencarian ke `App.tsx` lewat prop `onSearchActiveChange`, banner
+      disembunyikan selama kolom itu difokus (pola yang sama dengan
+      `sheetOpen`). Test baru di `bannerGate.test.ts`.
+- [x] **Logo aplikasi ditambahkan di pojok kiri atas dalam app** — badge
+      header (Home/Dokumen/Pengaturan) sebelumnya memakai `ScanIcon`
+      generik, bukan logo asli yang sudah dipakai untuk ikon Android &
+      watermark PDF (`src/assets/logo.svg`, commit 509aca6). Komponen baru
+      `AppLogo` menampilkan logo itu apa adanya (warna teal+hitam asli,
+      tidak direcolor ke token aksen — konsisten dengan keputusan yang sama
+      di watermark & ikon launcher); badge diberi latar putih (bukan
+      `var(--acc)`) supaya kontrasnya konsisten di keempat tema.
+
+Suite bertambah jadi 874 node + 161 browser test, semuanya lolos.
+`npm run build` sukses.
+
+**Belum diverifikasi di device fisik:**
+
+- [ ] Ketuk kolom pencarian di tab Dokumen, keyboard terbuka → banner iklan
+      hilang, tidak lagi menimpa konten
+- [ ] Tutup keyboard (ketuk di luar kolom / tombol kembali) → banner muncul
+      lagi seperti biasa
+- [ ] Logo ScannApp tampil di badge kiri atas header Home/Dokumen/
+      Pengaturan, bukan ikon kotak generik — kontrasnya cukup di tema yang
+      sedang dipakai
+
 ---
 
 ## Status Keputusan

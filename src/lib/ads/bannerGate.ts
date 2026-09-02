@@ -21,6 +21,16 @@ export interface BannerContext {
    * ia justru menimpanya.
    */
   sheetOpen: boolean
+  /**
+   * Kolom pencarian dokumen sedang difokus (keyboard terbuka).
+   *
+   * Banner adalah view native yang posisinya dihitung dari tinggi window,
+   * bukan layout WebView -- saat keyboard muncul dan area terlihat menyusut,
+   * banner ikut "naik" dan berakhir menimpa konten di tengah layar, bukan
+   * diam di bawah (dilaporkan Boss Ali dari HP, 2 September 2026). Sama
+   * seperti `sheetOpen`, ini bukan sesuatu yang bisa diperbaiki lewat CSS.
+   */
+  searchActive: boolean
 }
 
 /**
@@ -35,5 +45,11 @@ export interface BannerContext {
  * hendak menekannya.
  */
 export function shouldShowBanner(context: BannerContext): boolean {
-  return context.signedIn && context.onTabs && !context.reviewingScan && !context.sheetOpen
+  return (
+    context.signedIn &&
+    context.onTabs &&
+    !context.reviewingScan &&
+    !context.sheetOpen &&
+    !context.searchActive
+  )
 }

@@ -64,10 +64,21 @@ body.scroll-locked .app__body {
   border-radius: 13px;
   display: grid;
   place-items: center;
-  background: var(--acc);
-  color: #fff;
+  /*
+    Putih, bukan var(--acc): badge ini sekarang menampung logo asli (lihat
+    AppLogo), yang warnanya teal+hitam sudah final dan tidak ikut berubah
+    warna per tema (sama seperti ikon launcher Android, latarnya juga putih -
+    lihat ic_launcher_background.xml). Kalau di-taruh di atas var(--acc) yang
+    warnanya berganti per tema, kontrasnya jadi tidak terjamin di semua tema.
+  */
+  background: #fff;
   box-shadow: 0 8px 20px var(--acc-soft);
   flex-shrink: 0;
+}
+
+.app-header__badge img {
+  width: 26px;
+  height: 26px;
 }
 
 .app-header__titles {

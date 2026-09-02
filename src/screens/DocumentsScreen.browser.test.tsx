@@ -58,6 +58,7 @@ async function renderScreen(overrides: Partial<Parameters<typeof DocumentsScreen
       onNotice={() => {}}
       onImportFiles={() => {}}
       isImporting={false}
+      onSearchActiveChange={() => {}}
       {...overrides}
     />,
   )

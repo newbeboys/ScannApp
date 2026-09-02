@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { AppLogo } from '../components/AppLogo'
 import {
   CheckIcon,
   CloseIcon,
@@ -7,7 +8,6 @@ import {
   ExportIcon,
   ImportIcon,
   MergeIcon,
-  ScanIcon,
   SearchIcon,
   TrashIcon,
 } from '../components/Icons'
@@ -59,6 +59,12 @@ interface DocumentsScreenProps {
   onImportFiles: () => void
   /** True while the picker/conversion from onImportFiles is running. */
   isImporting: boolean
+  /**
+   * Fires when the search field gains/loses focus, so the banner gate in
+   * `App.tsx` can hide the ad while the keyboard is open -- see the comment
+   * on `BannerContext.searchActive` in `lib/ads/bannerGate.ts`.
+   */
+  onSearchActiveChange: (active: boolean) => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('id-ID', {
@@ -89,6 +95,7 @@ export function DocumentsScreen({
   onNotice,
   onImportFiles,
   isImporting,
+  onSearchActiveChange,
 }: DocumentsScreenProps) {
   const localCount = entries.filter((entry) => entry.kind === 'local').length
   const cloudCount = entries.length - localCount
@@ -110,6 +117,15 @@ export function DocumentsScreen({
     () => (selectMode ? entries : filterEntriesByQuery(entries, searchQuery)),
     [entries, searchQuery, selectMode],
   )
+
+  /**
+   * A screen switch away from Dokumen unmounts this component without firing
+   * a blur on whatever was focused -- without this, the banner could stay
+   * hidden forever after the user leaves mid-search.
+   */
+  useEffect(() => {
+    return () => onSearchActiveChange(false)
+  }, [onSearchActiveChange])
 
   const pressTimer = useRef<number | null>(null)
   const pressOrigin = useRef<{ x: number; y: number } | null>(null)
@@ -239,7 +255,7 @@ export function DocumentsScreen({
       ) : (
         <header className="app-header">
           <div className="app-header__badge">
-            <ScanIcon size={22} />
+            <AppLogo />
           </div>
           <div className="app-header__titles">
             <h1>ScannApp</h1>
@@ -274,6 +290,8 @@ export function DocumentsScreen({
             placeholder="Cari nama dokumen"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
+            onFocus={() => onSearchActiveChange(true)}
+            onBlur={() => onSearchActiveChange(false)}
             aria-label="Cari nama dokumen"
           />
           {searchQuery !== '' && (

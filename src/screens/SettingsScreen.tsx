@@ -1,5 +1,6 @@
 import { useAuth } from '../auth/useAuth'
-import { ChevronRightIcon, CloudIcon, GiftIcon, LogoutIcon, ScanIcon, TrashIcon } from '../components/Icons'
+import { AppLogo } from '../components/AppLogo'
+import { ChevronRightIcon, CloudIcon, GiftIcon, LogoutIcon, TrashIcon } from '../components/Icons'
 import { QuotaBar } from '../components/QuotaBar'
 import { proDaysRemaining, tierLabel } from '../lib/tier'
 import { THEMES, THEME_ORDER } from '../theme/themes'
@@ -36,7 +37,7 @@ export function SettingsScreen({
     <div className="screen">
       <header className="app-header">
         <div className="app-header__badge">
-          <ScanIcon size={22} />
+          <AppLogo />
         </div>
         <div className="app-header__titles">
           <h1>ScannApp</h1>

@@ -1,4 +1,5 @@
 import { PageImage } from '../components/PageImage'
+import { AppLogo } from '../components/AppLogo'
 import { CloudIcon, ScanIcon } from '../components/Icons'
 import type { DocumentEntry } from '../lib/documentEntries'
 import { resolvePage } from '../lib/scanStorage'
@@ -34,7 +35,7 @@ export function HomeScreen({
     <div className="screen">
       <header className="app-header">
         <div className="app-header__badge">
-          <ScanIcon size={22} />
+          <AppLogo />
         </div>
         <div className="app-header__titles">
           <h1>ScannApp</h1>

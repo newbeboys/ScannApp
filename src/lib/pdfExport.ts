@@ -115,12 +115,26 @@ export async function buildPdf(
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
   pdf.setProducer('ScannApp')
+  pdf.setCreator('ScannApp')
   if (options.title) pdf.setTitle(options.title)
 
   // Guarded rather than trusted: an unparseable date would otherwise be
-  // written as "D:NaN…", which is worse than leaving pdf-lib's own default.
-  const scannedAt = options.scannedAt ? new Date(options.scannedAt) : null
-  if (scannedAt && !Number.isNaN(scannedAt.getTime())) pdf.setCreationDate(scannedAt)
+  // written as "D:NaN…". CreationDate and ModDate are both pinned to this
+  // same value -- not left for pdf-lib to stamp at whatever wall-clock
+  // moment .save() happens to run, which is what it does for any field
+  // this function does not set explicitly itself (PDFDocument.
+  // prototype.updateInfoDict) -- both because a backup exported today of a
+  // March scan should not read as modified today, and because that is what
+  // makes the same pages always produce the same file (verified directly
+  // against pdf-lib: two builds with an explicit setModificationDate
+  // >1s apart come out byte-identical; without it they never do -- this is
+  // what made "builds the same document from a generator as from an array"
+  // below flaky in CI while passing every time locally, round 1).
+  const parsedScannedAt = options.scannedAt ? new Date(options.scannedAt) : null
+  const metadataDate =
+    parsedScannedAt && !Number.isNaN(parsedScannedAt.getTime()) ? parsedScannedAt : new Date()
+  pdf.setCreationDate(metadataDate)
+  pdf.setModificationDate(metadataDate)
 
   const font = options.watermark ? await pdf.embedFont(StandardFonts.HelveticaBold) : null
 

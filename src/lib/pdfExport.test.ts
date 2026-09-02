@@ -72,6 +72,50 @@ describe('buildPdf', () => {
   })
 
   /**
+   * PDFDocument.create() defaults to updateMetadata: true, which stamps
+   * Producer with pdf-lib's own signature the moment the document is
+   * constructed. buildPdf's own setProducer('ScannApp') call runs right
+   * after and unconditionally overwrites that -- confirmed directly against
+   * pdf-lib rather than assumed, since a first attempt at this fix reached
+   * for { updateMetadata: false } on create() as well, on the mistaken
+   * belief that was also required; it changed nothing observable and was
+   * removed (code review, round 1).
+   *
+   * PDFDocument.load() has this same updateMetadata: true default,
+   * independently -- loading the saved bytes with no options re-stamps
+   * Producer right back to pdf-lib's signature on the way in, which would
+   * make this test "pass" for the wrong reason (asserting what load() just
+   * overwrote, not what buildPdf wrote). { updateMetadata: false } here is
+   * what makes this actually read the saved bytes.
+   */
+  it('stamps ScannApp as the producer, not pdf-lib\'s own signature', async () => {
+    const pdf = await buildPdf([jpegPage()], { watermark: false })
+    const loaded = await PDFDocument.load(pdf, { updateMetadata: false })
+
+    expect(loaded.getProducer()).toBe('ScannApp')
+  })
+
+  /**
+   * Same root cause as Producer above, but for ModDate: without buildPdf's
+   * own setModificationDate call, the document keeps the ModDate
+   * create() stamped it with at construction time -- the wall-clock moment
+   * .create() happened to run, not when the pages were scanned. A cloud
+   * backup exported today of a document scanned in March would then read as
+   * "modified today" in any tool that surfaces ModDate, and two builds of
+   * the same pages would only be byte-identical when they landed in the
+   * same second -- this is what made the "generator vs array" test below
+   * flaky in CI while passing every time locally, round 1.
+   */
+  it('dates both Creation and Modification from scannedAt, not from create() time', async () => {
+    const scannedAt = '2026-03-04T00:00:00.000Z'
+    const pdf = await buildPdf([jpegPage()], { watermark: false, scannedAt })
+    const loaded = await PDFDocument.load(pdf, { updateMetadata: false })
+
+    expect(loaded.getCreationDate()?.toISOString()).toBe(scannedAt)
+    expect(loaded.getModificationDate()?.toISOString()).toBe(scannedAt)
+  })
+
+  /**
    * The tier rule that actually matters commercially: Basic exports are
    * marked, Pro exports are not. The watermark is the only thing in the
    * document that embeds a font, so its font dictionary is a reliable tell.

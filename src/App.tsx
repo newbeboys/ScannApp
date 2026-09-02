@@ -419,6 +419,13 @@ function App() {
     try {
       const result = await pickFiles()
       ingestImportedFiles(result)
+    } catch {
+      // A phone with no document provider at all answers ACTION_OPEN_DOCUMENT
+      // with ActivityNotFoundException, which reaches us as a rejection. Left
+      // uncaught it is an unhandled rejection and a button that appears to do
+      // nothing -- every other native call in this file says something instead
+      // (caught in code review, round 1).
+      setToast('Tidak bisa membuka pemilih file.')
     } finally {
       setIsImporting(false)
     }

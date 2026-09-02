@@ -11,6 +11,11 @@ const addListenerMock = vi.fn(
 )
 const pickFilesMock = vi.fn()
 
+const leaveForOwnFlowMock = vi.fn()
+vi.mock('./ads/appOpenGate', () => ({
+  resumeTracker: { leaveForOwnFlow: () => leaveForOwnFlowMock() },
+}))
+
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
     isNativePlatform: () => isNative,
@@ -33,6 +38,7 @@ beforeEach(() => {
   addListenerMock.mockClear()
   removeMock.mockClear()
   pickFilesMock.mockReset()
+  leaveForOwnFlowMock.mockClear()
 })
 
 describe('onSharedFilesReceived', () => {
@@ -140,5 +146,28 @@ describe('pickFiles', () => {
 
     expect(pickFilesMock).not.toHaveBeenCalled()
     expect(result).toEqual({ images: [], skippedCount: 0 })
+  })
+
+  /**
+   * The picker is its own activity, so returning from it looks exactly like
+   * the user coming back from another app. Unmarked, a Basic user who browses
+   * Drive for more than five seconds is met with an App Open ad on return --
+   * the thing CLAUDE.md Bagian 6 forbids, and which appOpenGate's own contract
+   * names the file picker for. Caught in code review, round 1.
+   */
+  it('marks the picker as our own flow, so returning earns no App Open ad', async () => {
+    pickFilesMock.mockResolvedValue({ paths: [], skippedCount: 0 })
+
+    await pickFiles()
+
+    expect(leaveForOwnFlowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not mark an excursion on web, where nothing is ever opened', async () => {
+    isNative = false
+
+    await pickFiles()
+
+    expect(leaveForOwnFlowMock).not.toHaveBeenCalled()
   })
 })

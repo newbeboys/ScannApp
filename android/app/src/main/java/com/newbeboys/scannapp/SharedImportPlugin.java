@@ -74,15 +74,7 @@ public class SharedImportPlugin extends Plugin {
             }
             if (uris.isEmpty()) return;
 
-            ConversionResult conversion = convertUris(uris, getContext().getContentResolver());
-
-            JSArray paths = new JSArray();
-            for (String path : conversion.outputPaths) {
-                paths.put(path);
-            }
-            JSObject data = new JSObject();
-            data.put("paths", paths);
-            data.put("skippedCount", conversion.skippedCount);
+            JSObject data = toPayload(convertUris(uris, getContext().getContentResolver()));
             // Plugin.eventListeners / retainedEventArguments are plain
             // HashMaps with no internal synchronization. addListener() from
             // JS runs on the Bridge's own "CapacitorPlugins" handler thread,
@@ -131,29 +123,35 @@ public class SharedImportPlugin extends Plugin {
             // Cancelled picker, or a provider that handed back nothing usable
             // -- not an error, same as backing out of any other flow in this
             // app (spec §5).
-            JSObject empty = new JSObject();
-            empty.put("paths", new JSArray());
-            empty.put("skippedCount", 0);
-            call.resolve(empty);
+            call.resolve(toPayload(new ConversionResult(new ArrayList<>(), 0)));
             return;
         }
 
         importExecutor.execute(() -> {
-            ConversionResult conversion = convertUris(uris, getContext().getContentResolver());
-
-            JSArray paths = new JSArray();
-            for (String path : conversion.outputPaths) {
-                paths.put(path);
-            }
-            JSObject payload = new JSObject();
-            payload.put("paths", paths);
-            payload.put("skippedCount", conversion.skippedCount);
+            JSObject payload = toPayload(convertUris(uris, getContext().getContentResolver()));
             // Unlike notifyListeners() above, PluginCall.resolve() has no
             // documented same-thread requirement and is the standard way
             // Capacitor plugins resolve calls after background work -- no
             // execute() bounce-back needed here.
             call.resolve(payload);
         });
+    }
+
+    /**
+     * The one place the wire shape JS receives is written, so the event
+     * (passive share) and the pickFiles() resolve cannot drift apart -- they
+     * are documented as being the same shape, and sharedImport.ts reads them
+     * with one interface (extracted in code review, round 1).
+     */
+    private JSObject toPayload(ConversionResult conversion) {
+        JSArray paths = new JSArray();
+        for (String path : conversion.outputPaths) {
+            paths.put(path);
+        }
+        JSObject payload = new JSObject();
+        payload.put("paths", paths);
+        payload.put("skippedCount", conversion.skippedCount);
+        return payload;
     }
 
     /** Result of converting a batch of incoming URIs into JPEG paths this app owns. */

@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
+import { resumeTracker } from './ads/appOpenGate'
 
 /** Shape of the event the native SharedImportPlugin sends. See spec §6 for what skippedCount covers. */
 interface SharedFilesReceivedEvent {
@@ -88,6 +89,15 @@ export async function pickFiles(): Promise<SharedImportResult> {
   if (!Capacitor.isNativePlatform()) {
     return { images: [], skippedCount: 0 }
   }
+
+  // The picker is a separate activity, exactly like the scanner and the share
+  // sheet -- the WebView sees the app backgrounded and come back, and without
+  // this mark a Basic user who spends more than five seconds browsing Drive is
+  // met with a full-screen App Open ad on return. appOpenGate's own contract
+  // names the file picker by name; marked right before the call that departs,
+  // same as documentScanner.ts (the 10s grace window covers a call that fails
+  // and never leaves).
+  resumeTracker.leaveForOwnFlow()
 
   const { paths, skippedCount } = await SharedImportNative.pickFiles()
   return {

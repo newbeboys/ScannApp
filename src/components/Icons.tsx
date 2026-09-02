@@ -120,12 +120,21 @@ export function SearchIcon({ size = 24, className }: IconProps) {
   )
 }
 
+/**
+ * Import: a folder with an arrow coming *down into* it.
+ *
+ * Deliberately not the tray-and-arrow shape of ExportIcon/DownloadIcon — both
+ * of those render on the Documents screen too (bulk export, and restoring a
+ * cloud row), and an arrow leaving a tray is what ExportIcon means. A folder
+ * is drawn nowhere else in the app, so this reads as its own thing: files
+ * being brought in from folders or Drive.
+ */
 export function ImportIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">
-      <path d="M12 3v11" />
-      <path d="m8 7 4-4 4 4" />
-      <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+      <path d="M3.5 8.5a1.5 1.5 0 0 1 1.5-1.5h3.4l1.7 2.2H19a1.5 1.5 0 0 1 1.5 1.5v7.8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z" />
+      <path d="M12 11.5v4.6" />
+      <path d="m9.8 14 2.2 2.2 2.2-2.2" />
     </svg>
   )
 }

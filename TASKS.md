@@ -1187,6 +1187,102 @@ Diminta Boss Ali setelah seluruh fase & test selesai. Bagian pertama dari dua pe
 
 Satu temuan code-review lain ditutup sebelum commit: fixture test baru sempat memakai `schemaVersion: 2` alih-alih `6` (`CURRENT_SCHEMA_VERSION` saat ini) — salah tempel dari pola lama, tidak tertangkap `tsc` karena `tsconfig.test.json` mewarisi `exclude` berkas test dari `tsconfig.app.json` (celah pra-ada, di luar cakupan perubahan ini, dicatat di sini supaya tidak hilang).
 
+## Impor File Aktif (Gambar/PDF) di Menu Dokumen — 2 September 2026
+
+Bagian kedua dari dua permintaan Boss Ali di menu Dokumen (bagian pertama:
+pencarian nama dokumen, lihat section di atas). Desain:
+`docs/superpowers/specs/2026-09-02-dokumen-impor-file-design.md`, plan:
+`docs/superpowers/plans/2026-09-02-dokumen-impor-file.md`.
+
+- [x] **`SharedImportPlugin.java` diperluas, bukan plugin baru.** Logika
+      konversi URI→JPEG yang sudah ada (salin gambar / rasterisasi PDF lewat
+      `PdfRenderer`) diekstrak jadi `convertUris()`, dipakai bersama oleh
+      jalur pasif (share sheet) yang sudah ada **dan** jalur aktif baru
+      (`pickFiles()` via `Intent.ACTION_OPEN_DOCUMENT` +
+      `startActivityForResult`/`@ActivityCallback`)
+- [x] **Tidak ada izin runtime baru** — SAF memberi akses baca per-URI lewat
+      grant sistem, bukan `READ_EXTERNAL_STORAGE`
+- [x] **Boleh pilih banyak file sekaligus** (`EXTRA_ALLOW_MULTIPLE`), dan
+      picker sistem Android otomatis mengagregasi folder lokal + provider
+      cloud terpasang (Google Drive, dst) tanpa integrasi API per provider
+- [x] **Membatalkan picker bukan error** — resolve kosong, tidak ada toast,
+      sama seperti membatalkan alur lain di aplikasi ini
+- [x] **`App.tsx`: `ingestImportedFiles()` baru** memakai ulang persis
+      logika "gambar masuk → antre tinjau" yang sebelumnya cuma dipakai
+      listener share pasif — sekarang dipakai bersama oleh listener itu dan
+      tombol impor baru, tidak ada logika yang digandakan
+- [x] **Tombol ikon baru di header layar Dokumen**, sebelum tombol "Pilih",
+      nonaktif selama proses impor berjalan
+- [x] **Tier: semua tier, tanpa gerbang** — pola yang sama dengan
+      reorder/filter/PNG/anotasi/pisah/share-pasif
+- [x] **DOCX sengaja tidak dicakup** — dipisah jadi sub-proyek tersendiri,
+      mewarisi keputusan 26 Agustus 2026
+- [x] **Test bertambah: 6 di `sharedImport.test.ts` (node) + 3 di
+      `DocumentsScreen.browser.test.tsx` (browser)** — total suite kini
+      **866 node + 161 browser**, semuanya lolos
+- [x] **Build native sungguhan lolos**, bukan cuma typecheck:
+      `gradlew.bat assembleDebug` → `BUILD SUCCESSFUL`
+
+**Empat temuan code-review ditutup sebelum commit terakhir:**
+
+1. **Picker memicu App Open ad.** `pickFiles()` tidak memanggil
+   `resumeTracker.leaveForOwnFlow()`, padahal picker itu activity terpisah
+   persis seperti pemindai/share sheet/pembelian — user Basic yang menelusuri
+   Google Drive lebih dari 5 detik akan disambut iklan layar penuh saat
+   kembali. Ini yang dilarang CLAUDE.md Bagian 6, dan `appOpenGate.ts`
+   menyebut "the file picker" di kontraknya sendiri. Ditutup + 2 test, yang
+   dibuktikan menggigit (perbaikannya dilepas → test merah).
+2. **`handleImportFiles` tanpa `catch`.** HP tanpa document provider menjawab
+   `ACTION_OPEN_DOCUMENT` dengan `ActivityNotFoundException`, yang sampai ke
+   JS sebagai rejection — tanpa `catch` jadi unhandled rejection dan tombol
+   yang seolah tidak bereaksi. Sekarang bertoast, sama seperti panggilan
+   native lain di file itu.
+3. **Ikon impor berbentuk ikon ekspor.** `ImportIcon` awalnya memakai panah
+   keluar dari baki — struktur yang sama persis dengan `ExportIcon`. Diganti
+   folder + panah masuk; sengaja **bukan** bentuk baki, karena `ExportIcon`
+   (Ekspor PDF) dan `DownloadIcon` (pulihkan baris cloud) dua-duanya juga
+   tampil di layar Dokumen.
+4. **Payload JS digandakan di sisi Java** antara `handleOnNewIntent` dan
+   `handlePickResult`, padahal perubahan ini justru mengekstrak `convertUris`
+   untuk alasan yang sama — diekstrak jadi `toPayload()`.
+
+Temuan kelima (**guard `Array.isArray` di `pickFiles`**) **ditolak, bukan
+dilewat**: JS dan Java ikut satu APK yang sama, jadi bentuk payload tidak bisa
+melenceng antar versi seperti kontrak jaringan, dan setelah temuan #2 ditutup,
+payload rusak pun berakhir sebagai toast, bukan crash. Guard tanpa jalan masuk
+cuma menambah cabang yang tidak bisa diuji.
+
+**Security-review:** tidak ada temuan. Yang diperiksa khusus — nama berkas
+tujuan (`shared-<nanoTime>[-<index>].jpg`) diturunkan **sepenuhnya** dari
+`System.nanoTime()` dan indeks loop; nama asli berkas dari provider tidak
+pernah dibaca (tidak ada query `OpenableColumns` sama sekali), jadi tidak ada
+jalan path traversal. Tujuan tulisnya `getCacheDir()` (cache privat aplikasi,
+bukan penyimpanan eksternal), dan URI tanpa grant membuat `openInputStream`
+melempar `SecurityException` yang sudah tertangkap batch-catch — jadi
+dilewati sebagai `skippedCount`, bukan crash atau eskalasi hak.
+
+**Catatan untuk plan berikutnya:** `npx tsc --noEmit` yang tertulis di plan
+ini **tidak memeriksa apa pun** — `tsconfig.json` root memakai project
+references dengan `"files": []`, jadi typecheck yang sebenarnya adalah
+`npx tsc -b` (yang dipakai `npm run build`). Perbedaan ini sempat menyembunyikan
+prop yang belum diteruskan di `App.tsx`.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Ketuk tombol impor → picker sistem Android terbuka, menampilkan folder
+      lokal **dan** akun Google Drive yang terpasang di HP
+- [ ] Pilih beberapa gambar sekaligus → semuanya masuk ke alur tinjau yang
+      sama seperti hasil scan
+- [ ] Pilih satu PDF pihak ketiga (bukan hasil ScannApp) → dirasterisasi
+      jadi beberapa halaman, masuk ke alur tinjau
+- [ ] Batalkan picker (tombol kembali/back gesture) → tidak ada toast, tidak
+      ada perubahan pada layar Dokumen
+- [ ] Impor saat sedang di tengah sesi tinjau (habis scan, belum simpan) →
+      halaman baru nambah di akhir, bukan sesi baru
+- [ ] **Akun Basic: pilih file lama-lama di Google Drive (>5 detik), lalu
+      kembali → TIDAK boleh ada App Open ad.** Ini temuan review #1; kalau
+      iklan tetap muncul, penanda alur internalnya tidak bekerja
+
 ---
 
 ## Status Keputusan

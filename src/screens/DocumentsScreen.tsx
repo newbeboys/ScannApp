@@ -5,6 +5,7 @@ import {
   CloudIcon,
   DownloadIcon,
   ExportIcon,
+  ImportIcon,
   MergeIcon,
   ScanIcon,
   SearchIcon,
@@ -54,6 +55,10 @@ interface DocumentsScreenProps {
   onBatchExport: () => void
   onBatchDelete: () => void
   onNotice: (message: string) => void
+  /** Opens the system file picker (folders, Google Drive, etc). */
+  onImportFiles: () => void
+  /** True while the picker/conversion from onImportFiles is running. */
+  isImporting: boolean
 }
 
 const dateFormatter = new Intl.DateTimeFormat('id-ID', {
@@ -82,6 +87,8 @@ export function DocumentsScreen({
   onBatchExport,
   onBatchDelete,
   onNotice,
+  onImportFiles,
+  isImporting,
 }: DocumentsScreenProps) {
   const localCount = entries.filter((entry) => entry.kind === 'local').length
   const cloudCount = entries.length - localCount
@@ -238,6 +245,15 @@ export function DocumentsScreen({
             <h1>ScannApp</h1>
             <p>Semua dokumen tersimpan</p>
           </div>
+          <button
+            type="button"
+            className="app-header__icon-btn"
+            onClick={onImportFiles}
+            disabled={isImporting}
+            aria-label="Impor file"
+          >
+            <ImportIcon size={20} />
+          </button>
           {entries.some(isSelectable) && (
             <button type="button" className="link-button" onClick={() => onEnterSelect('')}>
               Pilih

@@ -56,6 +56,8 @@ async function renderScreen(overrides: Partial<Parameters<typeof DocumentsScreen
       onBatchExport={() => {}}
       onBatchDelete={() => {}}
       onNotice={() => {}}
+      onImportFiles={() => {}}
+      isImporting={false}
       {...overrides}
     />,
   )
@@ -291,5 +293,28 @@ describe('searching documents', () => {
     const screen = await renderScreen({ selectMode: true, selectedIds: ['a'] })
 
     expect(screen.container.querySelector('.search-field')).toBeNull()
+  })
+})
+
+describe('importing files', () => {
+  it('calls onImportFiles when the import button is tapped', async () => {
+    const onImportFiles = vi.fn()
+    const screen = await renderScreen({ onImportFiles })
+
+    await screen.getByRole('button', { name: 'Impor file' }).click()
+
+    expect(onImportFiles).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables the import button while importing', async () => {
+    const screen = await renderScreen({ isImporting: true })
+
+    await expect.element(screen.getByRole('button', { name: 'Impor file' })).toBeDisabled()
+  })
+
+  it('is hidden while in select mode', async () => {
+    const screen = await renderScreen({ selectMode: true, selectedIds: ['a'] })
+
+    await expect.element(screen.getByRole('button', { name: 'Impor file' })).not.toBeInTheDocument()
   })
 })

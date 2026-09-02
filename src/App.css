@@ -94,6 +94,26 @@ body.scroll-locked .app__body {
   border: 1px solid var(--chip-border);
 }
 
+.app-header__icon-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  background: none;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--fg-dim);
+}
+
+.app-header__icon-btn:active {
+  background: var(--chip);
+}
+
+.app-header__icon-btn:disabled {
+  opacity: 0.6;
+}
+
 .flow-header {
   display: flex;
   align-items: center;

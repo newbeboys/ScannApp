@@ -243,3 +243,53 @@ describe('the action bar', () => {
     expect(onOpen).not.toHaveBeenCalled()
   })
 })
+
+describe('searching documents', () => {
+  it('narrows the list to rows whose title matches, including cloud-only rows', async () => {
+    const screen = await renderScreen()
+
+    await screen.getByLabelText('Cari nama dokumen').fill('kontrak')
+
+    await expect.element(screen.getByText('Kontrak Lama')).toBeVisible()
+    await expect.element(screen.getByText('Kwitansi Agustus')).not.toBeInTheDocument()
+  })
+
+  it('is case-insensitive and matches a partial title', async () => {
+    const screen = await renderScreen()
+
+    await screen.getByLabelText('Cari nama dokumen').fill('AGUSTUS')
+
+    await expect.element(screen.getByText('Kwitansi Agustus')).toBeVisible()
+    await expect.element(screen.getByText('Kontrak Lama')).not.toBeInTheDocument()
+  })
+
+  it('shows a dedicated empty state when nothing matches, not the "no documents" one', async () => {
+    const screen = await renderScreen()
+
+    await screen.getByLabelText('Cari nama dokumen').fill('faktur pajak')
+
+    await expect.element(screen.getByText('Tidak ada dokumen yang cocok dengan "faktur pajak".')).toBeVisible()
+  })
+
+  it('restores the full list once the query is cleared', async () => {
+    const screen = await renderScreen()
+    const field = screen.getByLabelText('Cari nama dokumen')
+
+    await field.fill('kontrak')
+    await screen.getByRole('button', { name: 'Bersihkan pencarian' }).click()
+
+    await expect.element(field).toHaveValue('')
+    await expect.element(screen.getByText('Kwitansi Agustus')).toBeVisible()
+    await expect.element(screen.getByText('Kontrak Lama')).toBeVisible()
+  })
+
+  /**
+   * Search and select don't overlap (see the comment on `visibleEntries` in
+   * the component) -- the field simply isn't there once selecting starts.
+   */
+  it('is hidden while in select mode', async () => {
+    const screen = await renderScreen({ selectMode: true, selectedIds: ['a'] })
+
+    expect(screen.container.querySelector('.search-field')).toBeNull()
+  })
+})

@@ -111,6 +111,15 @@ export function CheckIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function SearchIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20.5 20.5-4-4" />
+    </svg>
+  )
+}
+
 export function CropIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden="true">

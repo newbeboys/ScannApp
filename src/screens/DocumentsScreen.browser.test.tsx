@@ -56,6 +56,8 @@ async function renderScreen(overrides: Partial<Parameters<typeof DocumentsScreen
       onBatchExport={() => {}}
       onBatchDelete={() => {}}
       onNotice={() => {}}
+      onImportFiles={() => {}}
+      isImporting={false}
       {...overrides}
     />,
   )
@@ -241,5 +243,78 @@ describe('the action bar', () => {
 
     expect(onToggleSelect).toHaveBeenCalledWith('a')
     expect(onOpen).not.toHaveBeenCalled()
+  })
+})
+
+describe('searching documents', () => {
+  it('narrows the list to rows whose title matches, including cloud-only rows', async () => {
+    const screen = await renderScreen()
+
+    await screen.getByLabelText('Cari nama dokumen').fill('kontrak')
+
+    await expect.element(screen.getByText('Kontrak Lama')).toBeVisible()
+    await expect.element(screen.getByText('Kwitansi Agustus')).not.toBeInTheDocument()
+  })
+
+  it('is case-insensitive and matches a partial title', async () => {
+    const screen = await renderScreen()
+
+    await screen.getByLabelText('Cari nama dokumen').fill('AGUSTUS')
+
+    await expect.element(screen.getByText('Kwitansi Agustus')).toBeVisible()
+    await expect.element(screen.getByText('Kontrak Lama')).not.toBeInTheDocument()
+  })
+
+  it('shows a dedicated empty state when nothing matches, not the "no documents" one', async () => {
+    const screen = await renderScreen()
+
+    await screen.getByLabelText('Cari nama dokumen').fill('faktur pajak')
+
+    await expect.element(screen.getByText('Tidak ada dokumen yang cocok dengan "faktur pajak".')).toBeVisible()
+  })
+
+  it('restores the full list once the query is cleared', async () => {
+    const screen = await renderScreen()
+    const field = screen.getByLabelText('Cari nama dokumen')
+
+    await field.fill('kontrak')
+    await screen.getByRole('button', { name: 'Bersihkan pencarian' }).click()
+
+    await expect.element(field).toHaveValue('')
+    await expect.element(screen.getByText('Kwitansi Agustus')).toBeVisible()
+    await expect.element(screen.getByText('Kontrak Lama')).toBeVisible()
+  })
+
+  /**
+   * Search and select don't overlap (see the comment on `visibleEntries` in
+   * the component) -- the field simply isn't there once selecting starts.
+   */
+  it('is hidden while in select mode', async () => {
+    const screen = await renderScreen({ selectMode: true, selectedIds: ['a'] })
+
+    expect(screen.container.querySelector('.search-field')).toBeNull()
+  })
+})
+
+describe('importing files', () => {
+  it('calls onImportFiles when the import button is tapped', async () => {
+    const onImportFiles = vi.fn()
+    const screen = await renderScreen({ onImportFiles })
+
+    await screen.getByRole('button', { name: 'Impor file' }).click()
+
+    expect(onImportFiles).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables the import button while importing', async () => {
+    const screen = await renderScreen({ isImporting: true })
+
+    await expect.element(screen.getByRole('button', { name: 'Impor file' })).toBeDisabled()
+  })
+
+  it('is hidden while in select mode', async () => {
+    const screen = await renderScreen({ selectMode: true, selectedIds: ['a'] })
+
+    await expect.element(screen.getByRole('button', { name: 'Impor file' })).not.toBeInTheDocument()
   })
 })

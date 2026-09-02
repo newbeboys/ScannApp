@@ -44,7 +44,7 @@ import type { ExportDestination } from './lib/exportShare'
 import { mergeDocuments } from './lib/documentMerge'
 import { scanDocument } from './lib/documentScanner'
 import { warpImage, type Quad } from './lib/imageEditor'
-import { onSharedFilesReceived } from './lib/sharedImport'
+import { onSharedFilesReceived, pickFiles, type SharedImportResult } from './lib/sharedImport'
 import { describeOcrOutcome, recognizeDocument, type OcrProgress } from './lib/ocr'
 import {
   boundaryCuts,
@@ -162,6 +162,7 @@ function App() {
     { done: number; total: number } | null
   >(null)
   const [isScanning, setIsScanning] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isMerging, setIsMerging] = useState(false)
@@ -273,39 +274,13 @@ function App() {
     refreshBackupState()
   }, [refreshDocuments, refreshBackupState, status])
 
+  // ingestImportedFiles is defined further down (next to handleAddPages,
+  // which it mirrors), but is safe to reference here: this effect's callback
+  // only runs after the component function has finished executing once, by
+  // which point the const below has already been assigned -- same reasoning
+  // as any other handler a mount effect closes over in this file.
   useEffect(() => {
-    return onSharedFilesReceived(({ images, skippedCount }) => {
-      if (images.length > 0) {
-        if (pendingPagesRef.current) {
-          // Mid-review already: same as handleAddPages -- append only. The new
-          // pages' indices sit after every page already in the list.
-          const startIndex = pendingPagesRef.current.length
-          setPendingPages((existing) => [...(existing ?? []), ...images])
-          setStraightenQueue((queue) => [...queue, ...images.map((_, i) => startIndex + i)])
-        } else {
-          // Nothing in progress: same as handleStartScan -- a fresh review
-          // session. exitSplit() is called *first*, not last: it clears
-          // straightenQueue too (see its own comment), and calling it after
-          // setStraightenQueue below would silently wipe the queue this branch
-          // is trying to fill — React applies same-tick setState calls for one
-          // variable in the order they were made, and exitSplit's own call
-          // would be the last word on straightenQueue if it ran second.
-          exitSplit()
-          setPendingPages(images)
-          setStraightenQueue(images.map((_, i) => i))
-          setCurrentPage(0)
-          setReviewPreview(null)
-        }
-      }
-
-      if (skippedCount > 0) {
-        setToast(
-          images.length > 0
-            ? 'Sebagian file tidak bisa diimpor.'
-            : 'Tidak ada file yang bisa diimpor.',
-        )
-      }
-    })
+    return onSharedFilesReceived(ingestImportedFiles)
   }, [])
 
   useEffect(() => {
@@ -397,6 +372,63 @@ function App() {
     const pages = await runScanner()
     if (!pages) return
     setPendingPages((existing) => [...(existing ?? []), ...pages])
+  }
+
+  /**
+   * Feeds picked/shared images into the pending-pages review flow, and
+   * surfaces a toast if some of them could not be converted. Shared by the
+   * passive share listener above and handleImportFiles below -- both hand it
+   * exactly what the native side already agreed on (SharedImportResult), so
+   * neither path duplicates this branching (spec §3).
+   */
+  const ingestImportedFiles = ({ images, skippedCount }: SharedImportResult) => {
+    if (images.length > 0) {
+      if (pendingPagesRef.current) {
+        // Mid-review already: same as handleAddPages -- append only. The new
+        // pages' indices sit after every page already in the list.
+        const startIndex = pendingPagesRef.current.length
+        setPendingPages((existing) => [...(existing ?? []), ...images])
+        setStraightenQueue((queue) => [...queue, ...images.map((_, i) => startIndex + i)])
+      } else {
+        // Nothing in progress: same as handleStartScan -- a fresh review
+        // session. exitSplit() is called *first*, not last: it clears
+        // straightenQueue too (see its own comment), and calling it after
+        // setStraightenQueue below would silently wipe the queue this branch
+        // is trying to fill — React applies same-tick setState calls for one
+        // variable in the order they were made, and exitSplit's own call
+        // would be the last word on straightenQueue if it ran second.
+        exitSplit()
+        setPendingPages(images)
+        setStraightenQueue(images.map((_, i) => i))
+        setCurrentPage(0)
+        setReviewPreview(null)
+      }
+    }
+
+    if (skippedCount > 0) {
+      setToast(
+        images.length > 0
+          ? 'Sebagian file tidak bisa diimpor.'
+          : 'Tidak ada file yang bisa diimpor.',
+      )
+    }
+  }
+
+  const handleImportFiles = async () => {
+    setIsImporting(true)
+    try {
+      const result = await pickFiles()
+      ingestImportedFiles(result)
+    } catch {
+      // A phone with no document provider at all answers ACTION_OPEN_DOCUMENT
+      // with ActivityNotFoundException, which reaches us as a rejection. Left
+      // uncaught it is an unhandled rejection and a button that appears to do
+      // nothing -- every other native call in this file says something instead
+      // (caught in code review, round 1).
+      setToast('Tidak bisa membuka pemilih file.')
+    } finally {
+      setIsImporting(false)
+    }
   }
 
   const handleRemovePage = (index: number) => {
@@ -1389,6 +1421,8 @@ function App() {
             onBatchExport={() => setBatchOpen(true)}
             onBatchDelete={handleBatchDelete}
             onNotice={setToast}
+            onImportFiles={handleImportFiles}
+            isImporting={isImporting}
           />
         )}
         {tab === 'settings' && (

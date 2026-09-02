@@ -94,6 +94,26 @@ body.scroll-locked .app__body {
   border: 1px solid var(--chip-border);
 }
 
+.app-header__icon-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  background: none;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--fg-dim);
+}
+
+.app-header__icon-btn:active {
+  background: var(--chip);
+}
+
+.app-header__icon-btn:disabled {
+  opacity: 0.6;
+}
+
 .flow-header {
   display: flex;
   align-items: center;
@@ -338,6 +358,52 @@ body.scroll-locked .app__body {
 .doc-tile p {
   font-size: 12px;
   color: var(--fg-dim);
+}
+
+/* ---------- document search (documents tab) ---------- */
+
+.search-field {
+  position: relative;
+  display: block;
+}
+
+.search-field__icon {
+  position: absolute;
+  top: 50%;
+  left: 15px;
+  transform: translateY(-50%);
+  color: var(--fg-dim);
+  pointer-events: none;
+}
+
+/*
+  The border, font and focus ring come from `.field__input` (auth.css) via
+  the second class on the element -- only the pill shape (a search bar reads
+  differently from a labelled form field), the icon's padding, and the
+  search-input browser reset are specific to this screen. The clear button
+  reuses `.field__reveal` the same way, for the same reason.
+*/
+.search-field .field__input {
+  height: 46px;
+  padding: 0 42px;
+  border-radius: 23px;
+  background: var(--chip);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Chrome/WebView draws a default clear "x" on type=search; ours replaces it. */
+.search-field .field__input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/*
+  `.field__reveal:active` presses to `--chip` (auth.css), which is this
+  input's own resting background here -- without this override the clear
+  button would give no visible feedback on tap.
+*/
+.search-field .field__reveal:active {
+  background: var(--surface);
 }
 
 /* ---------- document list (documents tab) ---------- */

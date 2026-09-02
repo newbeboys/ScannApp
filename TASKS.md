@@ -1156,8 +1156,8 @@ Dites & dinyatakan berhasil oleh Boss Ali di HP fisik, 1 September 2026 — bran
 
 ## Fase 9 — QA & Hardening
 
-- [ ] Uji limit merge dokumen Basic (20 halaman) & quota storage R2 per tier (100MB/500MB/1GB) sesuai angka final
-- [ ] Uji job pembersihan object R2 yatim (tidak punya referensi di `scan_documents`)
+- [x] Uji limit merge dokumen Basic (20 halaman) & quota storage R2 per tier (100MB/500MB/1GB) sesuai angka final — sisi kode sudah dituntaskan 1 September 2026: `checkMergeAllowed`/angka 20 halaman sudah lama teruji, tapi titik penegakannya sendiri (`mergeDocuments`, yang benar-benar melempar error & tidak pernah menyentuh storage saat melebihi limit) belum punya test — ditambahkan di `documentMerge.test.ts`. Sisi quota R2 (`fitsInQuota`/`quotaBytesFor`/`QUOTA_BYTES`) sudah lama teruji pas dengan angka final, dan wiring-nya di `confirm-upload/index.ts` ditinjau ulang: ukuran diukur nyata dari R2 (bukan klaim client), bukan mock. **Uji hidup di project Supabase+R2 sungguhan selesai 1-2 September 2026**: `storage_usage.bytes_used` akun `demofimance@gmail.com` diset persis ke `quota_bytes` (100 MB, akun Basic) untuk memaksa kondisi penuh, lalu Boss Ali mengonfirmasi upload berikutnya ditolak 409 di HP fisik. Setelahnya `bytes_used` dikembalikan ke 666.870 byte — jumlah asli dari 2 dokumen yang sungguh tercadang (`Test 1` 326.679 + `Sof agent` 340.191) — lewat `execute_sql` langsung, bukan re-upload; diverifikasi dengan `SELECT` sebelum dan sesudah.
+- [~] Uji job pembersihan object R2 yatim (tidak punya referensi di `scan_documents`) — job-nya sendiri **belum pernah ada** sampai 1 September 2026 (baris ini mewarisi kalimat dari `BACKEND_API_DESIGN.md` yang cuma catatan kaki, referensinya sendiri sudah salah alamat). Dibangun lewat brainstorm→spec→plan penuh (lihat `docs/superpowers/specs/2026-09-01-fase9-cleanup-orphan-r2-design.md`): Edge Function baru `cleanup-orphan-r2`, dipicu `pg_cron`→`pg_net` harian jam 03:00, ditutup lewat header `x-cron-secret` vs Edge Function Secret `CRON_SECRET`. Margin aman 24 jam sebelum object dianggap yatim, katup pengaman menolak hapus kalau kandidat >50% dari total (dengan lantai minimum 20 kandidat supaya bucket kecil tidak macet permanen). **Sudah dites hidup di produksi** (bukan simulasi) 1 September 2026: dipanggil manual dengan secret benar → 200, menemukan 1 kandidat yatim nyata (192 byte) dalam mode `LOG_ONLY`, tidak menghapus apa pun; dipanggil dengan secret salah → 401. Alasan `[~]` bukan `[x]`: job jalan dalam mode `LOG_ONLY` sampai Boss Ali meninjau beberapa hari log kandidat lewat Supabase Dashboard, baru menyalakan mode hapus nyata lewat `CLEANUP_ORPHAN_R2_DRY_RUN = "false"`.
 - [~] Security review RLS policy (pastikan tidak ada cross-user data leak) — dimajukan sebagian, lihat di bawah
 - [ ] **Anti-abuse referral device-level** — Fase 8 v1 cuma menegakkan email unik + `referred_by`/`first_scan_completed_at` dibekukan RLS. Satu orang masih bisa bikin banyak akun email untuk refer diri sendiri berkali-kali, dan `first_scan_completed_at` sendiri adalah laporan-sendiri client (bukan bukti scan tervalidasi server) — dampaknya kecil (maksimal 1 hari Pro per akun, sekali). Butuh plugin native baru (`@capacitor/device` atau setara), known gap yang disengaja — lihat `docs/superpowers/specs/2026-09-01-fase8-referral-design.md` Bagian 2 & 7.
 - [ ] Nyalakan **Leaked Password Protection** di Supabase (Authentication → Policies) — cek password terhadap HaveIBeenPwned, satu-satunya temuan advisor yang tersisa per 26 Juli 2026
@@ -1173,6 +1173,115 @@ Ditemukan saat code-review Fase 5, diperbaiki atas permintaan Boss Ali sebelum l
 - [x] **`pro_plan` tidak dibekukan RLS** — user Pro Bulanan bisa menaikkan diri ke kuota 1GB tanpa membayar (migration `20260821211045`).
 
 Yang **belum** dicakup dan tetap jadi tugas Fase 9: telaah menyeluruh seluruh policy (bukan cuma tiga temuan di atas), termasuk `profiles`, `referral_events`, dan `referral_milestones`, plus uji cross-user beneran dengan dua akun.
+
+## Pencarian Dokumen — 2 September 2026
+
+Diminta Boss Ali setelah seluruh fase & test selesai. Bagian pertama dari dua permintaan (referensi gambar 1 & 2 dari file manager Android); impor file dari folder/Google Drive dibahas terpisah sebagai subsistem baru — lihat brainstorm yang menyusul di bawah.
+
+- [x] Kolom pencarian di tab Dokumen (`DocumentsScreen.tsx`), selalu tampil di bawah header selama tidak sedang di mode pilih — cocok sebagian & tanpa peduli huruf besar/kecil terhadap judul, lewat `filterEntriesByQuery()` baru di `src/lib/documentSearch.ts`
+- [x] Ikut mencakup dokumen berstatus "Di cloud" (belum dipulihkan ke HP) lewat judul cadangannya, bukan cuma dokumen yang sudah ada page file-nya di HP
+- [x] Disembunyikan (bukan disaring) saat mode pilih aktif — menghindari ambiguitas "Semua" berarti semua dokumen atau cuma yang lolos filter; banner cloud & tombol "Gabungkan Dokumen" tetap menghitung dari daftar penuh supaya tidak berkedip hilang saat mengetik
+- [x] Pesan kosong baru saat pencarian tidak menemukan apa pun, beda dari pesan "Belum ada dokumen tersimpan" yang sudah ada untuk kondisi benar-benar kosong
+- [x] Gaya kolom (bentuk pil, ikon di kiri, tombol × di kanan saat ada teks) memakai ulang `.field__input`/`.field__reveal` yang sudah ada di `auth.css`, bukan menduplikasi — temuan code-review sebelum commit
+- [x] Test bertambah: `documentSearch.test.ts` (suite node, 6 test) + 5 test interaksi baru di `DocumentsScreen.browser.test.tsx` (total suite: 860 node + 158 browser)
+
+Satu temuan code-review lain ditutup sebelum commit: fixture test baru sempat memakai `schemaVersion: 2` alih-alih `6` (`CURRENT_SCHEMA_VERSION` saat ini) — salah tempel dari pola lama, tidak tertangkap `tsc` karena `tsconfig.test.json` mewarisi `exclude` berkas test dari `tsconfig.app.json` (celah pra-ada, di luar cakupan perubahan ini, dicatat di sini supaya tidak hilang).
+
+## Impor File Aktif (Gambar/PDF) di Menu Dokumen — 2 September 2026
+
+Bagian kedua dari dua permintaan Boss Ali di menu Dokumen (bagian pertama:
+pencarian nama dokumen, lihat section di atas). Desain:
+`docs/superpowers/specs/2026-09-02-dokumen-impor-file-design.md`, plan:
+`docs/superpowers/plans/2026-09-02-dokumen-impor-file.md`.
+
+- [x] **`SharedImportPlugin.java` diperluas, bukan plugin baru.** Logika
+      konversi URI→JPEG yang sudah ada (salin gambar / rasterisasi PDF lewat
+      `PdfRenderer`) diekstrak jadi `convertUris()`, dipakai bersama oleh
+      jalur pasif (share sheet) yang sudah ada **dan** jalur aktif baru
+      (`pickFiles()` via `Intent.ACTION_OPEN_DOCUMENT` +
+      `startActivityForResult`/`@ActivityCallback`)
+- [x] **Tidak ada izin runtime baru** — SAF memberi akses baca per-URI lewat
+      grant sistem, bukan `READ_EXTERNAL_STORAGE`
+- [x] **Boleh pilih banyak file sekaligus** (`EXTRA_ALLOW_MULTIPLE`), dan
+      picker sistem Android otomatis mengagregasi folder lokal + provider
+      cloud terpasang (Google Drive, dst) tanpa integrasi API per provider
+- [x] **Membatalkan picker bukan error** — resolve kosong, tidak ada toast,
+      sama seperti membatalkan alur lain di aplikasi ini
+- [x] **`App.tsx`: `ingestImportedFiles()` baru** memakai ulang persis
+      logika "gambar masuk → antre tinjau" yang sebelumnya cuma dipakai
+      listener share pasif — sekarang dipakai bersama oleh listener itu dan
+      tombol impor baru, tidak ada logika yang digandakan
+- [x] **Tombol ikon baru di header layar Dokumen**, sebelum tombol "Pilih",
+      nonaktif selama proses impor berjalan
+- [x] **Tier: semua tier, tanpa gerbang** — pola yang sama dengan
+      reorder/filter/PNG/anotasi/pisah/share-pasif
+- [x] **DOCX sengaja tidak dicakup** — dipisah jadi sub-proyek tersendiri,
+      mewarisi keputusan 26 Agustus 2026
+- [x] **Test bertambah: 6 di `sharedImport.test.ts` (node) + 3 di
+      `DocumentsScreen.browser.test.tsx` (browser)** — total suite kini
+      **866 node + 161 browser**, semuanya lolos
+- [x] **Build native sungguhan lolos**, bukan cuma typecheck:
+      `gradlew.bat assembleDebug` → `BUILD SUCCESSFUL`
+
+**Empat temuan code-review ditutup sebelum commit terakhir:**
+
+1. **Picker memicu App Open ad.** `pickFiles()` tidak memanggil
+   `resumeTracker.leaveForOwnFlow()`, padahal picker itu activity terpisah
+   persis seperti pemindai/share sheet/pembelian — user Basic yang menelusuri
+   Google Drive lebih dari 5 detik akan disambut iklan layar penuh saat
+   kembali. Ini yang dilarang CLAUDE.md Bagian 6, dan `appOpenGate.ts`
+   menyebut "the file picker" di kontraknya sendiri. Ditutup + 2 test, yang
+   dibuktikan menggigit (perbaikannya dilepas → test merah).
+2. **`handleImportFiles` tanpa `catch`.** HP tanpa document provider menjawab
+   `ACTION_OPEN_DOCUMENT` dengan `ActivityNotFoundException`, yang sampai ke
+   JS sebagai rejection — tanpa `catch` jadi unhandled rejection dan tombol
+   yang seolah tidak bereaksi. Sekarang bertoast, sama seperti panggilan
+   native lain di file itu.
+3. **Ikon impor berbentuk ikon ekspor.** `ImportIcon` awalnya memakai panah
+   keluar dari baki — struktur yang sama persis dengan `ExportIcon`. Diganti
+   folder + panah masuk; sengaja **bukan** bentuk baki, karena `ExportIcon`
+   (Ekspor PDF) dan `DownloadIcon` (pulihkan baris cloud) dua-duanya juga
+   tampil di layar Dokumen.
+4. **Payload JS digandakan di sisi Java** antara `handleOnNewIntent` dan
+   `handlePickResult`, padahal perubahan ini justru mengekstrak `convertUris`
+   untuk alasan yang sama — diekstrak jadi `toPayload()`.
+
+Temuan kelima (**guard `Array.isArray` di `pickFiles`**) **ditolak, bukan
+dilewat**: JS dan Java ikut satu APK yang sama, jadi bentuk payload tidak bisa
+melenceng antar versi seperti kontrak jaringan, dan setelah temuan #2 ditutup,
+payload rusak pun berakhir sebagai toast, bukan crash. Guard tanpa jalan masuk
+cuma menambah cabang yang tidak bisa diuji.
+
+**Security-review:** tidak ada temuan. Yang diperiksa khusus — nama berkas
+tujuan (`shared-<nanoTime>[-<index>].jpg`) diturunkan **sepenuhnya** dari
+`System.nanoTime()` dan indeks loop; nama asli berkas dari provider tidak
+pernah dibaca (tidak ada query `OpenableColumns` sama sekali), jadi tidak ada
+jalan path traversal. Tujuan tulisnya `getCacheDir()` (cache privat aplikasi,
+bukan penyimpanan eksternal), dan URI tanpa grant membuat `openInputStream`
+melempar `SecurityException` yang sudah tertangkap batch-catch — jadi
+dilewati sebagai `skippedCount`, bukan crash atau eskalasi hak.
+
+**Catatan untuk plan berikutnya:** `npx tsc --noEmit` yang tertulis di plan
+ini **tidak memeriksa apa pun** — `tsconfig.json` root memakai project
+references dengan `"files": []`, jadi typecheck yang sebenarnya adalah
+`npx tsc -b` (yang dipakai `npm run build`). Perbedaan ini sempat menyembunyikan
+prop yang belum diteruskan di `App.tsx`.
+
+**Belum diverifikasi di device fisik** (butuh Boss Ali):
+
+- [ ] Ketuk tombol impor → picker sistem Android terbuka, menampilkan folder
+      lokal **dan** akun Google Drive yang terpasang di HP
+- [ ] Pilih beberapa gambar sekaligus → semuanya masuk ke alur tinjau yang
+      sama seperti hasil scan
+- [ ] Pilih satu PDF pihak ketiga (bukan hasil ScannApp) → dirasterisasi
+      jadi beberapa halaman, masuk ke alur tinjau
+- [ ] Batalkan picker (tombol kembali/back gesture) → tidak ada toast, tidak
+      ada perubahan pada layar Dokumen
+- [ ] Impor saat sedang di tengah sesi tinjau (habis scan, belum simpan) →
+      halaman baru nambah di akhir, bukan sesi baru
+- [ ] **Akun Basic: pilih file lama-lama di Google Drive (>5 detik), lalu
+      kembali → TIDAK boleh ada App Open ad.** Ini temuan review #1; kalau
+      iklan tetap muncul, penanda alur internalnya tidak bekerja
 
 ---
 

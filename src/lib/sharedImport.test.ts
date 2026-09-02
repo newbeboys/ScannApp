@@ -9,6 +9,12 @@ const addListenerMock = vi.fn(
     return Promise.resolve({ remove: removeMock })
   },
 )
+const pickFilesMock = vi.fn()
+
+const leaveForOwnFlowMock = vi.fn()
+vi.mock('./ads/appOpenGate', () => ({
+  resumeTracker: { leaveForOwnFlow: () => leaveForOwnFlowMock() },
+}))
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
@@ -20,16 +26,19 @@ vi.mock('@capacitor/core', () => ({
   },
   registerPlugin: () => ({
     addListener: addListenerMock,
+    pickFiles: pickFilesMock,
   }),
 }))
 
-const { onSharedFilesReceived } = await import('./sharedImport')
+const { onSharedFilesReceived, pickFiles } = await import('./sharedImport')
 
 beforeEach(() => {
   isNative = true
   registeredListener = null
   addListenerMock.mockClear()
   removeMock.mockClear()
+  pickFilesMock.mockReset()
+  leaveForOwnFlowMock.mockClear()
 })
 
 describe('onSharedFilesReceived', () => {
@@ -93,5 +102,72 @@ describe('onSharedFilesReceived', () => {
     await Promise.resolve()
     // No assertion beyond "got here": an uncaught rejection here would fail
     // the test file via vitest's unhandled-rejection detection.
+  })
+})
+
+describe('pickFiles', () => {
+  it('converts each picked path so the webview can read it', async () => {
+    pickFilesMock.mockResolvedValue({
+      paths: ['file:///cache/a.jpg', 'file:///cache/b.jpg'],
+      skippedCount: 0,
+    })
+
+    const result = await pickFiles()
+
+    expect(result).toEqual({
+      images: [
+        'https://localhost/_capacitor_file_/cache/a.jpg',
+        'https://localhost/_capacitor_file_/cache/b.jpg',
+      ],
+      skippedCount: 0,
+    })
+  })
+
+  it('passes skippedCount through untouched', async () => {
+    pickFilesMock.mockResolvedValue({ paths: ['file:///cache/a.jpg'], skippedCount: 2 })
+
+    const result = await pickFiles()
+
+    expect(result.skippedCount).toBe(2)
+  })
+
+  it('resolves to an empty result when the picker is cancelled, not a rejection', async () => {
+    pickFilesMock.mockResolvedValue({ paths: [], skippedCount: 0 })
+
+    const result = await pickFiles()
+
+    expect(result).toEqual({ images: [], skippedCount: 0 })
+  })
+
+  it('never calls the native plugin on web, resolving to an empty result', async () => {
+    isNative = false
+
+    const result = await pickFiles()
+
+    expect(pickFilesMock).not.toHaveBeenCalled()
+    expect(result).toEqual({ images: [], skippedCount: 0 })
+  })
+
+  /**
+   * The picker is its own activity, so returning from it looks exactly like
+   * the user coming back from another app. Unmarked, a Basic user who browses
+   * Drive for more than five seconds is met with an App Open ad on return --
+   * the thing CLAUDE.md Bagian 6 forbids, and which appOpenGate's own contract
+   * names the file picker for. Caught in code review, round 1.
+   */
+  it('marks the picker as our own flow, so returning earns no App Open ad', async () => {
+    pickFilesMock.mockResolvedValue({ paths: [], skippedCount: 0 })
+
+    await pickFiles()
+
+    expect(leaveForOwnFlowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not mark an excursion on web, where nothing is ever opened', async () => {
+    isNative = false
+
+    await pickFiles()
+
+    expect(leaveForOwnFlowMock).not.toHaveBeenCalled()
   })
 })

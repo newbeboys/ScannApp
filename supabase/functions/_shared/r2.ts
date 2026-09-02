@@ -1,4 +1,5 @@
 import { AwsClient } from 'npm:aws4fetch@1.0.20'
+import { parseListObjectsXml, type ListObjectsPage } from './r2ListParser.ts'
 
 /** Short-lived on purpose: a leaked link stops working within minutes. */
 export const SIGNED_URL_TTL_SECONDS = 600
@@ -82,4 +83,27 @@ export async function deleteObject(objectKey: string): Promise<void> {
   if (!response.ok && response.status !== 404) {
     throw new Error(`Gagal menghapus object R2: ${response.status}`)
   }
+}
+
+/**
+ * One page of `ListObjectsV2` under `prefix`. The caller drives pagination —
+ * pass back `nextContinuationToken` while `isTruncated` is true.
+ */
+export async function listObjects(
+  prefix: string,
+  continuationToken?: string,
+): Promise<ListObjectsPage> {
+  const { client, base } = config()
+
+  const url = new URL(`${base}/`)
+  url.searchParams.set('list-type', '2')
+  url.searchParams.set('prefix', prefix)
+  if (continuationToken) url.searchParams.set('continuation-token', continuationToken)
+
+  const response = await client.fetch(url.toString(), { method: 'GET' })
+  if (!response.ok) {
+    throw new Error(`Gagal me-list object R2: ${response.status}`)
+  }
+
+  return parseListObjectsXml(await response.text())
 }

@@ -1,7 +1,14 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
+import { resumeTracker } from './ads/appOpenGate'
 
 /** Shape of the event the native SharedImportPlugin sends. See spec §6 for what skippedCount covers. */
 interface SharedFilesReceivedEvent {
+  paths: string[]
+  skippedCount: number
+}
+
+/** Shape of what the native plugin's pickFiles() call resolves to -- same shape as the event above. */
+interface PickFilesResult {
   paths: string[]
   skippedCount: number
 }
@@ -11,6 +18,7 @@ interface SharedImportNative {
     eventName: 'sharedFilesReceived',
     listener: (event: SharedFilesReceivedEvent) => void,
   ): Promise<{ remove: () => Promise<void> }>
+  pickFiles(): Promise<PickFilesResult>
 }
 
 // Android-only, same as documentScanner.ts states in its own comment: there
@@ -62,5 +70,38 @@ export function onSharedFilesReceived(
     // becomes a second unhandled rejection the moment unsubscribe runs
     // (React StrictMode's mount/unmount/remount in dev), caught in review.
     void handlePromise.then((handle) => handle.remove()).catch(() => {})
+  }
+}
+
+/**
+ * Opens the system file picker (Storage Access Framework), letting the user
+ * pick images and/or PDFs from local folders or any cloud provider
+ * registered as a document provider (Google Drive, Dropbox, etc). No-ops on
+ * web/iOS, resolving to an empty result rather than throwing -- picking a
+ * file is not possible there, but the button that calls this should not have
+ * to special-case the platform itself.
+ *
+ * Resolves once, when the user finishes with the picker -- including when
+ * they cancel it, which resolves to an empty result rather than rejecting
+ * (spec §5).
+ */
+export async function pickFiles(): Promise<SharedImportResult> {
+  if (!Capacitor.isNativePlatform()) {
+    return { images: [], skippedCount: 0 }
+  }
+
+  // The picker is a separate activity, exactly like the scanner and the share
+  // sheet -- the WebView sees the app backgrounded and come back, and without
+  // this mark a Basic user who spends more than five seconds browsing Drive is
+  // met with a full-screen App Open ad on return. appOpenGate's own contract
+  // names the file picker by name; marked right before the call that departs,
+  // same as documentScanner.ts (the 10s grace window covers a call that fails
+  // and never leaves).
+  resumeTracker.leaveForOwnFlow()
+
+  const { paths, skippedCount } = await SharedImportNative.pickFiles()
+  return {
+    images: paths.map((path) => Capacitor.convertFileSrc(path)),
+    skippedCount,
   }
 }

@@ -1,5 +1,16 @@
-import { useEffect, useRef } from 'react'
-import { CheckIcon, CloudIcon, DownloadIcon, ExportIcon, MergeIcon, ScanIcon, TrashIcon } from '../components/Icons'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  CheckIcon,
+  CloseIcon,
+  CloudIcon,
+  DownloadIcon,
+  ExportIcon,
+  ImportIcon,
+  MergeIcon,
+  ScanIcon,
+  SearchIcon,
+  TrashIcon,
+} from '../components/Icons'
 import { PageImage } from '../components/PageImage'
 import type { DocumentEntry } from '../lib/documentEntries'
 import {
@@ -9,6 +20,7 @@ import {
   LONG_PRESS_MS,
   summarizeSelection,
 } from '../lib/documentSelection'
+import { filterEntriesByQuery } from '../lib/documentSearch'
 import { formatBytes } from '../lib/formatBytes'
 import { resolvePage } from '../lib/scanStorage'
 import type { Tier } from '../lib/tier'
@@ -43,6 +55,10 @@ interface DocumentsScreenProps {
   onBatchExport: () => void
   onBatchDelete: () => void
   onNotice: (message: string) => void
+  /** Opens the system file picker (folders, Google Drive, etc). */
+  onImportFiles: () => void
+  /** True while the picker/conversion from onImportFiles is running. */
+  isImporting: boolean
 }
 
 const dateFormatter = new Intl.DateTimeFormat('id-ID', {
@@ -71,10 +87,29 @@ export function DocumentsScreen({
   onBatchExport,
   onBatchDelete,
   onNotice,
+  onImportFiles,
+  isImporting,
 }: DocumentsScreenProps) {
   const localCount = entries.filter((entry) => entry.kind === 'local').length
   const cloudCount = entries.length - localCount
   const busy = isRestoringAll || restoringId !== null
+
+  /**
+   * Search only ever narrows the rendered rows -- the cloud banner and the
+   * merge button above the list keep counting from `entries`, not this, so
+   * typing a query never makes "Gabungkan Dokumen" flicker away because the
+   * filtered local count momentarily dropped below two.
+   *
+   * Hidden entirely in select mode rather than kept and filtered: an active
+   * search narrowing what "Semua" ticks while the header no longer shows the
+   * field that caused it would be confusing, so search and select simply
+   * don't overlap.
+   */
+  const [searchQuery, setSearchQuery] = useState('')
+  const visibleEntries = useMemo(
+    () => (selectMode ? entries : filterEntriesByQuery(entries, searchQuery)),
+    [entries, searchQuery, selectMode],
+  )
 
   const pressTimer = useRef<number | null>(null)
   const pressOrigin = useRef<{ x: number; y: number } | null>(null)
@@ -210,6 +245,15 @@ export function DocumentsScreen({
             <h1>ScannApp</h1>
             <p>Semua dokumen tersimpan</p>
           </div>
+          <button
+            type="button"
+            className="app-header__icon-btn"
+            onClick={onImportFiles}
+            disabled={isImporting}
+            aria-label="Impor file"
+          >
+            <ImportIcon size={20} />
+          </button>
           {entries.some(isSelectable) && (
             <button type="button" className="link-button" onClick={() => onEnterSelect('')}>
               Pilih
@@ -217,6 +261,32 @@ export function DocumentsScreen({
           )}
           <span className="app-header__tier">{tier === 'pro' ? 'Pro' : 'Basic'}</span>
         </header>
+      )}
+
+      {/* Hidden in select mode -- see the comment on `visibleEntries` above. */}
+      {!selectMode && entries.length > 0 && (
+        <div className="search-field">
+          <SearchIcon size={18} className="search-field__icon" />
+          <input
+            type="search"
+            inputMode="search"
+            className="field__input"
+            placeholder="Cari nama dokumen"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            aria-label="Cari nama dokumen"
+          />
+          {searchQuery !== '' && (
+            <button
+              type="button"
+              className="field__reveal"
+              onClick={() => setSearchQuery('')}
+              aria-label="Bersihkan pencarian"
+            >
+              <CloseIcon size={14} />
+            </button>
+          )}
+        </div>
       )}
 
       {/*
@@ -258,9 +328,11 @@ export function DocumentsScreen({
 
       {entries.length === 0 ? (
         <p className="empty-note">Belum ada dokumen tersimpan.</p>
+      ) : visibleEntries.length === 0 ? (
+        <p className="empty-note">Tidak ada dokumen yang cocok dengan &quot;{searchQuery.trim()}&quot;.</p>
       ) : (
         <ul className="doc-list">
-          {entries.map((entry) =>
+          {visibleEntries.map((entry) =>
             entry.kind === 'local' ? (
               <li key={entry.id} className="doc-row">
                 <button

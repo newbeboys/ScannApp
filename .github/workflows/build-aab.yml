@@ -1,4 +1,4 @@
-name: Build Signed AAB
+name: Build Signed AAB & APK
 
 on:
   workflow_dispatch:
@@ -55,17 +55,40 @@ jobs:
         run: |
           echo "${{ secrets.KEYSTOREBASE64 }}" | base64 -d > android/app/scannapp.jks
 
-      - name: Build signed AAB
+      - name: Build signed AAB + APK
+        # bundleRelease (AAB, untuk Play Console) dan assembleRelease (APK,
+        # untuk dites langsung di HP) dijalankan dalam SATU invocation Gradle
+        # yang sama, dari buildType `release` yang sama persis di
+        # android/app/build.gradle -- signing config, kode web hasil `npm run
+        # build` di atas (dengan VITE_ADMOB_* asli), dan proguard rules semua
+        # identik untuk keduanya. Ini yang menjamin APK yang dites di HP dan
+        # AAB yang naik ke Play Console tidak pernah berbeda isi -- bukan dua
+        # build terpisah yang kebetulan dari commit yang sama, tapi literally
+        # satu kompilasi yang dikemas dua format.
         working-directory: android
         run: |
-          ./gradlew bundleRelease \
+          ./gradlew bundleRelease assembleRelease \
             -PSCANNAPP_KEYSTORE_PATH=scannapp.jks \
             -PSCANNAPP_KEYSTORE_PASSWORD=${{ secrets.KEYSTOREPASSWORD }} \
             -PSCANNAPP_KEY_ALIAS=${{ secrets.KEYALIAS }} \
             -PSCANNAPP_KEY_PASSWORD=${{ secrets.KEYPASSWORD }}
 
       - name: Upload AAB artifact
+        # Ini yang diunggah ke Google Play Console.
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Upload APK artifact
+        # Ini yang didownload untuk dites langsung di HP -- signed dengan
+        # keystore rilis yang sama (bukan debug keystore), jadi kalau pernah
+        # menginstal APK debug dari workflow CI di HP yang sama, copot dulu:
+        # keystore beda berarti signature beda, dan Android menolak
+        # menimpa APK lama dengan yang signature-nya tidak cocok.
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error

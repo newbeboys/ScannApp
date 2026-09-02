@@ -6,11 +6,18 @@ interface SharedFilesReceivedEvent {
   skippedCount: number
 }
 
+/** Shape of what the native plugin's pickFiles() call resolves to -- same shape as the event above. */
+interface PickFilesResult {
+  paths: string[]
+  skippedCount: number
+}
+
 interface SharedImportNative {
   addListener(
     eventName: 'sharedFilesReceived',
     listener: (event: SharedFilesReceivedEvent) => void,
   ): Promise<{ remove: () => Promise<void> }>
+  pickFiles(): Promise<PickFilesResult>
 }
 
 // Android-only, same as documentScanner.ts states in its own comment: there
@@ -62,5 +69,29 @@ export function onSharedFilesReceived(
     // becomes a second unhandled rejection the moment unsubscribe runs
     // (React StrictMode's mount/unmount/remount in dev), caught in review.
     void handlePromise.then((handle) => handle.remove()).catch(() => {})
+  }
+}
+
+/**
+ * Opens the system file picker (Storage Access Framework), letting the user
+ * pick images and/or PDFs from local folders or any cloud provider
+ * registered as a document provider (Google Drive, Dropbox, etc). No-ops on
+ * web/iOS, resolving to an empty result rather than throwing -- picking a
+ * file is not possible there, but the button that calls this should not have
+ * to special-case the platform itself.
+ *
+ * Resolves once, when the user finishes with the picker -- including when
+ * they cancel it, which resolves to an empty result rather than rejecting
+ * (spec §5).
+ */
+export async function pickFiles(): Promise<SharedImportResult> {
+  if (!Capacitor.isNativePlatform()) {
+    return { images: [], skippedCount: 0 }
+  }
+
+  const { paths, skippedCount } = await SharedImportNative.pickFiles()
+  return {
+    images: paths.map((path) => Capacitor.convertFileSrc(path)),
+    skippedCount,
   }
 }

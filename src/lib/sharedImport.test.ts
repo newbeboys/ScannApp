@@ -9,6 +9,7 @@ const addListenerMock = vi.fn(
     return Promise.resolve({ remove: removeMock })
   },
 )
+const pickFilesMock = vi.fn()
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
@@ -20,16 +21,18 @@ vi.mock('@capacitor/core', () => ({
   },
   registerPlugin: () => ({
     addListener: addListenerMock,
+    pickFiles: pickFilesMock,
   }),
 }))
 
-const { onSharedFilesReceived } = await import('./sharedImport')
+const { onSharedFilesReceived, pickFiles } = await import('./sharedImport')
 
 beforeEach(() => {
   isNative = true
   registeredListener = null
   addListenerMock.mockClear()
   removeMock.mockClear()
+  pickFilesMock.mockReset()
 })
 
 describe('onSharedFilesReceived', () => {
@@ -93,5 +96,49 @@ describe('onSharedFilesReceived', () => {
     await Promise.resolve()
     // No assertion beyond "got here": an uncaught rejection here would fail
     // the test file via vitest's unhandled-rejection detection.
+  })
+})
+
+describe('pickFiles', () => {
+  it('converts each picked path so the webview can read it', async () => {
+    pickFilesMock.mockResolvedValue({
+      paths: ['file:///cache/a.jpg', 'file:///cache/b.jpg'],
+      skippedCount: 0,
+    })
+
+    const result = await pickFiles()
+
+    expect(result).toEqual({
+      images: [
+        'https://localhost/_capacitor_file_/cache/a.jpg',
+        'https://localhost/_capacitor_file_/cache/b.jpg',
+      ],
+      skippedCount: 0,
+    })
+  })
+
+  it('passes skippedCount through untouched', async () => {
+    pickFilesMock.mockResolvedValue({ paths: ['file:///cache/a.jpg'], skippedCount: 2 })
+
+    const result = await pickFiles()
+
+    expect(result.skippedCount).toBe(2)
+  })
+
+  it('resolves to an empty result when the picker is cancelled, not a rejection', async () => {
+    pickFilesMock.mockResolvedValue({ paths: [], skippedCount: 0 })
+
+    const result = await pickFiles()
+
+    expect(result).toEqual({ images: [], skippedCount: 0 })
+  })
+
+  it('never calls the native plugin on web, resolving to an empty result', async () => {
+    isNative = false
+
+    const result = await pickFiles()
+
+    expect(pickFilesMock).not.toHaveBeenCalled()
+    expect(result).toEqual({ images: [], skippedCount: 0 })
   })
 })

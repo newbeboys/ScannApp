@@ -34,6 +34,22 @@ export interface AuthContextValue {
   signOut: () => Promise<void>
   sendPasswordReset: (email: string) => Promise<void>
   /**
+   * True while a recovery code has been accepted but the new password has not
+   * been saved yet.
+   *
+   * verifyOtp({ type: 'recovery' }) hands back a full, persisted session, so
+   * without this the app cannot tell a half-finished reset apart from an
+   * ordinary sign-in — and would drop the user on Beranda still holding the
+   * old password. Anything that routes on `status` alone must check this first.
+   */
+  recoveryPending: boolean
+  /** Checks the emailed code and opens the recovery session. */
+  verifyRecoveryOtp: (email: string, token: string) => Promise<void>
+  /** Saves the new password, which is what ends the recovery state. */
+  completeRecovery: (password: string) => Promise<void>
+  /** Abandons a half-finished reset: signs out; the old password still stands. */
+  cancelRecovery: () => Promise<void>
+  /**
    * Re-reads the profile from the server.
    *
    * With `untilPro`, keeps retrying for a short while: after a purchase the

@@ -17,6 +17,10 @@ const AUTH_STUB: AuthContextValue = {
   signUp,
   signOut: vi.fn(),
   sendPasswordReset: vi.fn(),
+  recoveryPending: false,
+  verifyRecoveryOtp: vi.fn(),
+  completeRecovery: vi.fn(),
+  cancelRecovery: vi.fn(),
   refreshProfile: vi.fn(),
 }
 

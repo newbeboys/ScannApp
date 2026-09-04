@@ -409,6 +409,49 @@
   cursor: pointer;
 }
 
+/* Kode OTP: 6 digit, dibaca satu per satu — jadi besar, tengah, berjarak. */
+.field__input--otp {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  /* Mengimbangi letter-spacing yang menempel di kanan digit terakhir, supaya
+     angkanya benar-benar terlihat di tengah kotak. */
+  text-indent: 0.4em;
+}
+
+/* Kabar baik (kode terkirim). Sengaja memakai --acc, bukan hijau baru:
+   token warna proyek ini sudah final, lihat CLAUDE.md Bagian 9.2. */
+.auth__notice {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 13px;
+  border: 1px solid var(--acc-edge);
+  background: var(--acc-soft);
+  font-size: 0.87rem;
+  line-height: 1.45;
+  color: var(--acc);
+}
+
+.auth__resend {
+  align-self: center;
+  margin-top: 2px;
+  padding: 10px 4px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--acc);
+  cursor: pointer;
+}
+
+.auth__resend:disabled {
+  color: var(--fg-dim);
+  font-weight: 500;
+  cursor: default;
+}
+
 .auth__error {
   margin: 0;
   padding: 12px 14px;

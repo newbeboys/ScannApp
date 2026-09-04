@@ -55,3 +55,39 @@ describe('translateAuthError', () => {
     expect(translateAuthError(null)).toBe('Terjadi kesalahan. Coba lagi sebentar lagi.')
   })
 })
+
+describe('translateAuthError — kode OTP pemulihan', () => {
+  it('covers every wording Supabase uses for a wrong or stale code', () => {
+    for (const raw of [
+      'Token has expired or is invalid',
+      'Invalid token',
+      'Email link is invalid or has expired',
+    ]) {
+      expect(translateAuthError({ message: raw })).toContain('Kode verifikasi')
+    }
+  })
+
+  it('recognises the otp_expired error code, not just its prose form', () => {
+    expect(translateAuthError({ message: 'otp_expired' })).toContain('kedaluwarsa')
+  })
+
+  it('still reads the email address as invalid, not as a bad code', () => {
+    expect(translateAuthError({ message: 'Unable to validate email address' })).toBe(
+      'Format email tidak valid.',
+    )
+  })
+
+  it('explains a reused password instead of falling back to the generic message', () => {
+    expect(
+      translateAuthError({ message: 'New password should be different from the old password.' }),
+    ).toContain('berbeda dari password lama')
+  })
+
+  it('tells the user to start over when the recovery session is gone', () => {
+    expect(translateAuthError({ message: 'Auth session missing!' })).toContain('Lupa password')
+  })
+
+  it('keeps the resend rate limit distinct from a bad code', () => {
+    expect(translateAuthError({ message: 'Email rate limit exceeded' })).toContain('Terlalu sering')
+  })
+})

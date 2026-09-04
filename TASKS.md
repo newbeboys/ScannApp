@@ -1321,6 +1321,77 @@ Suite bertambah jadi 874 node + 161 browser test, semuanya lolos.
 
 ---
 
+## Lupa Password dengan Kode OTP — 5 September 2026
+
+Auth ScannApp dikonfigurasi mengirim **kode 6 digit** untuk alur recovery
+(template email memakai `{{ .Token }}`, bukan magic link), tapi layar "Lupa
+password" lama masih menjanjikan "tautan" dan berhenti di situ — tidak ada
+layar yang menerima kodenya. Dua layar sekarang menutup alurnya.
+
+- [x] **Layar 1 — Lupa password** (`ForgotPasswordScreen`): satu field email,
+      `resetPasswordForEmail()`, lalu pindah ke layar verifikasi sambil
+      membawa alamatnya. Tombolnya "Kirim kode", bukan lagi "Kirim tautan".
+- [x] **Layar 2 — Verifikasi & password baru** (`ResetPasswordScreen`): field
+      OTP 6 digit (non-digit disaring saat diketik/ditempel),
+      `verifyOtp({ type: 'recovery' })`, lalu field password baru +
+      konfirmasi yang **baru muncul setelah kodenya diterima**;
+      `updateUser({ password })` menutup alurnya dan user masuk ke Beranda.
+- [x] **Reset yang ditinggal separuh tidak mendarat di Beranda.**
+      `verifyOtp` mengembalikan sesi sungguhan yang ikut tersimpan, jadi
+      menutup aplikasi setelah kode diterima tapi sebelum password diganti
+      dulunya berarti dibuka lagi = langsung masuk pakai password lama.
+      Penandanya `scannapp.recovery-pending` di localStorage
+      (`src/lib/passwordRecovery.ts`), dibaca AuthProvider sebelum render
+      pertama; rute pemulihan di `App.tsx` diletakkan **di atas** cabang
+      `signed-out` maupun tabs, karena alur ini melintasi keduanya. Dibuka
+      lagi, user kembali ke layar set password (kodenya tidak diminta ulang —
+      sudah terpakai), bukan ke Beranda.
+- [x] Tombol **"Kirim ulang kode"** dengan jeda 60 detik.
+- [x] Tombol kembali saat kode sudah terpakai **membuang sesi pemulihannya**
+      (`cancelRecovery`), jadi tidak ada sesi hidup yang ditinggalkan; password
+      lama tetap berlaku. Ada fallback `scope: 'local'` supaya batal tetap
+      berhasil tanpa jaringan.
+- [x] Pesan error Bahasa Indonesia untuk OTP salah/kedaluwarsa, rate limit,
+      password < 6 karakter, konfirmasi tidak sama, format email tidak valid,
+      dan gagal jaringan — semuanya lewat `translateAuthError()` yang sudah
+      ada, ditambah 6 aturan baru.
+
+Dua hal yang ketahuan saat menulis test, keduanya bug betulan:
+
+- `maxLength={6}` di field OTP memotong teks **sebelum** handler sempat
+  membuang spasi, jadi kode yang ditempel sebagai "123 456" jadi "123 45" dan
+  diam-diam kehilangan satu digit. Atributnya dibuang; pembatasan panjang
+  dikerjakan `slice(0, 6)` setelah penyaringan.
+- Validasi bawaan browser (`minLength`) berjalan lebih dulu, sehingga pesan
+  "Password minimal 6 karakter" versi kita tidak pernah terpakai — yang muncul
+  gelembung bawaan browser dalam bahasa perangkat. Kedua form dipasangi
+  `noValidate`; validasinya jadi milik kita sepenuhnya.
+
+Gerbang iklan ikut menanyakan `recoveryPending`: banner dan **App Open ad**
+semula cuma memeriksa `status === 'signed-in'`, yang berarti iklan layar penuh
+bisa muncul menimpa form ganti password — momen paling buruk untuk diinterupsi,
+karena user tidak bisa kembali menyelesaikannya.
+
+Suite bertambah jadi 886 node + 177 browser test (1063), semuanya lolos.
+`npm run build` sukses.
+
+**Belum diverifikasi di device fisik:**
+
+- [ ] "Lupa password?" di layar Masuk → isi email → email berisi **kode 6
+      digit** masuk (bukan tautan)
+- [ ] Kode benar → field password baru muncul; kode salah/kedaluwarsa → pesan
+      Bahasa Indonesia, tetap di layar kode
+- [ ] "Kirim ulang kode" tidak bisa ditekan selama 60 detik, lalu aktif lagi
+- [ ] Password baru tersimpan → langsung masuk Beranda, dan **password lama
+      sudah tidak bisa dipakai** saat keluar lalu masuk lagi
+- [ ] **Edge case:** setelah kode diterima, tutup paksa aplikasi dari recent
+      apps → buka lagi → mendarat di layar set password, **bukan** Beranda
+- [ ] Dari layar itu tekan kembali → keluar ke layar Masuk, dan password lama
+      masih berlaku
+- [ ] Tidak ada iklan App Open yang muncul di atas layar set password
+
+---
+
 ## Status Keputusan
 
 Semua angka bisnis & keputusan arsitektur untuk versi pertama sudah final (lihat PRD v2 Bagian 7 & CLAUDE.md Bagian 6-7). Tidak ada lagi open decision yang memblokir task di atas — implementasi bisa langsung jalan mengikuti urutan fase.

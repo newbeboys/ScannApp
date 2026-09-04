@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { translateAuthError } from '../lib/authErrors'
 import { fetchOwnProfile } from '../lib/profileApi'
 import { forgetPurchaseIdentity, identifyForPurchases } from '../lib/purchases/purchasesService'
+import {
+  clearRecoveryPending,
+  markRecoveryPending,
+  readRecoveryPending,
+} from '../lib/passwordRecovery'
 import { clearCachedProfile, readCachedProfile, writeCachedProfile } from '../lib/profileCache'
 import { supabase } from '../lib/supabase'
 import { resolveTier, type Profile } from '../lib/tier'
@@ -30,6 +35,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * for showing an ad, which a Pro user has paid not to see.
    */
   const [tierResolved, setTierResolved] = useState(false)
+  /**
+   * Seeded straight from storage, before the first paint: the whole point is
+   * that a reset interrupted by the app closing is still known to be pending
+   * when it reopens. Reading it lazily would let one frame of Beranda through.
+   */
+  const [recoveryPending, setRecoveryPending] = useState(() => readRecoveryPending() !== null)
 
   /**
    * Cache-first: show the last known profile immediately so gating is correct
@@ -95,6 +106,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null)
         setTierResolved(false)
         void forgetPurchaseIdentity()
+        /*
+          No session, so there is no recovery to finish — clear the flag rather
+          than strand the user on a set-password screen that cannot save.
+          This is the crash-in-the-gap case: the flag is written just *before*
+          verifyOtp (see below), so a process killed in between would otherwise
+          reopen pending forever, with no session to update.
+        */
+        clearRecoveryPending()
+        setRecoveryPending(false)
       }
     })
 
@@ -141,6 +161,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) fail(error)
   }, [])
 
+  /**
+   * Exchanges the emailed 6-digit code for a session.
+   *
+   * The flag is raised *before* the call, not after, and that ordering is the
+   * point: verifyOtp notifies its auth-state subscribers from inside the await,
+   * so the listener above flips status to 'signed-in' while this function is
+   * still suspended. Marking afterwards would leave one render — the render
+   * that shows Beranda — where a session exists and nothing says a password is
+   * still owed. Raising it first means the signed-in state is never seen
+   * unguarded; a rejected code lowers it again in the catch.
+   */
+  const verifyRecoveryOtp = useCallback(async (address: string, token: string) => {
+    const trimmed = address.trim()
+    markRecoveryPending(trimmed)
+    setRecoveryPending(true)
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email: trimmed,
+        token: token.trim(),
+        type: 'recovery',
+      })
+      if (error) fail(error)
+    } catch (caught) {
+      clearRecoveryPending()
+      setRecoveryPending(false)
+      throw caught
+    }
+  }, [])
+
+  /** Saves the new password; only success ends the recovery state. */
+  const completeRecovery = useCallback(async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password })
+    if (error) fail(error)
+
+    clearRecoveryPending()
+    setRecoveryPending(false)
+  }, [])
+
+  /**
+   * Leaves a reset unfinished on purpose. Signing out is what makes this safe:
+   * the recovery session is the only thing the code bought, and the account
+   * keeps the password it already had.
+   */
+  const cancelRecovery = useCallback(async () => {
+    clearCachedProfile()
+
+    /*
+      The session goes first, and the flag only after it. Lowering the flag up
+      front would open the route while the session was still alive, and for the
+      frame between the two the app would look like an ordinary signed-in user
+      — Beranda, flashed on the way out of a reset that was just abandoned.
+    */
+    const { error } = await supabase.auth.signOut()
+    // A global sign-out has to reach the server to revoke the refresh token,
+    // so it fails in a tunnel — and a surviving session would land the user on
+    // Beranda, which is the one place a cancelled reset must not go. The local
+    // scope needs no network, so fall back to it and drop the session anyway.
+    if (error) await supabase.auth.signOut({ scope: 'local' })
+
+    // The listener above clears these when the session goes; repeated here so
+    // the state is right even if that event is ever missed.
+    clearRecoveryPending()
+    setRecoveryPending(false)
+  }, [])
+
   const value = useMemo(
     () => ({
       status,
@@ -153,6 +239,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signOut,
       sendPasswordReset,
+      recoveryPending,
+      verifyRecoveryOtp,
+      completeRecovery,
+      cancelRecovery,
       refreshProfile,
     }),
     [
@@ -165,6 +255,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signOut,
       sendPasswordReset,
+      recoveryPending,
+      verifyRecoveryOtp,
+      completeRecovery,
+      cancelRecovery,
       refreshProfile,
     ],
   )

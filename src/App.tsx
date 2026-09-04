@@ -75,6 +75,7 @@ import { LandingScreen } from './screens/LandingScreen'
 import { MergeScreen } from './screens/MergeScreen'
 import { PageViewerScreen } from './screens/PageViewerScreen'
 import { ReferralScreen } from './screens/ReferralScreen'
+import { ResetPasswordScreen } from './screens/ResetPasswordScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { SplitScanScreen } from './screens/SplitScanScreen'
@@ -107,10 +108,24 @@ type View =
   | { kind: 'upgrade' }
 
 /** Which screen the signed-out visitor is looking at. */
-type AuthView = { kind: 'landing' } | { kind: 'auth'; mode: AuthMode } | { kind: 'forgot' }
+type AuthView =
+  | { kind: 'landing' }
+  | { kind: 'auth'; mode: AuthMode }
+  | { kind: 'forgot' }
+  /* Carries the address forward: verifyOtp needs it next to the code. */
+  | { kind: 'reset'; email: string }
 
 function App() {
-  const { status, tier, tierResolved, profile, signOut, refreshProfile } = useAuth()
+  const {
+    status,
+    tier,
+    tierResolved,
+    profile,
+    signOut,
+    refreshProfile,
+    recoveryPending,
+    email: accountEmail,
+  } = useAuth()
   const [authView, setAuthView] = useState<AuthView>({ kind: 'landing' })
   const [tab, setTab] = useState<TabId>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
@@ -229,7 +244,13 @@ function App() {
   // or paywall, where it would sit in the middle of a task (spec Bagian 3.3).
   const bannerPx = useAdBanner(
     shouldShowBanner({
-      signedIn: status === 'signed-in',
+      /*
+        Not `status` alone: a recovery session reads as signed in, but the
+        screen showing is the set-password one, which replaces the tabs
+        entirely — `view.kind` is still 'tabs' underneath it, so the banner
+        would float over a form the user cannot finish without.
+      */
+      signedIn: status === 'signed-in' && !recoveryPending,
       onTabs: view.kind === 'tabs',
       reviewingScan: pendingPages !== null,
       sheetOpen,
@@ -240,8 +261,11 @@ function App() {
 
   // Waits for `tierResolved`, not just for being signed in: `tier` reads Basic
   // until the profile lands, so a Pro user signing in on a new phone would be
-  // met with a full-screen ad they have paid not to see.
-  useAppOpenAd(status === 'signed-in' && tierResolved, tier)
+  // met with a full-screen ad they have paid not to see. `recoveryPending` is
+  // the same argument from the other end: a reset in progress reads as signed
+  // in, and a full-screen ad over a half-changed password is the worst possible
+  // moment to interrupt — the user cannot even get back to finish it.
+  useAppOpenAd(status === 'signed-in' && !recoveryPending && tierResolved, tier)
 
   const refreshDocuments = useCallback(async () => {
     setDocuments(await listScanDocuments())
@@ -1049,6 +1073,29 @@ function App() {
     )
   }
 
+  /*
+    Ahead of both the signed-out screens and the tabs, because a password reset
+    straddles them: verifyOtp opens a real session, so from that moment the app
+    counts as signed in while the password it was called to replace is still
+    the old one. Left to `status` alone the user would be dropped on Beranda
+    mid-reset — and a user who closed the app there would land on Beranda again
+    on every launch, never seeing the screen that was about to fix it.
+    recoveryPending survives that restart, so this route does too.
+  */
+  if (recoveryPending || authView.kind === 'reset') {
+    return (
+      <div className="app">
+        <ResetPasswordScreen
+          /* After a restart the route is gone but the session is not, so its
+             own address is the one still being recovered. */
+          email={authView.kind === 'reset' ? authView.email : (accountEmail ?? '')}
+          onBack={() => setAuthView({ kind: 'auth', mode: 'signin' })}
+          onDone={() => setAuthView({ kind: 'landing' })}
+        />
+      </div>
+    )
+  }
+
   if (status === 'signed-out') {
     return (
       <div className="app">
@@ -1067,7 +1114,10 @@ function App() {
           />
         )}
         {authView.kind === 'forgot' && (
-          <ForgotPasswordScreen onBack={() => setAuthView({ kind: 'auth', mode: 'signin' })} />
+          <ForgotPasswordScreen
+            onBack={() => setAuthView({ kind: 'auth', mode: 'signin' })}
+            onCodeSent={(email) => setAuthView({ kind: 'reset', email })}
+          />
         )}
       </div>
     )

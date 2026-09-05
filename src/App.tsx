@@ -1,8 +1,10 @@
 import { Capacitor } from '@capacitor/core'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useAuth } from './auth/useAuth'
+import { AccountDeletionBanner } from './components/AccountDeletionBanner'
 import { BatchExportSheet } from './components/BatchExportSheet'
 import { BottomNav, type TabId } from './components/BottomNav'
+import { DeleteAccountSheet } from './components/DeleteAccountSheet'
 import { ExportSheet } from './components/ExportSheet'
 import { CropIcon, ExportIcon } from './components/Icons'
 import { resetScanStreak } from './lib/ads/adFrequency'
@@ -110,7 +112,16 @@ type View =
 type AuthView = { kind: 'landing' } | { kind: 'auth'; mode: AuthMode } | { kind: 'forgot' }
 
 function App() {
-  const { status, tier, tierResolved, profile, signOut, refreshProfile } = useAuth()
+  const {
+    status,
+    tier,
+    tierResolved,
+    profile,
+    signOut,
+    refreshProfile,
+    requestAccountDeletion,
+    cancelAccountDeletion,
+  } = useAuth()
   const [authView, setAuthView] = useState<AuthView>({ kind: 'landing' })
   const [tab, setTab] = useState<TabId>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
@@ -174,6 +185,10 @@ function App() {
   )
   const [exportEstimate, setExportEstimate] = useState<ExportSizeEstimate | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
+  /** Shared by the request and the cancel — only one of them can be in flight. */
+  const [isAccountDeletionBusy, setIsAccountDeletionBusy] = useState(false)
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null)
   const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null)
   /** Every document this account has in the cloud, whether or not it is on the phone. */
   const [backups, setBackups] = useState<CloudBackup[]>([])
@@ -973,6 +988,46 @@ function App() {
     }
   }
 
+  const handleRequestAccountDeletion = async () => {
+    setIsAccountDeletionBusy(true)
+    setDeleteAccountError(null)
+    try {
+      const schedule = await requestAccountDeletion()
+      setDeleteAccountOpen(false)
+      setToast(
+        schedule.alreadyRequested
+          ? 'Penghapusan akun ini memang sudah dijadwalkan.'
+          : 'Akun dijadwalkan untuk dihapus. Kamu masih bisa membatalkannya.',
+      )
+    } catch (error) {
+      /*
+        Kept inside the sheet rather than shown as a toast. The common failure
+        here is "cancel your Play Store subscription first", which is an
+        instruction the user has to act on — a toast would slide away while
+        they were still reading it.
+      */
+      setDeleteAccountError(
+        error instanceof Error ? error.message : 'Gagal menjadwalkan penghapusan akun.',
+      )
+    } finally {
+      setIsAccountDeletionBusy(false)
+    }
+  }
+
+  const handleCancelAccountDeletion = async () => {
+    setIsAccountDeletionBusy(true)
+    try {
+      await cancelAccountDeletion()
+      setToast('Penghapusan akun dibatalkan.')
+    } catch (error) {
+      setToast(
+        error instanceof Error ? error.message : 'Gagal membatalkan penghapusan akun.',
+      )
+    } finally {
+      setIsAccountDeletionBusy(false)
+    }
+  }
+
   /** Local files stay on the device; only the session is dropped. */
   const handleSignOut = async () => {
     if (!confirm('Keluar dari akun ini? Dokumen yang tersimpan di HP tidak ikut terhapus.')) return
@@ -1388,6 +1443,20 @@ function App() {
     // be handed to CSS explicitly — nothing in the layout can measure it.
     <div className="app" style={{ '--ad-banner-height': `${bannerPx}px` } as CSSProperties}>
       <main className="app__body">
+        {/*
+          Above the tab content, not inside one screen: the countdown runs
+          whatever the user is doing, and the way to stop it has to be
+          somewhere they will actually run into. `profile` is re-read from the
+          server on every app open (AuthProvider.loadProfile), so this reflects
+          a request made on another device too.
+        */}
+        {profile?.deletionRequestedAt && (
+          <AccountDeletionBanner
+            requestedAt={profile.deletionRequestedAt}
+            isBusy={isAccountDeletionBusy}
+            onCancel={handleCancelAccountDeletion}
+          />
+        )}
         {tab === 'home' && (
           <HomeScreen
             entries={entries}
@@ -1439,6 +1508,12 @@ function App() {
             onOpenBackups={() => setView({ kind: 'backups' })}
             onOpenReferral={() => setView({ kind: 'referral' })}
             onUpgrade={() => setView({ kind: 'upgrade' })}
+            onDeleteAccount={() => {
+              // Clear last time's refusal, so a user who has since cancelled
+              // their subscription is not greeted by the old error.
+              setDeleteAccountError(null)
+              setDeleteAccountOpen(true)
+            }}
           />
         )}
       </main>
@@ -1458,6 +1533,23 @@ function App() {
 
       {exportSheet}
       {batchSheet}
+
+      {deleteAccountOpen && (
+        <DeleteAccountSheet
+          /*
+            Only a paying plan needs the Play Store warning. Referral Pro never
+            went through Google, so telling that user to cancel a subscription
+            would send them looking for one that does not exist.
+          */
+          requiresSubscriptionCancel={
+            tier === 'pro' && (profile?.proPlan === 'monthly' || profile?.proPlan === 'yearly')
+          }
+          isBusy={isAccountDeletionBusy}
+          error={deleteAccountError}
+          onConfirm={handleRequestAccountDeletion}
+          onClose={() => setDeleteAccountOpen(false)}
+        />
+      )}
 
       {toast && <p className="toast">{toast}</p>}
 

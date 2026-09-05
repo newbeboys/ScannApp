@@ -1321,6 +1321,124 @@ Suite bertambah jadi 874 node + 161 browser test, semuanya lolos.
 
 ---
 
+## Hapus Akun & Crash Reporting — 5 September 2026
+
+Dipicu Boss Ali menemukan error saat mencoba hapus akun test lewat Supabase
+Dashboard (`update or delete on table "profiles" violates foreign key
+constraint "storage_usage_user_id_fkey"`), sekaligus persiapan sebelum submit
+Play Console — app dengan fitur akun **wajib** punya jalur hapus akun (in-app
++ web-link) per kebijakan Google Play "User Data policy". Belum ada task ini
+sama sekali sebelumnya.
+
+**Bagian A (Hapus Akun) dikerjakan di cabang `feat/hapus-akun`** — ditandai
+`[~]`, naik jadi `[x]` setelah merge ke `main`. **Bagian B (Crash Reporting)
+belum disentuh sama sekali**, sengaja: satu subsistem per sesi
+(`CLAUDE.md` Bagian 1).
+
+### A. Hapus Akun
+
+Penyebab akar error di atas: FK ke `profiles.id` semuanya dibuat tanpa klausa
+`ON DELETE`, jadi defaultnya `NO ACTION` — database menolak hapus `profiles`
+selama masih ada row anak yang menunjuk ke situ. Ini juga akan menghalangi
+hapus akun user asli lewat app, bukan cuma masalah testing manual.
+
+**Temuan saat implementasi: FK-nya ada ENAM, bukan empat.** Dokumen brainstorm
+menyebut `storage_usage.user_id`, `scan_documents.owner_id`, dan
+`referral_events.referrer_id`/`referred_id`. Dua lagi ketinggalan dan
+sama-sama memblokir:
+
+- **`profiles.referred_by → profiles.id`** — menunjuk BALIK ke referrer, jadi
+  menghapus orang yang pernah mengundang siapa pun akan tertahan oleh baris
+  profil orang yang dia undang. Skenario uji di brainstorm sendiri ("akun test
+  yang jadi referrer") pasti menabraknya. Diperlakukan `SET NULL`, sama seperti
+  `referral_events` — menghapus akun seseorang tidak boleh ikut menghapus akun
+  orang yang dia undang.
+- **`referral_milestone_grants.referrer_id → profiles.id`** — tabelnya baru
+  dibuat di migration `20260901120000`, setelah dokumen desain ditulis.
+  Diperlakukan `CASCADE`: isinya ledger anti-dobel-reward milik satu referrer,
+  tidak berarti apa-apa tanpa dia, dan `SET NULL` mustahil karena
+  `referrer_id` bagian dari primary key.
+
+Keputusan bisnis final ada di `CLAUDE.md` Bagian 6 — jangan tanya ulang ke
+Boss Ali kecuali ada perubahan eksplisit.
+
+Migration `20260905120000_fase8_5_account_deletion.sql`:
+
+- [~] Tambah kolom `profiles.deletion_requested_at` (timestamptz, nullable) + partial index untuk query job harian
+- [~] `storage_usage.user_id → profiles.id` jadi `ON DELETE CASCADE`
+- [~] `scan_documents.owner_id → profiles.id` jadi `ON DELETE CASCADE`
+- [~] `referral_milestone_grants.referrer_id → profiles.id` jadi `ON DELETE CASCADE` — **di luar daftar brainstorm, lihat temuan di atas**
+- [~] `referral_events.referrer_id`/`referred_id → profiles.id` jadi nullable + `ON DELETE SET NULL`
+- [~] `profiles.referred_by → profiles.id` jadi `ON DELETE SET NULL` — **di luar daftar brainstorm, lihat temuan di atas**
+- [~] Bekukan `deletion_requested_at` di policy `profiles_update_own` — dua arah (mengisi & mengosongkan), supaya satu-satunya pintu adalah kedua Edge Function
+
+Edge Function:
+
+- [~] `request-account-deletion` — cek entitlement via RevenueCat REST `GET /v1/subscribers/{app_user_id}`, tolak 409 kalau masih aktif, set `deletion_requested_at = now()`. Panggilan kedua **tidak** mengulang jam mulai (`already_requested: true` + tanggal yang lama), supaya masa tunggu tidak diam-diam memanjang tiap tombolnya ditekan lagi.
+- [~] `cancel-account-deletion` — set `deletion_requested_at = NULL`, idempoten
+- [~] `process-account-deletions` (cron harian **04:00**, job terpisah dari `expire-pro-status` 00:00 & `cleanup-orphan-r2` 03:00) — hapus object R2 → anonimkan `referral_events` → hapus `auth.users` via Admin API. Urutannya dijaga: kalau ada satu object R2 yang gagal dihapus, akunnya **dibiarkan utuh** untuk run berikutnya, karena menghapus `profiles` duluan akan meng-cascade `scan_documents` dan membuang `r2_object_key` — satu-satunya pegangan ke object itu.
+- [~] Logika murni dipisah ke `_shared/accountDeletion.ts` supaya ikut ke-cover suite `node` (pola sama seperti `orphanCleanup.ts`) — 23 test
+
+Client:
+
+- [~] `SettingsScreen`: bagian "Akun" + tombol "Hapus akun", sengaja dipisah dari kartu "Keluar"
+- [~] `DeleteAccountSheet`: dialog konfirmasi yang menjelaskan masa tunggu 7 hari, apa yang hilang (termasuk seluruh cadangan cloud), apa yang tidak (dokumen di HP), dan peringatan cancel langganan Play Store — peringatan itu **hanya** muncul untuk plan berbayar, bukan untuk Pro dari referral yang tidak punya langganan untuk dibatalkan
+- [~] `AccountDeletionBanner`: "Akun ini akan dihapus permanen dalam X hari" + tombol "Batalkan", dipasang di atas isi tab jadi tampil di ketiga tab. Statusnya ikut `profiles.deletion_requested_at` yang dibaca ulang dari server tiap app dibuka (`AuthProvider.loadProfile`), bukan cuma sekali saat request dibuat — jadi permintaan dari HP lain pun kelihatan.
+- [~] 13 browser test untuk kedua komponen
+
+**Diverifikasi sungguhan di project Supabase live (5 September 2026):**
+
+- [~] Dua akun uji dibuat lewat SQL (bukan signup, supaya nol email keluar): A jadi referrer, B mendaftar pakai kode A. Trigger `handle_new_user()` menghasilkan `profiles.referred_by` + baris `referral_events` persis seperti signup sungguhan.
+- [~] A mengunggah PDF sungguhan ke R2 lewat alur normal (`generate-upload-url` → `PUT` → `confirm-upload`, HTTP 200, 69 byte)
+- [~] Object R2 dibuktikan **ada** sebelum purge (URL presigned → HTTP 200, header `%PDF-`), lalu **hilang** sesudah purge (URL presigned yang **sama** → HTTP 404 `NoSuchKey`). Bukan sekadar barisnya yang lepas rujukan — objectnya memang terhapus.
+- [~] `process-account-deletions`: `deleted: 1, objectsDeleted: 1, referralRowsAnonymised: 1, failed: 0`. `auth.users`/`profiles`/`storage_usage`/`scan_documents`/`referral_milestone_grants`/`auth.identities` milik A semuanya nol — tanpa error FK.
+- [~] `referral_events` **tetap ada** dengan `referrer_id = NULL`, `activated = true`, `activated_at` utuh, `reward_granted = true` — anonim, bukan terhapus. `profiles.referred_by` milik B ikut jadi `NULL`.
+- [~] Idempotensi: run kedua mengembalikan `dueCount: 0` tanpa error. Cron secret salah → 401.
+- [~] User Pro aktif → HTTP 409 `ACTIVE_SUBSCRIPTION`, dan `deletion_requested_at` **tetap NULL** (tidak ada yang tertulis)
+- [~] Pro dari **referral** → diizinkan (200). Kalau ini ikut ditolak, user itu buntu: tidak ada langganan Play Store untuk dibatalkan.
+- [~] Batal saat masa tunggu → `deletion_requested_at` kembali `NULL`; dipanggil dua kali tetap 200
+- [~] **Exploit RLS:** client `PATCH /rest/v1/profiles` untuk mengisi `deletion_requested_at` → 403 `42501`; untuk mengosongkannya → 403 `42501` juga. Dua arah tertutup.
+- [~] Jejak audit lengkap tampil di Log Viewer sebagai JSON terstruktur (`deletion_requested`, `deletion_refused`, `deletion_cancelled`, `account_purge`, `account_purge_summary`)
+- [~] Kedua akun uji ikut di-purge lewat job yang sama; database kembali persis ke kondisi awal (3 user, 13 dokumen, 0 referral_events). Advisor keamanan tidak bertambah.
+
+**Dua temuan `/code-review` yang ditutup sebelum commit:**
+
+- [~] **Race check-then-set di `request-account-deletion`.** Pengecekan "sudah dijadwalkan?" terjadi **sebelum** panggilan `await` ke RevenueCat, jadi dua ketukan berjarak sedetik bisa sama-sama lolos dan sama-sama menulis — yang kedua mendorong tanggal purge lebih jauh dari tanggal yang sudah dijanjikan ke user di jawaban pertama. Ditutup dengan menjadikan tulisannya atomik di database: `UPDATE ... WHERE id = ? AND deletion_requested_at IS NULL`; yang kalah membaca ulang dan melaporkan tanggal yang benar-benar berlaku. **Dibuktikan:** dua request dilepas bersamaan → keduanya menjawab `deletion_scheduled_at` yang **sama**, satu `already_requested: false`, satu `true`.
+- [~] **"7 hari" ditulis literal di `SettingsScreen`** padahal `DeleteAccountSheet` menginterpolasi `GRACE_PERIOD_DAYS`. Disamakan, supaya angkanya tidak diam-diam basi kalau konstanta itu berubah.
+
+**Belum diverifikasi / masih menunggu Boss Ali:**
+
+- [ ] **`REVENUECAT_SECRET_API_KEY` belum ada di Edge Function Secrets.** Selama kosong, `request-account-deletion` jatuh ke cadangan `profiles.tier`/`pro_plan` dan mencatat `revenuecat_key_missing` di log — itulah jalur yang menolak user Pro di uji di atas. Jalur RevenueCat sungguhannya **belum pernah dijalankan**. Ambil "Secret API key" v1 dari dashboard RevenueCat (Project settings → API keys), simpan dengan nama persis itu.
+- [ ] Uji di HP fisik: tombol Hapus akun → dialog → banner muncul di ketiga tab → Batalkan → banner hilang
+- [ ] Halaman legal (`scannapp-legal`): teks siap tempel di `docs/legal/2026-09-05-hapus-akun-halaman-legal.md`, **belum dipublish**. Tiga hal perlu keputusan Boss Ali: (a) konfirmasi `supportscannapp@gmail.com` masih dipakai, (b) **URL root `https://newbeboys.github.io/scannapp-legal/` sekarang 404** — reponya tidak punya `index.html`, jadi daftarkan URL lengkap `.../privacy-policy.html` atau buat halaman index, (c) bagian 05 halaman itu menjanjikan 30 hari sementara implementasinya 7 hari — usul teks penggantinya sudah disiapkan.
+- [ ] Daftarkan URL halaman legal di Data Safety form Play Console (langkah manual Boss Ali, di luar kode)
+
+### B. Crash Reporting (Client)
+
+**Belum dikerjakan — di luar cakupan sesi `feat/hapus-akun`.**
+
+Backend **tidak butuh tools baru** — log Edge Function sudah otomatis ada di
+Supabase Log Viewer (itu yang tampil di screenshot Boss Ali), cukup untuk
+kebutuhan pasif. Gap sebenarnya di client: kalau app crash di HP user
+(force-close/ANR), saat ini tidak ada catatan apa pun yang sampai ke developer.
+
+- [ ] Setup project Firebase baru khusus ScannApp (terpisah dari FinanceApp), daftarkan app Android `com.newbeboys.scannapp`
+- [ ] Integrasi `@capacitor-firebase/crashlytics` + konfigurasi Gradle (Google Services + Crashlytics plugin)
+- [ ] Putuskan penanganan `google-services.json` di CI (`build-aab.yml`) — commit langsung (umumnya aman untuk Android) atau lewat GitHub Secret; sebutkan eksplisit keputusannya, jangan diam-diam diasumsikan
+- [ ] Mekanisme trigger crash test **khusus build debug**, dipastikan tidak ada/tidak bisa diakses di build release
+- [ ] Verifikasi build CI tidak rusak setelah penambahan ini
+
+**Testing wajib sebelum merge:**
+- [ ] Crash test di device fisik/emulator → muncul di Firebase Console dalam beberapa menit
+- [ ] Build APK/AAB lewat CI tetap sukses
+- [ ] Mekanisme crash-test dipastikan tidak ada di build release
+
+**Di luar cakupan sesi ini (jangan diperluas sendiri):** notifikasi aktif
+(email/Telegram), tracking kegagalan alur bisnis (upload/pembayaran/OCR
+gagal) — itu topik terpisah yang belum dibahas.
+
+---
+
 ## Status Keputusan
 
 Semua angka bisnis & keputusan arsitektur untuk versi pertama sudah final (lihat PRD v2 Bagian 7 & CLAUDE.md Bagian 6-7). Tidak ada lagi open decision yang memblokir task di atas — implementasi bisa langsung jalan mengikuti urutan fase.

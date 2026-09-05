@@ -9,6 +9,7 @@ interface ProfileRow {
   tier_expires_at: string | null
   pro_plan: string | null
   referral_code: string | null
+  deletion_requested_at: string | null
 }
 
 function toProfile(row: ProfileRow): Profile {
@@ -24,6 +25,7 @@ function toProfile(row: ProfileRow): Profile {
         ? row.pro_plan
         : null,
     referralCode: row.referral_code,
+    deletionRequestedAt: row.deletion_requested_at,
   }
 }
 
@@ -37,7 +39,7 @@ function toProfile(row: ProfileRow): Profile {
 export async function fetchOwnProfile(): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, display_name, tier, tier_expires_at, pro_plan, referral_code')
+    .select('id, display_name, tier, tier_expires_at, pro_plan, referral_code, deletion_requested_at')
     .maybeSingle<ProfileRow>()
 
   if (error || !data) return null

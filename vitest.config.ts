@@ -37,10 +37,42 @@ export default defineConfig({
         */
         optimizeDeps: {
           exclude: ['vitest-browser-react'],
-          // Left unbundled, the helper reaches `react-dom/client` as raw CJS
-          // and the import fails for want of a default export, so React itself
-          // has to stay pre-bundled into ESM.
-          include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-dev-runtime'],
+          /*
+            React entries stay pre-bundled into ESM for the reason above. The
+            five Capacitor native plugins are here for a different reason:
+            left undeclared, Vite discovers them lazily mid-run the first time
+            a cold run's dependency crawl reaches whichever lib file imports
+            them (adsService.ts -> @capacitor-community/admob,
+            crashlytics.ts -> @capacitor-firebase/crashlytics,
+            documentScanner.ts -> @capacitor-mlkit/document-scanner, ocr.ts ->
+            @capacitor-mlkit/text-recognition, purchasesService.ts ->
+            @revenuecat/purchases-capacitor), triggers "optimized dependencies
+            changed. reloading" mid-suite, and can tear down an unrelated
+            test's dynamic import in the process (CI run 33972024211, 5
+            September 2026 — PageViewerScreen.browser.test.tsx failed to
+            import on a cold cache, nothing to do with that file itself).
+            None of the five ever runs in a browser — they no-op behind
+            Capacitor.isNativePlatform() guards — so this is purely about
+            forcing the optimizer to settle on them up front instead of
+            discovering them partway through a run.
+          */
+          include: [
+            'react',
+            'react-dom',
+            'react-dom/client',
+            'react/jsx-dev-runtime',
+            '@capacitor-community/admob',
+            '@capacitor-firebase/crashlytics',
+            '@capacitor-mlkit/document-scanner',
+            '@capacitor-mlkit/text-recognition',
+            '@revenuecat/purchases-capacitor',
+            // Same story, confirmed by reproducing the cold-cache race
+            // locally (`rm -rf node_modules/.vite && vitest run --project
+            // browser`): pdf-lib is a large, statically-imported dependency
+            // (pdfExport.ts, pdfImport.ts, watermark.ts) that a first-ever
+            // crawl can still discover after test execution has begun.
+            'pdf-lib',
+          ],
         },
         test: {
           name: 'browser',

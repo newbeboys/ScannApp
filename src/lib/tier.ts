@@ -12,6 +12,16 @@ export interface Profile {
   tierExpiresAt: string | null
   proPlan: ProPlan | null
   referralCode: string | null
+  /**
+   * ISO timestamp of a pending account-deletion request, or null when there
+   * is none. Only ever written server-side (`request-account-deletion` /
+   * `cancel-account-deletion`); the client reads it to decide whether the
+   * grace-period banner belongs on screen.
+   *
+   * Optional so a profile cached by an older build still parses — see
+   * `profileCache.readCachedProfile`.
+   */
+  deletionRequestedAt?: string | null
 }
 
 const MS_PER_DAY = 86_400_000

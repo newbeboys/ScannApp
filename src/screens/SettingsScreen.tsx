@@ -2,6 +2,7 @@ import { useAuth } from '../auth/useAuth'
 import { AppLogo } from '../components/AppLogo'
 import { ChevronRightIcon, CloudIcon, GiftIcon, LogoutIcon, TrashIcon } from '../components/Icons'
 import { QuotaBar } from '../components/QuotaBar'
+import { GRACE_PERIOD_DAYS } from '../lib/accountDeletion'
 import { proDaysRemaining, tierLabel } from '../lib/tier'
 import { THEMES, THEME_ORDER } from '../theme/themes'
 import { useTheme } from '../theme/useTheme'
@@ -15,6 +16,7 @@ interface SettingsScreenProps {
   onOpenBackups: () => void
   onOpenReferral: () => void
   onUpgrade: () => void
+  onDeleteAccount: () => void
 }
 
 export function SettingsScreen({
@@ -26,6 +28,7 @@ export function SettingsScreen({
   onOpenBackups,
   onOpenReferral,
   onUpgrade,
+  onDeleteAccount,
 }: SettingsScreenProps) {
   const { themeId, setThemeId, theme } = useTheme()
   const { email, profile, tier } = useAuth()
@@ -140,6 +143,29 @@ export function SettingsScreen({
           <LogoutIcon size={18} />
         </button>
       </section>
+
+      {/*
+        Kept apart from "Keluar" and from "Hapus semua dokumen" on purpose.
+        Sitting in the same card as sign-out would put the one irreversible
+        action in this screen a thumb's width from the one people tap most.
+      */}
+      <h2 className="section-label">Akun</h2>
+
+      <section className="card">
+        <button
+          type="button"
+          className="card__row card__row--button"
+          onClick={onDeleteAccount}
+        >
+          <span className="card__row-label danger-label">Hapus akun</span>
+          <TrashIcon size={18} className="danger-icon" />
+        </button>
+      </section>
+
+      <p className="settings-note">
+        Menghapus akun juga menghapus semua cadangan di cloud. Ada masa tunggu{' '}
+        {GRACE_PERIOD_DAYS} hari sebelum penghapusan permanen.
+      </p>
 
       <p className="app-version">ScannApp · Fase 5</p>
     </div>

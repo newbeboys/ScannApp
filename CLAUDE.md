@@ -19,6 +19,7 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 | Storage/backup file | Cloudflare R2 (S3-compatible API), diakses lewat signed URL dari Supabase Edge Function — **client tidak pernah menyimpan R2 access key langsung** |
 | Penyimpanan utama file | Lokal di device user (local-first). Cloud (R2) hanya untuk backup/sync opsional |
 | Perbaikan gambar | Versi pertama **metode klasik** (deterministik, nol dependency, **semua tier**), nama UI **"Perbaiki Pencahayaan"** — jangan sebut AI. Versi **"AI Enhance"** memakai model on-device TensorFlow Lite dan Pro-exclusive, menyusul saat modelnya ada — **dilarang** memanggil cloud AI API berbayar/free-tier pihak ketiga untuk fitur ini kecuali ada keputusan baru yang eksplisit dari Boss Ali |
+| Crash reporting (client) | **Firebase Crashlytics** via `@capacitor-firebase/crashlytics` (ditetapkan saat brainstorm 5 September 2026) — project Firebase baru khusus ScannApp, **terpisah dari FinanceApp**. Mode pasif (dashboard dicek manual), tanpa notifikasi aktif. Belum diintegrasikan — lihat `TASKS.md` bagian "Hapus Akun & Crash Reporting" |
 
 ## 3. Aturan Keras (Hard Rules)
 
@@ -82,6 +83,13 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 - **Cadangan cloud tidak mengikuti level kompresi** (keputusan Boss Ali 23 Agustus 2026): `buildPdfFile()` selalu memakai Standar. Pilihan di lembar Ekspor hanya mengatur berkas yang sedang disimpan/dibagikan — kalau ia ikut mengatur cadangan, satu pilihan di layar ekspor diam-diam menentukan konsumsi kuota R2 dan mutu maksimal yang bisa dikembalikan `cloudRestore`.
 - **Perbaikan pencahayaan: semua tier, dan namanya bukan "AI"** (ditetapkan Boss Ali 29 Agustus 2026 saat brainstorm Fase 7). Riset model menemukan tidak ada model shadow-removal dokumen yang muat di HP — yang tersedia dan berlisensi MIT (`DocShadow/FSENet`) punya 29,34 juta parameter dan butuh 7,93 detik per halaman **di GPU desktop**, dan penulisnya sendiri menyatakan model itu tidak bisa jalan di perangkat tepi. Versi pertama karena itu memakai **metode klasik** (estimasi peta cahaya lalu pembagian), dan dua keputusan menyertainya: **(1) Tier — gratis untuk semua tier**, Basic maupun Pro, karena argumen paywall di PRD Bagian 4 berdiri di atas biaya cloud AI sementara metode klasik nol biaya marjinal; status Pro-exclusive baru berlaku **khusus untuk versi model TFLite** saat model itu selesai dilatih. **(2) Nama — dilarang menyebutnya "AI Enhance"** di UI maupun copy mana pun; namanya **"Perbaiki Pencahayaan"**, karena isinya matematika deterministik dan klaim "AI" akan menyesatkan user. Nama "AI Enhance" disimpan untuk versi model. **Noise reduction & peningkatan ketajaman sengaja di luar versi pertama** — tercatat sebagai known gap di `TASKS.md` Fase 7, jangan sampai dianggap hilang saat QA Fase 9.
 
+- **Hapus akun** (ditetapkan Boss Ali saat brainstorm 5 September 2026, sebelum submit Play Console — wajib per kebijakan Google Play "User Data policy — Account Deletion"):
+  - **Grace period 7 hari** sebelum data benar-benar dihapus permanen. Selama itu user tetap bisa login normal, ada tombol "Batalkan Penghapusan".
+  - User dengan entitlement Pro aktif (RevenueCat) **wajib cancel subscription Play Store dulu** — request hapus akun ditolak selama entitlement masih aktif.
+  - `referral_events` milik user yang dihapus **dianonimkan** (`referrer_id`/`referred_id` di-set `NULL`), **bukan** dihapus — statistik & reward (`reward_granted = true`) yang sudah diberikan ke pihak lain tetap valid secara historis.
+  - Web-link syarat Google Play: paragraf instruksi email di halaman `https://newbeboys.github.io/scannapp-legal/` (bukan form baru) — **cek dulu format alamat emailnya ke Boss Ali sebelum publish**, jangan menebak/asumsikan.
+  - Detail implementasi (migration FK cascade, Edge Function) — lihat `TASKS.md` bagian "Hapus Akun & Crash Reporting".
+
 Angka-angka di atas dipakai langsung sebagai konstanta/env var (lihat `.env.example`) — jangan tanyakan ulang ke Boss Ali kecuali ada perubahan eksplisit.
 
 ## 7. Infrastruktur yang Sudah Terpasang (jangan buat ulang, langsung pakai)
@@ -102,6 +110,8 @@ Angka-angka di atas dipakai langsung sebagai konstanta/env var (lihat `.env.exam
   - `R2_ENDPOINT`
   - `R2_BUCKET_NAME`
 - Akses ke lima secret ini di Edge Function selalu lewat `Deno.env.get('<NAMA_SECRET>')` — jangan hardcode nilainya di kode, dan jangan asumsikan nama secret lain dari yang tercantum di atas.
+- **`REVENUECAT_SECRET_API_KEY`** — sudah terpasang & diverifikasi jalan (5 September 2026). Dipakai `request-account-deletion` untuk menanyakan `GET /v1/subscribers/{app_user_id}` ke RevenueCat sebelum menjadwalkan hapus akun. Isinya "Secret API key" v1 dari dashboard RevenueCat → Project settings → API keys; ini **bukan** public SDK key `VITE_REVENUECAT_ANDROID_KEY` dan **bukan** `REVENUECAT_WEBHOOK_SECRET`. Kalau suatu saat kosong lagi, fungsinya tidak mati — ia jatuh ke cadangan `profiles.tier`/`pro_plan` dan mencatat `revenuecat_key_missing` di log, sengaja begitu karena Google Play mewajibkan jalur hapus akun tetap tersedia. **Cara memastikan ia benar-benar terpakai:** log `deletion_requested` harus menunjukkan `storeEntitlement` selain `"unknown"`; `"unknown"` berarti kembali jatuh ke cadangan.
+- **`CRON_SECRET`** dipakai bersama oleh `cleanup-orphan-r2` **dan** `process-account-deletions` — satu nilai untuk semua pemanggil cron, bukan satu per job. Nilai yang sama tersimpan di Vault dengan nama `cleanup_orphan_r2_cron_secret` (namanya historis, dibuat saat job cron pertama); kedua jadwal `pg_cron` membacanya dari situ.
 
 ## 8. Filosofi Kerja Claude Code di Proyek Ini
 

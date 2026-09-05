@@ -348,3 +348,13 @@ export function GiftIcon({ size = 24, className }: IconProps) {
     </svg>
   )
 }
+
+export function WarningIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <path d="M12 4.2 3.3 19a1.2 1.2 0 0 0 1 1.8h15.4a1.2 1.2 0 0 0 1-1.8L12 4.2Z" />
+      <path d="M12 10v4.2" />
+      <path d="M12 17.4h.01" />
+    </svg>
+  )
+}

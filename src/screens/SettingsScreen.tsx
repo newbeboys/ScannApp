@@ -1,6 +1,13 @@
 import { useAuth } from '../auth/useAuth'
 import { AppLogo } from '../components/AppLogo'
-import { ChevronRightIcon, CloudIcon, GiftIcon, LogoutIcon, TrashIcon } from '../components/Icons'
+import {
+  BugIcon,
+  ChevronRightIcon,
+  CloudIcon,
+  GiftIcon,
+  LogoutIcon,
+  TrashIcon,
+} from '../components/Icons'
 import { QuotaBar } from '../components/QuotaBar'
 import { proDaysRemaining, tierLabel } from '../lib/tier'
 import { THEMES, THEME_ORDER } from '../theme/themes'
@@ -15,6 +22,13 @@ interface SettingsScreenProps {
   onOpenBackups: () => void
   onOpenReferral: () => void
   onUpgrade: () => void
+  /**
+   * Apakah install ini build Gradle debug (tidak pernah `true` untuk yang
+   * dikirim CI ke Play Store) — lihat `lib/crashlytics.ts`. Menggerbangi
+   * baris uji-crash Crashlytics di bawah, Fase 8.5b.
+   */
+  showCrashTest: boolean
+  onTriggerCrash: () => void
 }
 
 export function SettingsScreen({
@@ -26,6 +40,8 @@ export function SettingsScreen({
   onOpenBackups,
   onOpenReferral,
   onUpgrade,
+  showCrashTest,
+  onTriggerCrash,
 }: SettingsScreenProps) {
   const { themeId, setThemeId, theme } = useTheme()
   const { email, profile, tier } = useAuth()
@@ -140,6 +156,29 @@ export function SettingsScreen({
           <LogoutIcon size={18} />
         </button>
       </section>
+
+      {/*
+        Hanya muncul di build debug (BuildConfig.DEBUG lewat DebugBuildPlugin
+        native, bukan import.meta.env.DEV — lihat lib/crashlytics.ts untuk
+        alasannya) dan tidak pernah di build release yang dikirim ke Play
+        Store. Kartu terpisah, di paling bawah, supaya jelas ini alat uji
+        coba bukan pengaturan biasa.
+      */}
+      {showCrashTest && (
+        <>
+          <h2 className="section-label">Debug</h2>
+          <section className="card">
+            <button
+              type="button"
+              className="card__row card__row--button"
+              onClick={onTriggerCrash}
+            >
+              <span className="card__row-label">Picu Crash Uji Coba</span>
+              <BugIcon size={18} className="danger-icon" />
+            </button>
+          </section>
+        </>
+      )}
 
       <p className="app-version">ScannApp · Fase 5</p>
     </div>

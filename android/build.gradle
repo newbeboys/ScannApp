@@ -9,6 +9,10 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.0'
         classpath 'com.google.gms:google-services:4.4.4'
+        // Fase 8.5b — crash reporting client (lihat CLAUDE.md Bagian 2 &
+        // TASKS.md Fase 8.5). Versi mengikuti rekomendasi resmi README
+        // @capacitor-firebase/crashlytics 8.5.1 per 5 September 2026.
+        classpath 'com.google.firebase:firebase-crashlytics-gradle:2.9.9'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files

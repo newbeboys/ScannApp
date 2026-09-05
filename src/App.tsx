@@ -6,6 +6,7 @@ import { BottomNav, type TabId } from './components/BottomNav'
 import { ExportSheet } from './components/ExportSheet'
 import { CropIcon, ExportIcon } from './components/Icons'
 import { resetScanStreak } from './lib/ads/adFrequency'
+import { isDebugBuild, triggerTestCrash } from './lib/crashlytics'
 import { maybeShowInterstitial } from './lib/ads/adsService'
 import { shouldShowBanner } from './lib/ads/bannerGate'
 import { toastDurationMs } from './lib/toastDuration'
@@ -174,6 +175,14 @@ function App() {
   )
   const [exportEstimate, setExportEstimate] = useState<ExportSizeEstimate | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  /**
+   * Whether Pengaturan should show the Crashlytics test-crash row. Starts
+   * `false` and only ever flips to `true` once the native side confirms this
+   * is a debug build (`isDebugBuild()`, Fase 8.5b) — never assumed optimistic
+   * while the check is in flight, so the row cannot flash visible for a
+   * frame on a release build.
+   */
+  const [canTriggerTestCrash, setCanTriggerTestCrash] = useState(false)
   const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null)
   /** Every document this account has in the cloud, whether or not it is on the phone. */
   const [backups, setBackups] = useState<CloudBackup[]>([])
@@ -284,6 +293,19 @@ function App() {
   // as any other handler a mount effect closes over in this file.
   useEffect(() => {
     return onSharedFilesReceived(ingestImportedFiles)
+  }, [])
+
+  // Resolved once at mount, never re-checked: the build type an install was
+  // compiled as cannot change while it is running. `cancelled` only guards
+  // against setting state after an unmount raced ahead of the native call.
+  useEffect(() => {
+    let cancelled = false
+    void isDebugBuild().then((debug) => {
+      if (!cancelled) setCanTriggerTestCrash(debug)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -973,6 +995,17 @@ function App() {
     }
   }
 
+  /**
+   * Forces a real crash to verify Crashlytics end to end (TASKS.md, Fase
+   * 8.5b). Confirmed first, same as every other action here the user cannot
+   * undo mid-flow — a stray tap on a debug build should not force-close the
+   * app with no warning.
+   */
+  const handleTriggerTestCrash = () => {
+    if (!confirm('Picu crash uji coba sekarang? Aplikasi akan force-close.')) return
+    void triggerTestCrash()
+  }
+
   /** Local files stay on the device; only the session is dropped. */
   const handleSignOut = async () => {
     if (!confirm('Keluar dari akun ini? Dokumen yang tersimpan di HP tidak ikut terhapus.')) return
@@ -1439,6 +1472,8 @@ function App() {
             onOpenBackups={() => setView({ kind: 'backups' })}
             onOpenReferral={() => setView({ kind: 'referral' })}
             onUpgrade={() => setView({ kind: 'upgrade' })}
+            showCrashTest={canTriggerTestCrash}
+            onTriggerCrash={handleTriggerTestCrash}
           />
         )}
       </main>

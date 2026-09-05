@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "772046303206",
+    "project_id": "scannapp-project",
+    "storage_bucket": "scannapp-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:772046303206:android:d11fdeb29f8b4b8845f027",
+        "android_client_info": {
+          "package_name": "com.newbeboys.scannapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBe7GFy3mq3iR7SionnunlrdYVLWT_vUNA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

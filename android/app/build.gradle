@@ -3,6 +3,13 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.newbeboys.scannapp"
     compileSdk = rootProject.ext.compileSdkVersion
+    // AGP 8+ stopped generating BuildConfig by default. DebugBuildPlugin.java
+    // (Fase 8.5b) reads BuildConfig.DEBUG to tell a debug Gradle build from
+    // a release one -- without this flag the class does not exist at all,
+    // not just an empty one, and compileDebugJavaWithJavac fails outright.
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         applicationId "com.newbeboys.scannapp"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -95,11 +102,21 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
+// Fase 8.5b — google-services.json memang di-commit ke repo (lihat catatan
+// panjang di TASKS.md/CLAUDE.md): Google sendiri menyatakan file ini tidak
+// perlu dirahasiakan untuk app Android, karena ia sudah ikut terbundel di
+// dalam APK yang dikirim ke semua user dan bisa diekstrak dari situ kapan
+// saja -- sama seperti App ID AdMob yang sudah lebih dulu ditulis di
+// AndroidManifest.xml. try/catch di bawah sebelumnya cuma menjaga
+// google-services plugin, sekarang Crashlytics plugin ikut di dalamnya
+// karena keduanya sama-sama butuh berkas yang sama dan sama-sama tidak ada
+// gunanya diterapkan tanpanya.
 try {
     def servicesJSON = file('google-services.json')
     if (servicesJSON.text) {
         apply plugin: 'com.google.gms.google-services'
+        apply plugin: 'com.google.firebase.crashlytics'
     }
 } catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+    logger.info("google-services.json not found, google-services/crashlytics plugin not applied.")
 }

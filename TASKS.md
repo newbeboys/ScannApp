@@ -1321,6 +1321,51 @@ Suite bertambah jadi 874 node + 161 browser test, semuanya lolos.
 
 ---
 
+## Crash Reporting (Client) — Fase 8.5b, 5 September 2026
+
+Bagian B dari brainstorm "Hapus Akun & Crash Reporting" (Bagian A — hapus
+akun — dikerjakan terpisah di cabang/PR `feat/hapus-akun`, sesuai aturan
+satu subsistem per sesi CLAUDE.md Bagian 1; kalau PR itu sudah lebih dulu
+gabung ke `main`, bagian ini perlu digabung manual dengan bagian A di
+`TASKS.md`, bukan konflik sungguhan — keduanya cuma dua subseksi dari
+brainstorm yang sama).
+
+Backend tidak disentuh — log Edge Function sudah otomatis ada di Supabase
+Log Viewer, cukup untuk kebutuhan pasif. Gap-nya murni di client: sebelum
+ini, crash/force-close di HP user tidak meninggalkan jejak apa pun.
+
+- [x] Project Firebase baru `scannapp-project` (akun `jangkahadevv@gmail.com`, dibuat & dikonfigurasi Boss Ali 5 September 2026), app Android terdaftar dengan package `com.newbeboys.scannapp` — cocok dengan `applicationId` yang sudah ada, tidak perlu ubah apa pun di sisi itu.
+- [x] `@capacitor-firebase/crashlytics@8.5.1` diinstal — versi terbaru yang mendukung `@capacitor/core >=8.0.0` (proyek ini di `^8.4.2`). Nol dependency vulnerability baru: `npm audit` menunjukkan 3 isu, ketiganya dari `@capacitor/cli`/`vite` yang sudah ada sebelumnya, dilacak lewat `npm ls --all`.
+- [x] Gradle: classpath `com.google.firebase:firebase-crashlytics-gradle:2.9.9` di root `build.gradle`, `apply plugin: 'com.google.firebase.crashlytics'` di app `build.gradle` — disatukan ke dalam blok `try/catch` yang sudah ada untuk `com.google.gms.google-services` (keduanya sama-sama butuh `google-services.json`, sama-sama tidak berguna diterapkan tanpanya).
+- [x] **Google Services classpath ternyata sudah ada** (`com.google.gms:google-services:4.4.4` di root `build.gradle`, kemungkinan bawaan template Capacitor Android untuk Push Notifications) — tidak perlu ditambah, cuma `google-services.json`-nya yang sebelumnya belum ada.
+- [x] **`android/app/google-services.json` di-commit langsung ke repo (termasuk yang publik `newbeboys/ScannApp`) — keputusan eksplisit, bukan diam-diam diasumsikan**, sesuai yang diminta prompt. Alasannya: Google sendiri menyatakan berkas ini tidak perlu dirahasiakan untuk app Android — isinya App ID + API key yang dibatasi package name, bukan kredensial server, dan berkas yang sama sudah ikut terbundel di dalam APK yang dikirim ke semua user (bisa diekstrak dari situ kapan saja oleh siapa pun). Pola yang sama persis dengan App ID/unit AdMob yang sudah lebih dulu di-commit (`CLAUDE.md` Bagian 7). **Sengaja TIDAK dipindah ke GitHub Secret + langkah decode di CI** — itu menambah titik gagal (kelas bug yang sama dengan riwayat `VITE_SUPABASE_URL/ANON_KEY` hilang saat build CI, commit `dd6a7f1`) untuk berkas yang memang tidak butuh dirahasiakan. Dicatat eksplisit di `CLAUDE.md` Bagian 7.
+- [x] **Ditemukan & diperbaiki saat implementasi:** AGP 8+ berhenti men-generate `BuildConfig` secara default. Tanpa `buildFeatures { buildConfig true }` di app `build.gradle`, `compileDebugJavaWithJavac` gagal dengan "cannot find symbol: variable BuildConfig" — bukan class kosong, class-nya memang tidak ada sama sekali.
+- [x] **`DebugBuildPlugin.java`** (native, custom) — mengekspos `BuildConfig.DEBUG` ke JS. **`import.meta.env.DEV` tidak bisa dipakai untuk ini**: `ci.yml`'s `assembleDebug` dan `build-aab.yml`'s `assembleRelease`/`bundleRelease` sama-sama menjalankan `npm run build` (Vite production) dulu baru `npx cap sync android` — payload JS yang masuk ke APK debug dan release itu identik, tidak ada pembeda level Vite di dalamnya. `BuildConfig.DEBUG` sebaliknya digenerate per build type Gradle dan tidak bisa dipalsukan dari JS — literally `false` di build yang dikirim CI ke Play Store.
+- [x] `src/lib/crashlytics.ts` — `initCrashlytics()` (native-only, `setEnabled(true)` eksplisit; deteksi native crash sendiri sudah aktif sejak process start lewat ContentProvider Firebase, terlepas dari panggilan ini), `isDebugBuild()` (gagal ke `false`, bukan `true`, kalau plugin native error — supaya tombol uji coba gagal ke arah *sembunyi*, bukan muncul di build yang tidak bisa membuktikan dirinya debug), `triggerTestCrash()`. 9 unit test.
+- [x] `initCrashlytics()` dipanggil di `main.tsx` (entry point sungguhan), fire-and-forget, sebelum React mount.
+- [x] UI: baris "Picu Crash Uji Coba" di `SettingsScreen`, hanya render kalau `isDebugBuild()` sudah resolve `true` (state dimulai `false`, tidak optimistic) — dengan `confirm()` dulu sebelum memicu, sama seperti aksi lain di app ini yang tidak bisa dibatalkan (crash sungguhan = force-close). 3 browser test.
+- [x] **Diverifikasi lewat `assembleDebug` sungguhan di mesin dev** (JDK 21 Temurin, `BUILD SUCCESSFUL` 18m24s — lebih lama dari baseline karena dependency Firebase baru pertama kali di-download): APK segar diperiksa langsung —
+  - `android/app/build/generated/source/buildConfig/debug/.../BuildConfig.java` berisi `DEBUG = Boolean.parseBoolean("true")` — bukan diasumsikan dari nama task.
+  - String `DebugBuildPlugin` ditemukan di `classes15.dex` hasil ekstrak APK — kelasnya sungguh ter-compile & masuk APK, bukan cuma ada di source.
+  - `FirebaseCrashlytics`/`firebase.crashlytics` ditemukan di tiga file dex — SDK Crashlytics sungguh ter-bundle.
+  - `android/app/build/generated/res/processDebugGoogleServices/values/values.xml` berisi `google_app_id`, `google_api_key`, `project_id` yang **persis sama** dengan `google-services.json` yang diberikan Boss Ali (`1:772046303206:android:d11fdeb29f8b4b8845f027`, `scannapp-project`) — bukti config yang benar yang terpakai, bukan config lain/kosong.
+- [~] **`assembleRelease` gagal di mesin dev — bukan bug kode.** `hs_err_pid*.log` yang dihasilkan Gradle daemon menyebut eksplisit mesin ini cuma punya **3GB RAM fisik**; crash-nya "Native memory allocation (mmap) failed... system out of physical RAM" persis di task `mergeExtDexRelease`, setelah dependency Firebase menambah jumlah dex eksternal yang digabung sampai lewat batas heap daemon (`-Xmx1536m`, sudah ada sebelum task ini, bukan diubah). Debug build dengan dependency identik sukses (lihat poin di atas) — jadi ini murni keterbatasan RAM mesin dev, bukan kesalahan konfigurasi Gradle. **Dicatat di memory harness** (`android-build-env-jdk-sdk.md`) supaya sesi berikutnya tidak salah simpul jadi "Gradle-nya rusak".
+- [x] **`assembleRelease`/`bundleRelease` diverifikasi sungguhan lewat CI** — `gh workflow run build-aab.yml --ref feat/fase8-5b-crash-reporting` (run [`33971699239`](https://github.com/newbeboys/ScannApp/actions/runs/33971699239)), langkah "Build signed AAB + APK" sukses **3m44s** di runner GitHub (RAM jauh lebih lega daripada mesin dev 3GB) — pembuktian yang representatif untuk build yang sungguh dikirim ke Play Store. `ci.yml` juga otomatis jalan atas push branch ini (run [`33971675975`](https://github.com/newbeboys/ScannApp/actions/runs/33971675975)): job "Web build & typecheck" (57s, termasuk 1047 test) dan "Android debug build" (`assembleDebug`, 3m56s) dua-duanya sukses. Ketiganya hijau — Gradle/Firebase wiring terbukti benar di lingkungan yang representatif, terlepas dari keterbatasan mesin dev.
+- [ ] **Uji di device fisik/emulator — tidak bisa dikerjakan dari sesi ini.** Mesin dev tidak punya emulator Android terpasang (`Sdk/emulator` tidak ada) maupun device fisik tersambung (`adb devices` kosong). Boss Ali perlu: install APK debug hasil build (lokal atau dari artifact CI `ci.yml`), buka Pengaturan → scroll ke bawah → "Picu Crash Uji Coba" → konfirmasi → app force-close → buka lagi aplikasinya (laporan terkirim saat proses berikutnya start) → cek Firebase Console (project `scannapp-project` → Crashlytics) dalam beberapa menit.
+- [ ] Setelah terverifikasi di device fisik, putuskan: hapus baris UI-nya, atau biarkan (gerbangnya sudah `BuildConfig.DEBUG` asli, bukan bisa dipalsukan dari JS, jadi aman ditinggal permanen sebagai alat uji ulang kapan pun perlu — direkomendasikan dibiarkan, tapi keputusan akhir tetap Boss Ali sesuai instruksi task).
+
+**Suite setelah perubahan ini: 1047 node+browser test, semuanya lolos** (dijalankan sendiri, terisolasi dari build Gradle — percobaan pertama menjalankan keduanya bersamaan sempat membuat both proses crash kehabisan memori di mesin 3GB yang sama; itu bukan kegagalan test, cuma pelajaran untuk tidak membarengi dua proses berat di mesin ini).
+
+**CI PR sempat gagal di trigger `pull_request` (run `33972024211`) — ditutup, `vitest.config.ts` ikut diperbaiki.** Commit yang sama lolos di trigger `push`-nya (soal timing, bukan soal kode): `PageViewerScreen.browser.test.tsx` gagal diimpor dengan "Vitest failed to find the runner", gara-gara Vite melakukan "optimized dependencies changed. reloading" di tengah suite jalan pada cache dingin (runner CI selalu segar) — dependency baru (termasuk `@capacitor-firebase/crashlytics`) ditemukan lambat oleh crawler Vite, memutus dynamic import file lain yang kebetulan sedang diproses saat itu.
+
+Direproduksi lokal dengan `rm -rf node_modules/.vite` (memaksa cache dingin persis seperti runner CI), bukan diasumsikan dari baca log saja — gagal persis dengan pola sama, sekaligus menyingkap dependency **kedua** yang juga telat ditemukan: `pdf-lib` (statically imported, jadi bukan soal dynamic-vs-static import — crawler awal Vite memang tidak selalu menjangkau seluruh graph sebelum eksekusi test dimulai). Ditutup dengan menambahkan keenamnya (`react`, `react-dom`, `react-dom/client`, `react/jsx-dev-runtime` sudah ada; ditambah lima plugin Capacitor + `pdf-lib`) ke `optimizeDeps.include`, persis saran Vite sendiri di pesan errornya. Diverifikasi **tiga run cold-cache berturut-turut**, semuanya bersih tanpa satu pun "reloading" — bukan cuma "lolos sekali, kebetulan". Setelah dipush ulang, kedua trigger CI (`push` dan `pull_request`) lolos bersih.
+
+**Di luar cakupan sesi ini (sesuai batas task):** notifikasi aktif
+(email/Telegram/dsb), tracking kegagalan alur bisnis (upload/pembayaran/OCR
+gagal) — topik terpisah yang belum dibahas.
+
+---
+
 ## Status Keputusan
 
 Semua angka bisnis & keputusan arsitektur untuk versi pertama sudah final (lihat PRD v2 Bagian 7 & CLAUDE.md Bagian 6-7). Tidak ada lagi open decision yang memblokir task di atas — implementasi bisa langsung jalan mengikuti urutan fase.

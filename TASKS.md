@@ -1408,7 +1408,7 @@ Client:
 
 **Belum diverifikasi / masih menunggu Boss Ali:**
 
-- [ ] **`REVENUECAT_SECRET_API_KEY` belum ada di Edge Function Secrets.** Selama kosong, `request-account-deletion` jatuh ke cadangan `profiles.tier`/`pro_plan` dan mencatat `revenuecat_key_missing` di log — itulah jalur yang menolak user Pro di uji di atas. Jalur RevenueCat sungguhannya **belum pernah dijalankan**. Ambil "Secret API key" v1 dari dashboard RevenueCat (Project settings → API keys), simpan dengan nama persis itu.
+- [x] **`REVENUECAT_SECRET_API_KEY` sudah dipasang Boss Ali & diverifikasi jalan** (5 September 2026). Buktinya bukan sekadar "tidak error": skenario yang **persis sama** — profil `tier='pro', pro_plan='monthly'` masih aktif — tadinya ditolak `409` saat secret belum ada, sekarang **diizinkan `200`**, karena RevenueCat menjawab bahwa akun itu tidak punya langganan dan RevenueCat-lah otoritasnya saat ia menjawab. Log berubah dari `storeEntitlement: "unknown"` jadi `"inactive"`, dan `revenuecat_key_missing` **tidak muncul lagi** sama sekali (begitu pula `revenuecat_http_error`, yang akan muncul kalau nilai key-nya ditolak RevenueCat). Nama secret-nya benar.
 - [ ] Uji di HP fisik: tombol Hapus akun → dialog → banner muncul di ketiga tab → Batalkan → banner hilang
 - [ ] Daftarkan URL halaman legal di Data Safety form Play Console (langkah manual Boss Ali, di luar kode) — pakai `https://newbeboys.github.io/scannapp-legal/`, pilih opsi **hapus akun penuh**, dan centang juga bahwa app menyediakan jalur hapus akun di dalam app
 

@@ -1,7 +1,8 @@
 # Halaman Legal — Hapus Akun (Fase 8.5a)
 
 **Status: SUDAH TAYANG** sejak 5 September 2026, commit
-[`e362ba9`](https://github.com/newbeboys/scannapp-legal/commit/e362ba9) di repo
+[`e362ba9`](https://github.com/newbeboys/scannapp-legal/commit/e362ba9) dan
+[`7f1857e`](https://github.com/newbeboys/scannapp-legal/commit/7f1857e) di repo
 [`newbeboys/scannapp-legal`](https://github.com/newbeboys/scannapp-legal).
 Dokumen ini menyimpan alasan tiap perubahannya, karena repo legal itu terpisah
 dan tidak punya tempat untuk catatan sepanjang ini.
@@ -10,9 +11,16 @@ dan tidak punya tempat untuk catatan sepanjang ini.
 |---|---|---|
 | `https://newbeboys.github.io/scannapp-legal/` | **404** | **200** |
 | `.../index.html` | tidak ada | **200** (baru) |
-| `.../privacy-policy.html` | 200 | 200, +bagian 07 |
-| `.../terms-of-service.html` | 200 | 200 |
+| `.../privacy-policy.html` | 200 | 200, +bagian 07, **alamat tidak berubah** |
+| `.../terms-of-service.html` | 200 | 200, +baris hapus akun di bagian 02 |
 | `.../confirmed.html` | 200 | 200 (tidak disentuh) |
+
+**Boss Ali mengupload `https://newbeboys.github.io/scannapp-legal/privacy-policy.html`
+ke Play Console sebelumnya.** Alamat itu **tidak berubah** — yang berubah cuma
+isinya, di tempat yang sama. Jadi kolom "Privacy policy URL" di Play Console
+**tidak perlu diisi ulang**. Yang perlu dicek terpisah: kolom "Data deletion"
+di Data Safety form (lihat Bagian 5) kemungkinan besar belum pernah diisi,
+karena fiturnya baru ada hari ini.
 
 ---
 
@@ -60,9 +68,33 @@ sebagai tujuan Data Safety tanpa Google harus mengikuti tautan lagi.
 
 ## 3. Perubahan di `terms-of-service.html`
 
-Satu atribut: brand di header dari `href="#top"` jadi `href="index.html"`.
-Perubahan yang sama juga di `privacy-policy.html`. Tanpa ini halaman root
-jadi yatim — hanya bisa dicapai dengan mengetik URL-nya.
+**Commit `e362ba9`:** satu atribut — brand di header dari `href="#top"` jadi
+`href="index.html"`. Perubahan yang sama juga di `privacy-policy.html`. Tanpa
+ini halaman root jadi yatim — hanya bisa dicapai dengan mengetik URL-nya.
+
+**Commit `7f1857e`, setelah membaca ulang isi TOS terhadap keputusan final
+`CLAUDE.md`:** sebagian besar sudah sesuai — harga Rp 15.000/Rp 150.000
+(bagian 04), aturan "reward hanya setelah aktivasi scan" (bagian 05), dan
+"batalkan lewat pengaturan Play Store, bukan lewat app" (bagian 04) sudah
+selaras dengan syarat hapus akun yang baru. Satu celah nyata: **bagian 02
+"Akun Pengguna" cuma menyebut hak KAMI menangguhkan/menghapus akun yang
+melanggar** — tidak pernah menyebut hak USER SENDIRI meminta hapus akun kapan
+saja, padahal itu sekarang fitur inti yang Play Console mewajibkan. Ditambah
+satu baris cross-reference ke Kebijakan Privasi bagian 07, bukan
+menduplikasi isinya:
+
+> Anda dapat meminta penghapusan akun Anda sendiri kapan saja, langsung dari
+> Aplikasi maupun lewat email — lihat Kebijakan Privasi bagian 07 untuk
+> detail proses, masa tunggu, dan konsekuensinya.
+
+Versi dinaikkan 1.0 → 1.1 dengan tanggal diperbarui, sama seperti Kebijakan
+Privasi. Tautannya diverifikasi hidup dengan mengklik sungguhan lewat
+Playwright (bukan cuma mengecek `href`-nya ada) — mendarat tepat di
+`privacy-policy.html#hapus-akun`.
+
+Juga dicek: kelas CSS `.placeholder` ada di kedua halaman tapi **tidak
+pernah dipakai** di badan HTML manapun — bukan ada teks yang belum terisi,
+cuma sisa dari template yang tidak terpakai.
 
 ## 4. Alamat email
 

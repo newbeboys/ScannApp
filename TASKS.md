@@ -1425,6 +1425,13 @@ terpisah `newbeboys/scannapp-legal`). Alasan tiap perubahannya dicatat di
 - [x] Email `supportscannapp@gmail.com` dikonfirmasi Boss Ali — bukan tebakan, alamat itu memang sudah tertulis di halaman yang tayang sebelumnya.
 - [x] Diverifikasi live: kelima URL `200`, penomoran bagian 01–10 utuh, anchor `#hapus-akun` ada, tidak ada lagi teks "30 hari".
 
+**Boss Ali mengonfirmasi URL `privacy-policy.html` yang di-upload ke Play Console memang tidak berubah alamat** — hanya isinya yang diperbarui di tempat, jadi **tidak perlu upload ulang** untuk kolom Privacy policy URL. Yang perlu dicek terpisah: kolom "Data deletion" di Data Safety form, kemungkinan besar belum pernah diisi karena fiturnya baru ada hari ini (lihat item Play Console di bawah).
+
+**Syarat & Ketentuan diperiksa terhadap keputusan final `CLAUDE.md` (5 September 2026, commit `7f1857e`)** — sebagian besar sudah sesuai (harga Rp 15.000/Rp 150.000, aturan reward hanya setelah aktivasi scan, "batalkan lewat Play Store bukan lewat app" sudah selaras dengan syarat hapus akun). Satu celah nyata ditemukan dan ditutup:
+
+- [x] Bagian 02 "Akun Pengguna" cuma menyebut hak **kami** menangguhkan/menghapus akun yang melanggar — tidak pernah menyebut hak **user sendiri** meminta hapus akun kapan saja, padahal itu sekarang fitur inti. Ditambah satu baris cross-reference ke Kebijakan Privasi bagian 07 (bukan menduplikasi isinya). Versi dinaikkan 1.0 → 1.1 dengan tanggal diperbarui, sama seperti Kebijakan Privasi. Diverifikasi live dan tautannya diklik sungguhan (Playwright) — mendarat tepat di `privacy-policy.html#hapus-akun`.
+- [x] Dicek juga: `.placeholder` ada di CSS kedua halaman tapi **tidak pernah dipakai** di badan HTML manapun — bukan ada teks yang belum terisi, cuma sisa kelas dari template.
+
 **Dua catatan kecil dari membaca isi halaman (bukan penghalang):**
 
 - [ ] `scannapp-logo.png` ada di repo legal tapi tidak dipakai halaman mana pun — ketiganya memakai kotak biru gambaran CSS. Juga belum ada favicon, jadi browser meminta `/favicon.ico` dan dapat 404. Keputusan desain terpisah.

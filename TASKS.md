@@ -1410,6 +1410,11 @@ Client:
 
 - [x] **`REVENUECAT_SECRET_API_KEY` sudah dipasang Boss Ali & diverifikasi jalan** (5 September 2026). Buktinya bukan sekadar "tidak error": skenario yang **persis sama** — profil `tier='pro', pro_plan='monthly'` masih aktif — tadinya ditolak `409` saat secret belum ada, sekarang **diizinkan `200`**, karena RevenueCat menjawab bahwa akun itu tidak punya langganan dan RevenueCat-lah otoritasnya saat ia menjawab. Log berubah dari `storeEntitlement: "unknown"` jadi `"inactive"`, dan `revenuecat_key_missing` **tidak muncul lagi** sama sekali (begitu pula `revenuecat_http_error`, yang akan muncul kalau nilai key-nya ditolak RevenueCat). Nama secret-nya benar.
 - [ ] Uji di HP fisik: tombol Hapus akun → dialog → banner muncul di ketiga tab → Batalkan → banner hilang
+
+**Dua bug UI ditemukan Boss Ali saat uji HP fisik pertama (6 September 2026), sudah diperbaiki:**
+
+- [x] `DeleteAccountSheet` tidak pernah ditambahkan ke `sheetOpen` di `App.tsx` (gate yang menyembunyikan banner iklan selagi sebuah sheet terbuka), padahal komentar di baris itu sendiri sudah memperingatkan "menambah sheet baru tanpa menambahkannya di sini membawa bug itu kembali" — persis yang terjadi. Akibatnya tombol Batal/Hapus akun saya di sheet konfirmasi tertutup banner iklan native dan tidak bisa diklik. Ditambahkan `deleteAccountOpen` ke `sheetOpen`.
+- [x] `AccountDeletionBanner` (banner "akan dihapus dalam N hari" + tombol Batalkan) dirender sebagai saudara `.screen`, bukan di dalamnya, jadi tidak kebagian padding `env(safe-area-inset-top)` yang dipakai layar lain — banner nongol di balik status bar dan tombol Batalkan tidak terjangkau. Ditambahkan margin top/horizontal yang sama ke `.deletion-banner` di `App.css`.
 - [ ] Daftarkan URL halaman legal di Data Safety form Play Console (langkah manual Boss Ali, di luar kode) — pakai `https://newbeboys.github.io/scannapp-legal/`, pilih opsi **hapus akun penuh**, dan centang juga bahwa app menyediakan jalur hapus akun di dalam app
 
 **Halaman legal — SUDAH TAYANG** (5 September 2026, commit `e362ba9` di repo

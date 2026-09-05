@@ -2668,11 +2668,17 @@ body.scroll-locked .app__body {
   `position: sticky`. Sisa layar di HP sudah dipotong header, bottom nav, dan
   banner iklan; satu palang lagi yang menempel permanen akan memakan ruang
   daftar dokumen selama tujuh hari penuh.
+
+  Ia dirender sebagai saudara `.screen`, bukan di dalamnya, jadi tidak ikut
+  kebagian padding-top `.screen` yang menjorokkan konten di bawah status bar.
+  Tanpa margin sendiri di sini, tombol "Batalkan" ikut naik ke balik status
+  bar dan tidak bisa disentuh (dilaporkan dari HP, 6 September 2026).
 */
 .deletion-banner {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin: calc(12px + env(safe-area-inset-top, 0px)) 20px 0;
   padding: 12px 14px;
   border-radius: 16px;
   background: rgba(229, 72, 77, 0.1);

@@ -238,7 +238,7 @@ function App() {
    * 26 Agustus 2026). Adding a new bottom sheet without adding it here brings
    * that bug straight back.
    */
-  const sheetOpen = exportDoc !== null || batchOpen
+  const sheetOpen = exportDoc !== null || batchOpen || deleteAccountOpen
 
   // Banner only on the tab screens — never over a scan review, editor, merge
   // or paywall, where it would sit in the middle of a task (spec Bagian 3.3).

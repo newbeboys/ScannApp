@@ -1356,6 +1356,10 @@ ini, crash/force-close di HP user tidak meninggalkan jejak apa pun.
 
 **Suite setelah perubahan ini: 1047 node+browser test, semuanya lolos** (dijalankan sendiri, terisolasi dari build Gradle — percobaan pertama menjalankan keduanya bersamaan sempat membuat both proses crash kehabisan memori di mesin 3GB yang sama; itu bukan kegagalan test, cuma pelajaran untuk tidak membarengi dua proses berat di mesin ini).
 
+**CI PR sempat gagal di trigger `pull_request` (run `33972024211`) — ditutup, `vitest.config.ts` ikut diperbaiki.** Commit yang sama lolos di trigger `push`-nya (soal timing, bukan soal kode): `PageViewerScreen.browser.test.tsx` gagal diimpor dengan "Vitest failed to find the runner", gara-gara Vite melakukan "optimized dependencies changed. reloading" di tengah suite jalan pada cache dingin (runner CI selalu segar) — dependency baru (termasuk `@capacitor-firebase/crashlytics`) ditemukan lambat oleh crawler Vite, memutus dynamic import file lain yang kebetulan sedang diproses saat itu.
+
+Direproduksi lokal dengan `rm -rf node_modules/.vite` (memaksa cache dingin persis seperti runner CI), bukan diasumsikan dari baca log saja — gagal persis dengan pola sama, sekaligus menyingkap dependency **kedua** yang juga telat ditemukan: `pdf-lib` (statically imported, jadi bukan soal dynamic-vs-static import — crawler awal Vite memang tidak selalu menjangkau seluruh graph sebelum eksekusi test dimulai). Ditutup dengan menambahkan keenamnya (`react`, `react-dom`, `react-dom/client`, `react/jsx-dev-runtime` sudah ada; ditambah lima plugin Capacitor + `pdf-lib`) ke `optimizeDeps.include`, persis saran Vite sendiri di pesan errornya. Diverifikasi **tiga run cold-cache berturut-turut**, semuanya bersih tanpa satu pun "reloading" — bukan cuma "lolos sekali, kebetulan". Setelah dipush ulang, kedua trigger CI (`push` dan `pull_request`) lolos bersih.
+
 **Di luar cakupan sesi ini (sesuai batas task):** notifikasi aktif
 (email/Telegram/dsb), tracking kegagalan alur bisnis (upload/pembayaran/OCR
 gagal) — topik terpisah yang belum dibahas.

@@ -1410,8 +1410,25 @@ Client:
 
 - [ ] **`REVENUECAT_SECRET_API_KEY` belum ada di Edge Function Secrets.** Selama kosong, `request-account-deletion` jatuh ke cadangan `profiles.tier`/`pro_plan` dan mencatat `revenuecat_key_missing` di log — itulah jalur yang menolak user Pro di uji di atas. Jalur RevenueCat sungguhannya **belum pernah dijalankan**. Ambil "Secret API key" v1 dari dashboard RevenueCat (Project settings → API keys), simpan dengan nama persis itu.
 - [ ] Uji di HP fisik: tombol Hapus akun → dialog → banner muncul di ketiga tab → Batalkan → banner hilang
-- [ ] Halaman legal (`scannapp-legal`): teks siap tempel di `docs/legal/2026-09-05-hapus-akun-halaman-legal.md`, **belum dipublish**. Tiga hal perlu keputusan Boss Ali: (a) konfirmasi `supportscannapp@gmail.com` masih dipakai, (b) **URL root `https://newbeboys.github.io/scannapp-legal/` sekarang 404** — reponya tidak punya `index.html`, jadi daftarkan URL lengkap `.../privacy-policy.html` atau buat halaman index, (c) bagian 05 halaman itu menjanjikan 30 hari sementara implementasinya 7 hari — usul teks penggantinya sudah disiapkan.
-- [ ] Daftarkan URL halaman legal di Data Safety form Play Console (langkah manual Boss Ali, di luar kode)
+- [ ] Daftarkan URL halaman legal di Data Safety form Play Console (langkah manual Boss Ali, di luar kode) — pakai `https://newbeboys.github.io/scannapp-legal/`, pilih opsi **hapus akun penuh**, dan centang juga bahwa app menyediakan jalur hapus akun di dalam app
+
+**Halaman legal — SUDAH TAYANG** (5 September 2026, commit `e362ba9` di repo
+terpisah `newbeboys/scannapp-legal`). Alasan tiap perubahannya dicatat di
+`docs/legal/2026-09-05-hapus-akun-halaman-legal.md`.
+
+- [x] **URL root diperbaiki dari 404 jadi 200.** Bukan salah konfigurasi — Pages-nya sehat (`status: built`, sumber `main` root); reponya memang tidak punya `index.html`, jadi hosting statis tidak punya apa pun untuk disajikan di `/`. Ini penting karena URL root itulah yang didaftarkan di Data Safety form, dan Google menolak URL yang tidak resolve.
+- [x] `index.html` dibuat **memakai template yang sudah ada** (permintaan eksplisit Boss Ali: jangan bikin template baru) — `<head>`, blok `<style>`, header sticky, pil navigasi, penomoran mono, kartu, dan footer disalin dari `privacy-policy.html`. Nol kelas CSS baru, nol warna baru.
+- [x] Bagian hapus akun dimuat **utuh di halaman root**, bukan sekadar tautan — supaya URL root sendiri sudah sah sebagai tujuan Data Safety.
+- [x] Kebijakan Privasi dapat bagian 07 "Menghapus Akun & Data Anda" (`id="hapus-akun"`); bagian 07–09 lama naik jadi 08–10.
+- [x] Bagian 05 diperbaiki dari "30 hari" jadi 7 hari, dirujuk ke bagian 07. Versi dinaikkan 1.0 → 1.1 dengan tanggal diperbarui.
+- [x] Brand di header kedua halaman lama diarahkan ke `index.html` (sebelumnya `#top`), supaya halaman root tidak jadi yatim.
+- [x] Email `supportscannapp@gmail.com` dikonfirmasi Boss Ali — bukan tebakan, alamat itu memang sudah tertulis di halaman yang tayang sebelumnya.
+- [x] Diverifikasi live: kelima URL `200`, penomoran bagian 01–10 utuh, anchor `#hapus-akun` ada, tidak ada lagi teks "30 hari".
+
+**Dua catatan kecil dari membaca isi halaman (bukan penghalang):**
+
+- [ ] `scannapp-logo.png` ada di repo legal tapi tidak dipakai halaman mana pun — ketiganya memakai kotak biru gambaran CSS. Juga belum ada favicon, jadi browser meminta `/favicon.ico` dan dapat 404. Keputusan desain terpisah.
+- [ ] Bagian 01 Kebijakan Privasi menyebut **"log error/crash"** sebagai data yang dikumpulkan, padahal Crashlytics (bagian B di bawah) belum dibangun. Mengumpulkan lebih sedikit dari yang diumumkan tidak merugikan user, tapi **Data Safety form harus konsisten dengan halaman ini**. Paling mudah: selesaikan bagian B, lalu kalimat itu jadi benar.
 
 ### B. Crash Reporting (Client)
 

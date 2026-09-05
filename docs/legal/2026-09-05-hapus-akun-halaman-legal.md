@@ -1,115 +1,97 @@
-# Halaman Legal — Paragraf Hapus Akun (Fase 8.5a)
+# Halaman Legal — Hapus Akun (Fase 8.5a)
 
-**Status: SIAP TEMPEL, BELUM DIPUBLISH.** Menerbitkan halaman publik itu
-tindakan keluar yang tidak bisa ditarik diam-diam, jadi teksnya disiapkan di
-sini dan menunggu keputusan Boss Ali. Repo tujuannya
-[`newbeboys/scannapp-legal`](https://github.com/newbeboys/scannapp-legal)
-(publik, terpisah dari repo aplikasi) — akses tulis ada, tinggal perintahnya.
+**Status: SUDAH TAYANG** sejak 5 September 2026, commit
+[`e362ba9`](https://github.com/newbeboys/scannapp-legal/commit/e362ba9) di repo
+[`newbeboys/scannapp-legal`](https://github.com/newbeboys/scannapp-legal).
+Dokumen ini menyimpan alasan tiap perubahannya, karena repo legal itu terpisah
+dan tidak punya tempat untuk catatan sepanjang ini.
 
----
-
-## 1. Tiga hal yang perlu diputuskan Boss Ali sebelum publish
-
-### a. Alamat email support — kemungkinan besar sudah benar, tinggal dikonfirmasi
-
-Prompt meminta alamatnya dikonfirmasi, jangan ditebak. Tidak ditebak: alamat
-di bawah **dibaca langsung dari halaman yang sudah tayang**,
-`privacy-policy.html` bagian 06 dan 09:
-
-```
-supportscannapp@gmail.com
-```
-
-Formatnya sah (ada `@`, domain `gmail.com`). Konfirmasi yang dibutuhkan cuma:
-**alamat ini masih dipakai dan masih dibaca?** Kalau ya, teks di bawah bisa
-langsung dipasang apa adanya.
-
-### b. URL root halaman legal saat ini 404 — ini memblokir Play Console
-
-`https://newbeboys.github.io/scannapp-legal/` **mengembalikan HTTP 404**
-(diperiksa 5 September 2026). Reponya tidak punya `index.html`; yang tayang
-hanya tiga berkas spesifik:
-
-| URL | Status |
-|---|---|
-| `https://newbeboys.github.io/scannapp-legal/` | **404** |
-| `https://newbeboys.github.io/scannapp-legal/privacy-policy.html` | tayang |
-| `https://newbeboys.github.io/scannapp-legal/terms-of-service.html` | tayang |
-
-Google Play menolak URL yang tidak resolve. Dua jalan keluar:
-
-1. **Daftarkan URL lengkapnya** ke Play Console
-   (`.../scannapp-legal/privacy-policy.html`) — nol pekerjaan tambahan.
-2. **Buat `index.html`** di repo legal sebagai halaman pengantar berisi tautan
-   ke keduanya, lalu daftarkan URL root. Lebih rapi, tapi satu berkas baru
-   yang harus dibuat & di-review dulu.
-
-Rekomendasi: opsi 1 sekarang supaya submit tidak tertahan, opsi 2 menyusul
-kalau memang mau dirapikan.
-
-### c. Bagian 05 halaman itu menjanjikan 30 hari, implementasinya 7 hari
-
-Teks yang sekarang tayang di bagian 05 "Berapa Lama Kami Menyimpan Data Anda":
-
-> Jika Anda menghapus akun, data profil dan metadata dokumen dihapus dari
-> sistem kami **dalam waktu 30 hari**, termasuk file backup di cloud.
-
-Yang dibangun: masa tunggu **7 hari**, lalu purge permanen. 7 hari masih di
-dalam janji "dalam waktu 30 hari", jadi ini **bukan pelanggaran** — tapi
-angkanya sebaiknya disamakan supaya halaman legal menggambarkan proses yang
-sebenarnya, sebagaimana diminta kebijakan Google Play. Usulan penggantinya ada
-di bagian 3 di bawah.
+| URL | Sebelum | Sesudah |
+|---|---|---|
+| `https://newbeboys.github.io/scannapp-legal/` | **404** | **200** |
+| `.../index.html` | tidak ada | **200** (baru) |
+| `.../privacy-policy.html` | 200 | 200, +bagian 07 |
+| `.../terms-of-service.html` | 200 | 200 |
+| `.../confirmed.html` | 200 | 200 (tidak disentuh) |
 
 ---
 
-## 2. Teks yang ditempel — bagian baru di `privacy-policy.html`
+## 1. Kenapa root-nya 404, dan apa yang memperbaikinya
 
-Sisipkan **setelah** blok bagian `06 Hak Anda` (tepat sebelum
-`<h2><span class="num">07</span>Anak-Anak</h2>`), lalu naikkan nomor bagian
-07/08/09 yang lama jadi 08/09/10.
+Bukan salah konfigurasi. GitHub Pages-nya sehat — `gh api repos/.../pages`
+menjawab `status: "built"`, sumber `main` branch path `/`, `https_enforced`.
+Reponya memang **tidak punya `index.html`**; isinya cuma `confirmed.html`,
+`privacy-policy.html`, `terms-of-service.html`, dan `scannapp-logo.png`.
+Hosting statis tidak punya apa pun untuk disajikan di `/`, jadi 404.
 
-```html
-  <h2><span class="num">07</span>Menghapus Akun &amp; Data Anda</h2>
-  <p>Anda dapat menghapus akun ScannApp beserta seluruh data yang tersimpan di server kami, kapan saja, lewat dua jalur berikut.</p>
+Ini penting karena URL root itulah yang paling wajar didaftarkan di Data
+Safety form Play Console, dan Google menolak URL yang tidak resolve.
 
-  <p><strong>Lewat aplikasi (paling cepat).</strong> Buka ScannApp → tab <em>Pengaturan</em> → <em>Hapus akun</em>, lalu ikuti konfirmasinya. Akun langsung dijadwalkan untuk dihapus.</p>
+`index.html` dibuat **memakai template yang sudah ada** (permintaan eksplisit
+Boss Ali: jangan bikin template baru) — `<head>` dan blok `<style>` disalin
+dari `privacy-policy.html`, header sticky yang sama, pil navigasi yang sama,
+penomoran `.num` IBM Plex Mono yang sama, `.contact-card` dan `.callout` yang
+sama, footer yang sama. Tidak ada kelas CSS baru dan tidak ada warna baru;
+palet `--blue #2563EB` / `--coral #FF6B4A` tetap seperti aslinya, sesuai
+`CLAUDE.md` Bagian 9.2.
 
-  <p><strong>Lewat email.</strong> Kirim permintaan ke <a href="mailto:supportscannapp@gmail.com">supportscannapp@gmail.com</a> dari <strong>alamat email yang Anda pakai mendaftar</strong> — alamat itu yang kami pakai untuk memastikan permintaan datang dari pemilik akun. Tulis subjek <em>&ldquo;Hapus Akun&rdquo;</em>. Kami memproses permintaan dalam waktu maksimal 7 hari kerja sejak email diterima.</p>
+Isinya: pengantar singkat, tautan ke kedua dokumen, **bagian hapus akun
+lengkap**, dan kartu kontak. Bagian hapus akunnya sengaja dimuat utuh di
+halaman root, bukan sekadar tautan — supaya URL root sendiri sudah sah
+sebagai tujuan Data Safety tanpa Google harus mengikuti tautan lagi.
 
-  <div class="callout">Setelah permintaan dibuat, ada masa tunggu <strong>7 hari</strong>. Selama masa itu Anda masih bisa masuk seperti biasa dan membatalkan penghapusan lewat tombol <em>Batalkan Penghapusan</em> di aplikasi. Lewat 7 hari, penghapusan bersifat permanen dan tidak dapat dipulihkan.</div>
+## 2. Perubahan di `privacy-policy.html`
 
-  <p><strong>Yang dihapus permanen:</strong> data profil (nama tampilan, alamat email, kata sandi), status langganan dan kuota penyimpanan, metadata dokumen, serta <strong>seluruh berkas cadangan Anda di penyimpanan cloud</strong>.</p>
+- **Bagian 07 baru, "Menghapus Akun & Data Anda"** (`id="hapus-akun"`), berisi
+  dua jalur (dalam aplikasi & email dari alamat pendaftaran sebagai verifikasi
+  pemilik), masa tunggu 7 hari beserta cara membatalkan, daftar apa yang
+  dihapus permanen, apa yang tidak (dokumen lokal, catatan transaksi anonim,
+  catatan referral yang dianonimkan), dan peringatan bahwa menghapus akun
+  **tidak** menghentikan tagihan Google Play.
+- **Bagian 07–09 lama naik jadi 08–10.**
+- **Bagian 05 diperbaiki dari "30 hari" jadi 7 hari.** 7 masih di dalam 30
+  jadi bukan pelanggaran, tapi Google Play minta halamannya menggambarkan
+  proses yang sebenarnya. Sekarang merujuk ke bagian 07.
+- **Versi 1.0 → 1.1** dengan tanggal "Diperbarui 5 September 2026", tanggal
+  "Berlaku sejak" dipertahankan. Isinya berubah materiil; menahannya di
+  "Versi 1.0, berlaku sejak 13 Agustus" akan menyesatkan.
+- `h2` diberi `scroll-margin-top:80px` supaya anchor `#hapus-akun` tidak
+  mendarat di balik header sticky.
 
-  <p><strong>Yang tidak ikut terhapus:</strong></p>
-  <ul>
-    <li>Dokumen yang tersimpan lokal di perangkat Anda — file itu tidak pernah menyentuh server kami, jadi hapus sendiri lewat menu <em>Hapus semua dokumen</em> di aplikasi, atau dengan menghapus aplikasinya.</li>
-    <li>Catatan transaksi pembelian, yang kami simpan dalam bentuk anonim (tanpa penunjuk ke identitas Anda) selama masih diwajibkan untuk keperluan akuntansi dan penyelesaian sengketa pembayaran.</li>
-    <li>Catatan program referral, yang penunjuk identitasnya kami hapus (dianonimkan) namun barisnya dipertahankan agar hadiah yang sudah diterima pengguna lain tetap sah.</li>
-  </ul>
+## 3. Perubahan di `terms-of-service.html`
 
-  <p><strong>Jika Anda berlangganan Pro:</strong> batalkan dulu langganan Anda lewat Play Store (Play Store → Menu → Langganan → ScannApp → Batalkan). Menghapus akun di ScannApp <strong>tidak</strong> menghentikan tagihan Google Play, karena penagihan dikelola oleh Google, bukan oleh kami.</p>
-```
+Satu atribut: brand di header dari `href="#top"` jadi `href="index.html"`.
+Perubahan yang sama juga di `privacy-policy.html`. Tanpa ini halaman root
+jadi yatim — hanya bisa dicapai dengan mengetik URL-nya.
 
----
+## 4. Alamat email
 
-## 3. Usulan pengganti bagian 05 (opsional, lihat 1c)
+`supportscannapp@gmail.com`, dikonfirmasi Boss Ali 5 September 2026. Bukan
+tebakan: alamat itu memang sudah tertulis di bagian 06 dan 09 halaman yang
+tayang sebelumnya, dan sekarang dipakai konsisten di ketiga tempat.
 
-Kalau Boss Ali setuju menyamakan angkanya, ganti paragraf bagian 05 yang
-sekarang dengan ini:
+## 5. Yang masih perlu tangan Boss Ali
 
-```html
-  <p>Data akun disimpan selama akun Anda aktif. Jika Anda menghapus akun, seluruh data profil, metadata dokumen, dan berkas backup di cloud dihapus permanen setelah masa tunggu 7 hari — lihat bagian 07. Dokumen yang disimpan lokal di perangkat Anda tetap ada sampai Anda menghapusnya sendiri, karena file itu tidak pernah menyentuh server kami.</p>
-```
+- [ ] **Daftarkan URL di Data Safety form Play Console** — langkah manual di
+      luar kode. Play Console → App content → Data safety → bagian penghapusan
+      data. Pakai `https://newbeboys.github.io/scannapp-legal/` (sudah 200).
+      Pilih opsi **hapus akun penuh**, bukan "hapus sebagian data" — yang
+      ScannApp sediakan memang penghapusan akun seutuhnya. Centang juga bahwa
+      app menyediakan jalur hapus akun **di dalam app** (Pengaturan → Hapus
+      akun).
 
----
+## 6. Dua catatan kecil, bukan penghalang
 
-## 4. Langkah manual di Play Console (di luar kode, tidak bisa dikerjakan Claude Code)
-
-Setelah halaman di atas tayang:
-
-1. Play Console → **App content** → **Data safety** → bagian penghapusan data.
-2. Isi URL halamannya (lihat keputusan 1b soal URL mana yang dipakai).
-3. Centang bahwa app menyediakan **jalur hapus akun di dalam app** — ini sudah
-   ada: Pengaturan → Hapus akun.
-4. Google membedakan "hapus akun" dan "hapus sebagian data". Yang ScannApp
-   sediakan adalah **hapus akun penuh**, jadi pilih opsi itu.
+- **`scannapp-logo.png` ada di repo tapi tidak dipakai halaman mana pun.**
+  Ketiga halaman legal memakai kotak biru yang digambar CSS (`.brand .mark`),
+  bukan berkas logonya. Dibiarkan apa adanya supaya konsisten dengan template
+  yang sudah ada — kalau mau dipakai (mis. jadi favicon, yang sekarang belum
+  ada sehingga browser meminta `/favicon.ico` dan dapat 404), itu keputusan
+  desain terpisah.
+- **Bagian 01 Kebijakan Privasi menyebut "log error/crash" sebagai data yang
+  dikumpulkan**, padahal crash reporting (Fase 8.5 bagian B, Crashlytics)
+  belum dibangun. Mengumpulkan lebih sedikit dari yang diumumkan tidak
+  merugikan user, tapi **Data Safety form harus konsisten dengan halaman
+  ini** — kalau formnya diisi "tidak mengumpulkan crash log" sementara
+  halamannya bilang iya, itu ketidakcocokan yang bisa dipersoalkan Google.
+  Paling mudah: selesaikan Fase 8.5 B, lalu kalimat itu jadi benar.

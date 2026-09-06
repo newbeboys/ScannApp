@@ -3,13 +3,6 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.newbeboys.scannapp"
     compileSdk = rootProject.ext.compileSdkVersion
-    // AGP 8+ stopped generating BuildConfig by default. DebugBuildPlugin.java
-    // (Fase 8.5b) reads BuildConfig.DEBUG to tell a debug Gradle build from
-    // a release one -- without this flag the class does not exist at all,
-    // not just an empty one, and compileDebugJavaWithJavac fails outright.
-    buildFeatures {
-        buildConfig true
-    }
     defaultConfig {
         applicationId "com.newbeboys.scannapp"
         minSdkVersion rootProject.ext.minSdkVersion

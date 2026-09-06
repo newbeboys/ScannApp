@@ -11,7 +11,6 @@ public class MainActivity extends BridgeActivity {
         // bridge and immediately replays the launch intent through it (see
         // BridgeActivity.load()), so the plugin has to already be registered.
         registerPlugin(SharedImportPlugin.class);
-        registerPlugin(DebugBuildPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

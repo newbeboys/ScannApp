@@ -18,6 +18,8 @@ const AUTH_STUB: AuthContextValue = {
   signOut: vi.fn(),
   sendPasswordReset: vi.fn(),
   refreshProfile: vi.fn(),
+  requestAccountDeletion: vi.fn(),
+  cancelAccountDeletion: vi.fn(),
 }
 
 async function renderAuth(mode: 'signin' | 'signup' = 'signup') {

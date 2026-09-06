@@ -1,4 +1,5 @@
 import { createContext } from 'react'
+import type { DeletionSchedule } from '../lib/accountDeletion'
 import type { Profile, Tier } from '../lib/tier'
 
 export type AuthStatus = 'loading' | 'signed-out' | 'signed-in'
@@ -42,6 +43,16 @@ export interface AuthContextValue {
    * would usually still see Basic.
    */
   refreshProfile: (options?: { untilPro?: boolean }) => Promise<void>
+  /**
+   * Starts the 7-day account-deletion grace period.
+   *
+   * Rejects with the server's own message when a Play Store subscription is
+   * still live — the account cannot be scheduled for deletion while something
+   * is still billing for it (CLAUDE.md Bagian 6).
+   */
+  requestAccountDeletion: () => Promise<DeletionSchedule>
+  /** Calls off a pending deletion. Idempotent, both here and server-side. */
+  cancelAccountDeletion: () => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

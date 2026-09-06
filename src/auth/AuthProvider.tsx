@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import {
+  cancelAccountDeletion as sendCancelAccountDeletion,
+  requestAccountDeletion as sendAccountDeletionRequest,
+  type DeletionSchedule,
+} from '../lib/accountDeletion'
 import { translateAuthError } from '../lib/authErrors'
 import { fetchOwnProfile } from '../lib/profileApi'
 import { forgetPurchaseIdentity, identifyForPurchases } from '../lib/purchases/purchasesService'
@@ -101,6 +106,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => data.subscription.unsubscribe()
   }, [loadProfile])
 
+  /**
+   * Writes the pending-deletion stamp into the profile already in hand,
+   * instead of re-reading it from the server.
+   *
+   * The Edge Function has committed by the time this runs, so the value is
+   * known — and a follow-up read would put the banner (or its disappearance)
+   * behind a second round trip that can fail on its own, leaving the screen
+   * disagreeing with what the user was just told.
+   */
+  const applyDeletionRequestedAt = useCallback((value: string | null) => {
+    setProfile((current) => {
+      if (!current) return current
+
+      const next = { ...current, deletionRequestedAt: value }
+      writeCachedProfile(next)
+      return next
+    })
+  }, [])
+
+  const requestAccountDeletion = useCallback(async (): Promise<DeletionSchedule> => {
+    const schedule = await sendAccountDeletionRequest()
+    applyDeletionRequestedAt(schedule.requestedAt)
+    return schedule
+  }, [applyDeletionRequestedAt])
+
+  const cancelAccountDeletion = useCallback(async () => {
+    await sendCancelAccountDeletion()
+    applyDeletionRequestedAt(null)
+  }, [applyDeletionRequestedAt])
+
   const signIn = useCallback(async (address: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email: address.trim(),
@@ -154,6 +189,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       sendPasswordReset,
       refreshProfile,
+      requestAccountDeletion,
+      cancelAccountDeletion,
     }),
     [
       status,
@@ -166,6 +203,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       sendPasswordReset,
       refreshProfile,
+      requestAccountDeletion,
+      cancelAccountDeletion,
     ],
   )
 

@@ -167,7 +167,7 @@ export function SettingsScreen({
         {GRACE_PERIOD_DAYS} hari sebelum penghapusan permanen.
       </p>
 
-      <p className="app-version">ScannApp · Fase 5</p>
+      <p className="app-version">ScannApp</p>
     </div>
   )
 }

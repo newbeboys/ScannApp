@@ -13,7 +13,9 @@ build/
 
 # Capacitor / Android / iOS native build artifacts
 android/app/build/
+android/build/
 android/.gradle/
+android/.kotlin/
 android/local.properties
 ios/App/Pods/
 ios/App/build/

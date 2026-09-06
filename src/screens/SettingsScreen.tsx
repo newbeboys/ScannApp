@@ -1,6 +1,12 @@
 import { useAuth } from '../auth/useAuth'
 import { AppLogo } from '../components/AppLogo'
-import { ChevronRightIcon, CloudIcon, GiftIcon, LogoutIcon, TrashIcon } from '../components/Icons'
+import {
+  ChevronRightIcon,
+  CloudIcon,
+  GiftIcon,
+  LogoutIcon,
+  TrashIcon,
+} from '../components/Icons'
 import { QuotaBar } from '../components/QuotaBar'
 import { proDaysRemaining, tierLabel } from '../lib/tier'
 import { THEMES, THEME_ORDER } from '../theme/themes'
@@ -141,7 +147,7 @@ export function SettingsScreen({
         </button>
       </section>
 
-      <p className="app-version">ScannApp · Fase 5</p>
+      <p className="app-version">ScannApp</p>
     </div>
   )
 }

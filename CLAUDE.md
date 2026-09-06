@@ -19,6 +19,7 @@ Aplikasi scan dokumen Android, dua tier (Basic gratis+iklan, Pro berbayar). Diba
 | Storage/backup file | Cloudflare R2 (S3-compatible API), diakses lewat signed URL dari Supabase Edge Function — **client tidak pernah menyimpan R2 access key langsung** |
 | Penyimpanan utama file | Lokal di device user (local-first). Cloud (R2) hanya untuk backup/sync opsional |
 | Perbaikan gambar | Versi pertama **metode klasik** (deterministik, nol dependency, **semua tier**), nama UI **"Perbaiki Pencahayaan"** — jangan sebut AI. Versi **"AI Enhance"** memakai model on-device TensorFlow Lite dan Pro-exclusive, menyusul saat modelnya ada — **dilarang** memanggil cloud AI API berbayar/free-tier pihak ketiga untuk fitur ini kecuali ada keputusan baru yang eksplisit dari Boss Ali |
+| Crash reporting (client) | **Firebase Crashlytics** via `@capacitor-firebase/crashlytics` (Fase 8.5b, 5 September 2026) — project Firebase `scannapp-project`, akun `jangkahadevv@gmail.com`, **terpisah dari FinanceApp**. Mode pasif (dashboard dicek manual lewat Firebase Console, tanpa notifikasi aktif). `google-services.json` **di-commit ke repo publik** — lihat Bagian 7 kenapa itu aman |
 
 ## 3. Aturan Keras (Hard Rules)
 
@@ -102,6 +103,9 @@ Angka-angka di atas dipakai langsung sebagai konstanta/env var (lihat `.env.exam
   - `R2_ENDPOINT`
   - `R2_BUCKET_NAME`
 - Akses ke lima secret ini di Edge Function selalu lewat `Deno.env.get('<NAMA_SECRET>')` — jangan hardcode nilainya di kode, dan jangan asumsikan nama secret lain dari yang tercantum di atas.
+- **Project Firebase `scannapp-project` sudah ada** (dibuat Boss Ali 5 September 2026, akun `jangkahadevv@gmail.com`), khusus untuk Crashlytics, **terpisah dari FinanceApp**. App Android terdaftar dengan package `com.newbeboys.scannapp`.
+  - `android/app/google-services.json` **di-commit ke repo, termasuk yang publik** — keputusan sadar, bukan default yang diasumsikan diam-diam. Google sendiri menyatakan berkas ini tidak perlu dirahasiakan untuk app Android: isinya App ID + API key yang dibatasi package name, bukan kredensial server, dan berkas yang sama sudah ikut terbundel di dalam APK yang dikirim ke semua user — bisa diekstrak dari situ kapan saja. Pola yang sama seperti App ID AdMob di atas. **Jangan** dipindah ke GitHub Secret + langkah decode di CI; itu menambah titik gagal (kelas bug yang sama dengan riwayat `VITE_SUPABASE_URL/ANON_KEY` hilang saat build CI, lihat commit `dd6a7f1`) untuk berkas yang memang tidak butuh dirahasiakan.
+  - Kalau project Firebase-nya perlu dibuat ulang/diganti kunci: download `google-services.json` baru dari Firebase Console → Project settings → General → app Android, timpa berkas yang ada, `npx cap sync android`.
 
 ## 8. Filosofi Kerja Claude Code di Proyek Ini
 

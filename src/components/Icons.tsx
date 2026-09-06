@@ -348,3 +348,19 @@ export function GiftIcon({ size = 24, className }: IconProps) {
     </svg>
   )
 }
+
+export function BugIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden="true">
+      <rect x="8" y="8" width="8" height="10" rx="4" />
+      <path d="M9 8a3 3 0 0 1 6 0" />
+      <path d="M12 8v10" />
+      <path d="M8 11H4.5" />
+      <path d="M16 11h3.5" />
+      <path d="M8 15H4.5" />
+      <path d="M16 15h3.5" />
+      <path d="M9.5 6.5 8 5" />
+      <path d="M14.5 6.5 16 5" />
+    </svg>
+  )
+}
